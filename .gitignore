@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+
+# Production Build Outputs
+dist/
+dist-ssr/
+build/
+*.local
+
+# Cloudflare Workers & Wrangler
+.wrangler/
+.dev.vars
+wrangler.jsonc.backup
+
+# Environment variables & secrets (CRITICAL FOR ZERO-KNOWLEDGE)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+
+# Local Vault Backups & Dumps (Avoid accidental git commits of unencrypted data)
+*.backup.json
+*plaintext*.json
+vault-export*.json
+
+# Logs & Runtime Dumps
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor & IDE artifacts
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Test Coverage
+coverage/
+.nyc_output/
