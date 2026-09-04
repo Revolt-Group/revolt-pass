@@ -44,7 +44,7 @@ export interface EncryptedVaultPayload {
   updated_at: number;
 }
 
-export type SyncStatus = 'synced' | 'dirty' | 'syncing' | 'error';
+export type SyncStatus = 'synced' | 'dirty' | 'syncing' | 'conflict' | 'error';
 
 export interface LocalVaultRecord extends EncryptedVaultPayload {
   sync_status: SyncStatus;
