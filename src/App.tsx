@@ -1,13 +1,17 @@
-import { useState, useEffect, useCallback, useTransition } from 'react';
+import { useState, useEffect, useCallback, useTransition, useMemo } from 'react';
 import {
   Shield,
   Lock,
   Unlock,
   KeyRound,
   Fingerprint,
-  RefreshCw,
   Search,
-  Sparkles,
+  User,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Loader2,
+  FolderArchive,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Toaster, toast } from 'sonner';
@@ -25,6 +29,7 @@ import {
   registerPlatformPasskey,
   wrapMasterKey,
   unwrapMasterKey,
+  type WrappedKeyPackage,
 } from './lib/crypto/webauthn.ts';
 import { syncTimeWithServer } from './lib/sync/timeSync.ts';
 import {
@@ -33,11 +38,13 @@ import {
   onSyncStateChange,
   initNetworkSyncListeners,
 } from './lib/sync/syncEngine.ts';
+import { AutoLockManager } from './lib/security/autoLock.ts';
 
 import { VaultList } from './components/VaultList.tsx';
 import { QrModal } from './components/QrModal.tsx';
 import { PasswordGeneratorModal } from './components/PasswordGeneratorModal.tsx';
 import { CommandPalette } from './components/CommandPalette.tsx';
+import { BackupModal } from './components/BackupModal.tsx';
 
 import type { VaultItem, LocalUserConfig, SyncStatus } from './types/vault.ts';
 import type { ApiResponse } from './worker/types.ts';
@@ -56,16 +63,49 @@ export function App() {
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
+  const [isBackupOpen, setIsBackupOpen] = useState(false);
 
   // Formularios de Autenticación
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
+
   const [unlockPassword, setUnlockPassword] = useState('');
+  const [showUnlockPassword, setShowUnlockPassword] = useState(false);
+
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [hasPasskeySupport, setHasPasskeySupport] = useState(false);
 
   const [, startTransition] = useTransition();
+
+  // -------------------------------------------------------------------------
+  // Cálculo de Entropía en Tiempo Real de la Contraseña Maestra
+  // -------------------------------------------------------------------------
+  const passwordEntropy = useMemo(() => {
+    if (!regPassword) {
+      return { bits: 0, level: 0, label: '', color: '' };
+    }
+
+    let pool = 0;
+    if (/[a-z]/.test(regPassword)) pool += 26;
+    if (/[A-Z]/.test(regPassword)) pool += 26;
+    if (/[0-9]/.test(regPassword)) pool += 10;
+    if (/[^a-zA-Z0-9]/.test(regPassword)) pool += 33;
+
+    const bits = pool > 0 ? Math.round(regPassword.length * Math.log2(pool)) : 0;
+
+    if (bits < 40 || regPassword.length < 8) {
+      return { bits, level: 1, label: 'Débil', color: 'text-rose-400' };
+    } else if (bits < 60) {
+      return { bits, level: 2, label: 'Media', color: 'text-amber-400' };
+    } else if (bits < 80) {
+      return { bits, level: 3, label: 'Segura', color: 'text-emerald-400' };
+    } else {
+      return { bits, level: 4, label: `Blindada • ${bits} bits`, color: 'text-emerald-300' };
+    }
+  }, [regPassword]);
 
   // -------------------------------------------------------------------------
   // 1. Inicialización de la Aplicación y Detección de Estado
@@ -123,6 +163,29 @@ export function App() {
       isMounted = false;
     };
   }, [masterKey]);
+
+  // -------------------------------------------------------------------------
+  // Auto-lock de Memoria por Inactividad (5 min) y Cambio de Visibilidad (30s)
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (screen !== 'unlocked' || !masterKey) return;
+
+    const timeoutMinutes = userConfig?.auto_lock_minutes ?? 5;
+    const autoLock = new AutoLockManager({
+      inactivityTimeoutMs: timeoutMinutes * 60 * 1000,
+      backgroundGraceMs: 30 * 1000,
+    });
+
+    autoLock.start(() => {
+      setMasterKey(null);
+      setScreen('locked');
+      toast.info('Sesión bloqueada por inactividad. Claves purgadas de memoria RAM.');
+    });
+
+    return () => {
+      autoLock.stop();
+    };
+  }, [screen, masterKey, userConfig?.auto_lock_minutes]);
 
   // Atajo universal Ctrl + K / Cmd + K
   useEffect(() => {
@@ -216,16 +279,20 @@ export function App() {
       setItems([]);
       setVaultVersion(1);
       setScreen('unlocked');
-      toast.success('¡Bóveda creada exitosamente!');
-    } catch (err) {
-      toast.error('Error al inicializar la bóveda criptográfica');
+
+      toast.success('Bóveda creada exitosamente', {
+        description: 'Tu clave fue derivada con 600.000 rondas de PBKDF2 en un hilo aislado.',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al registrar la bóveda';
+      toast.error(msg);
     } finally {
       setIsAuthenticating(false);
     }
   };
 
   // -------------------------------------------------------------------------
-  // 3. Desbloqueo Frío con Contraseña Maestra
+  // 3. Desbloqueo de Bóveda con Master Password
   // -------------------------------------------------------------------------
   const handleUnlockWithPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,175 +300,214 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // 1. Reconstruir salt
+      // 1. Derivar clave maestra a partir del salt almacenado
       const saltBytes = Uint8Array.from(atob(userConfig.kdf_salt), (c) => c.charCodeAt(0));
-
-      // 2. Derivar MasterKey con Web Worker (PBKDF2-SHA256 600k rondas)
       const key = await deriveMasterKey(unlockPassword, saltBytes, 600000);
 
-      // 3. Cargar y descifrar bóveda desde IndexedDB
+      // 2. Obtener bóveda local de IndexedDB
       const localVault = await getLocalVault();
       if (!localVault) {
-        throw new Error('No se encontró la bóveda local');
+        throw new Error('No se encontró ninguna bóveda local almacenada.');
       }
 
-      const decryptedItems = await decryptVault(localVault.encrypted_blob, localVault.iv, key);
+      // 3. Descifrar la bóveda con AES-GCM-256
+      const decryptedItems = await decryptVault(
+        localVault.encrypted_blob,
+        localVault.iv,
+        key
+      );
 
       setMasterKey(key);
       setItems(decryptedItems);
       setVaultVersion(localVault.version);
-      setScreen('unlocked');
       setUnlockPassword('');
-      toast.success('Bóveda descifrada');
+      setScreen('unlocked');
 
-      // Intentar pull de cambios remotos en segundo plano
+      toast.success('Bóveda desbloqueada correctamente');
+
+      // 4. Intentar sincronización remota en segundo plano
       pullRemoteVault().catch(() => {});
-    } catch {
-      toast.error('Contraseña Maestra incorrecta o datos alterados');
+    } catch (err: unknown) {
+      toast.error('Contraseña Maestra incorrecta o bóveda corrupta');
+      console.error(err);
     } finally {
       setIsAuthenticating(false);
     }
   };
 
   // -------------------------------------------------------------------------
-  // 4. Desbloqueo Rápido con Windows Hello (PIN) / Biometría
+  // 4. Desbloqueo Rápido con Windows Hello / Biometría WebAuthn
   // -------------------------------------------------------------------------
   const handleUnlockWithPasskey = async () => {
-    if (!userConfig || !userConfig.wrapped_master_key || !userConfig.webauthn_credential_id) {
-      toast.error('Windows Hello / Biometría aún no está configurado en este dispositivo.');
+    if (!userConfig?.wrapped_master_key || !userConfig.webauthn_credential_id) {
+      toast.error('Windows Hello no está configurado para esta bóveda.');
       return;
     }
 
     setIsAuthenticating(true);
     try {
-      const wrappedPackage = JSON.parse(userConfig.wrapped_master_key);
-      // Invocar Windows Hello (solicitará PIN en PC o huella en móvil)
-      const key = await unwrapMasterKey(wrappedPackage, userConfig.webauthn_credential_id);
+      // Desempaquetar la clave maestra protegida por la clave de plataforma
+      const wrappedPkg = JSON.parse(userConfig.wrapped_master_key) as WrappedKeyPackage;
+      const key = await unwrapMasterKey(
+        wrappedPkg,
+        userConfig.webauthn_credential_id
+      );
 
       const localVault = await getLocalVault();
-      if (!localVault) throw new Error('Bóveda no encontrada');
+      if (!localVault) throw new Error('Bóveda local no encontrada.');
 
-      const decryptedItems = await decryptVault(localVault.encrypted_blob, localVault.iv, key);
+      const decryptedItems = await decryptVault(
+        localVault.encrypted_blob,
+        localVault.iv,
+        key
+      );
 
       setMasterKey(key);
       setItems(decryptedItems);
       setVaultVersion(localVault.version);
       setScreen('unlocked');
-      toast.success('Desbloqueado con Windows Hello');
 
+      toast.success('Desbloqueado con Windows Hello');
       pullRemoteVault().catch(() => {});
-    } catch (err) {
-      toast.error('Verificación biométrica / PIN cancelada o rechazada.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error en la verificación biométrica';
+      toast.error(msg);
     } finally {
       setIsAuthenticating(false);
     }
   };
 
   // -------------------------------------------------------------------------
-  // 5. Enrolamiento de Windows Hello / Biometría
+  // 5. Vincular PIN de Windows Hello o Biometría
   // -------------------------------------------------------------------------
   const handleSetupPasskey = async () => {
     if (!masterKey || !userConfig) return;
 
     try {
-      toast.info('Solicitando verificación a Windows Hello...');
-      const cred = await registerPlatformPasskey(userConfig.user_id, userConfig.username);
-
-      // Envolver la MasterKey con la credencial de hardware
-      const wrappedPackage = await wrapMasterKey(masterKey, cred.rawId);
+      toast.info('Solicitando credencial de Windows Hello...');
+      const reg = await registerPlatformPasskey(userConfig.user_id, userConfig.username);
+      const wrappedPkg = await wrapMasterKey(masterKey, reg.credentialId);
 
       const updatedConfig: LocalUserConfig = {
         ...userConfig,
-        webauthn_credential_id: cred.rawId,
-        wrapped_master_key: JSON.stringify(wrappedPackage),
+        webauthn_credential_id: reg.credentialId,
+        wrapped_master_key: JSON.stringify(wrappedPkg),
       };
 
       await saveUserConfig(updatedConfig);
       setUserConfig(updatedConfig);
-      toast.success('¡Windows Hello / Biometría configurado para Desbloqueo Rápido!');
-    } catch (err) {
-      toast.error('No se pudo vincular Windows Hello en este dispositivo');
+
+      toast.success('Windows Hello vinculado exitosamente', {
+        description: 'Ahora puedes desbloquear tu bóveda al instante con tu PIN o huella digital.',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al vincular passkey';
+      toast.error(msg);
     }
   };
 
   // -------------------------------------------------------------------------
-  // 6. Bloqueo Manual Inmediato (Higiene de RAM)
+  // 6. Bloqueo Manual de Bóveda (Purga Estricta de RAM)
   // -------------------------------------------------------------------------
   const handleLockVault = useCallback(() => {
     setMasterKey(null);
-    setItems([]);
     setScreen('locked');
-    toast.info('Bóveda bloqueada: memoria RAM purgada');
+    toast.info('Bóveda bloqueada. Claves purgadas de memoria RAM.');
   }, []);
 
   // -------------------------------------------------------------------------
-  // 7. Mutaciones de Cuentas (Agregar, Fijar, Alternar Recovery, Eliminar)
+  // 7. Persistencia y Actualización de Cuentas
   // -------------------------------------------------------------------------
-  const persistVaultChanges = useCallback(
-    async (updatedItems: VaultItem[]) => {
-      if (!masterKey || !userConfig) return;
+  const persistVaultChanges = async (newItems: VaultItem[]) => {
+    if (!masterKey || !userConfig) return;
 
-      const nextVersion = vaultVersion + 1;
-      // 1. Cifrar con AES-GCM en memoria
-      const enc = await encryptVault(updatedItems, masterKey, nextVersion);
+    const newVersion = vaultVersion + 1;
+    setVaultVersion(newVersion);
+    setItems(newItems);
 
-      // 2. Persistir localmente en IndexedDB
+    try {
+      const enc = await encryptVault(newItems, masterKey, newVersion);
       await saveLocalVault({
         user_id: userConfig.user_id,
         encrypted_blob: enc.encryptedBlob,
         iv: enc.iv,
-        version: nextVersion,
+        version: newVersion,
         updated_at: enc.updatedAt,
         sync_status: 'dirty',
       });
 
-      startTransition(() => {
-        setItems(updatedItems);
-        setVaultVersion(nextVersion);
-      });
-
-      // 3. Sincronizar en segundo plano con Cloudflare D1
-      pushLocalVault('', masterKey).catch(() => {});
-    },
-    [masterKey, userConfig, vaultVersion]
-  );
+      // Disparar sincronización asíncrona hacia Cloudflare D1
+      pushLocalVault(userConfig.user_id, masterKey).catch(() => {});
+    } catch (err: unknown) {
+      console.error('Error al persistir cambios de la bóveda:', err);
+      toast.error('Error al cifrar y guardar los cambios');
+    }
+  };
 
   const handleSaveNewAccount = async (newItem: VaultItem) => {
-    const updated = [newItem, ...items];
-    await persistVaultChanges(updated);
-  };
-
-  const handleTogglePin = (id: string) => {
-    const updated = items.map((i) => (i.id === id ? { ...i, pinned: !i.pinned } : i));
-    persistVaultChanges(updated);
-  };
-
-  const handleDeleteAccount = (id: string) => {
-    const updated = items.filter((i) => i.id !== id);
-    persistVaultChanges(updated);
-    toast.success('Cuenta eliminada de la bóveda');
-  };
-
-  const handleToggleRecoveryCode = (id: string, codeIndex: number) => {
-    const updated = items.map((item) => {
-      if (item.id !== id || !item.recovery_codes) return item;
-      const codes = [...item.recovery_codes];
-      codes[codeIndex] = { ...codes[codeIndex], used: !codes[codeIndex].used };
-      return { ...item, recovery_codes: codes, updated_at: Date.now() };
+    startTransition(async () => {
+      const updated = [newItem, ...items];
+      await persistVaultChanges(updated);
+      toast.success(`Cuenta de ${newItem.issuer} guardada y cifrada`);
     });
-    persistVaultChanges(updated);
+  };
+
+  const handleTogglePin = async (id: string) => {
+    startTransition(async () => {
+      const updated = items.map((item) =>
+        item.id === id ? { ...item, pinned: !item.pinned, updated_at: Date.now() } : item
+      );
+      await persistVaultChanges(updated);
+    });
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    startTransition(async () => {
+      const updated = items.filter((item) => item.id !== id);
+      await persistVaultChanges(updated);
+      toast.info('Cuenta eliminada de la bóveda');
+    });
+  };
+
+  const handleToggleRecoveryCode = async (id: string, codeIdx: number) => {
+    startTransition(async () => {
+      const updated = items.map((item) => {
+        if (item.id !== id || !item.recovery_codes) return item;
+        const codes = [...item.recovery_codes];
+        codes[codeIdx] = { ...codes[codeIdx], used: !codes[codeIdx].used };
+        return { ...item, recovery_codes: codes, updated_at: Date.now() };
+      });
+      await persistVaultChanges(updated);
+    });
   };
 
   // -------------------------------------------------------------------------
-  // RENDER: PANTALLA DE CARGA
+  // 8. Restauración de Bóveda desde BackupModal
+  // -------------------------------------------------------------------------
+  const handleVaultRestored = async (newItems: VaultItem[]) => {
+    await persistVaultChanges(newItems);
+  };
+
+  // -------------------------------------------------------------------------
+  // RENDER: PANTALLA DE CARGA INICIAL
   // -------------------------------------------------------------------------
   if (screen === 'loading') {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-zinc-100">
-        <div className="w-12 h-12 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center animate-pulse mb-4">
-          <Shield className="w-6 h-6 text-violet-400" />
+      <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 relative overflow-hidden">
+        {/* Malla técnica con máscara radial */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+            maskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
+          }}
+        />
+        <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-4 text-zinc-100 animate-pulse">
+          <Shield className="w-6 h-6 text-zinc-100" />
         </div>
-        <p className="text-xs text-zinc-500 font-mono tracking-wider">
+        <p className="text-xs text-zinc-400 font-mono tracking-wider">
           Inicializando entorno seguro...
         </p>
       </div>
@@ -409,93 +515,201 @@ export function App() {
   }
 
   // -------------------------------------------------------------------------
-  // RENDER: PANTALLA DE REGISTRO INICIAL
+  // RENDER: PANTALLA DE REGISTRO INICIAL (DISEÑO ANTI-AI CLICHÉS)
   // -------------------------------------------------------------------------
   if (screen === 'register') {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-violet-500/30 selection:text-violet-200">
-        <Toaster position="bottom-right" richColors theme="dark" />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-zinc-900/60 border border-zinc-800 rounded-3xl p-8 shadow-2xl backdrop-blur-2xl relative overflow-hidden"
-        >
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
+    const isConfirmMatch =
+      regPassword.length > 0 && regConfirmPassword.length > 0 && regPassword === regConfirmPassword;
 
-          <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-xl shadow-violet-500/25 mb-4">
-              <Shield className="w-8 h-8 text-white" />
+    return (
+      <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-white/20 selection:text-white relative overflow-hidden">
+        <Toaster position="bottom-right" richColors theme="dark" />
+
+        {/* 1. Malla técnica con máscara radial */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+            maskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
+          }}
+        />
+
+        {/* 2. Spotlight superior tenue */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-indigo-500/10 via-violet-500/5 to-transparent blur-3xl pointer-events-none" />
+
+        {/* 3. La Bóveda (Card Craftsmanship) */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          className="relative w-full max-w-md bg-zinc-900/60 backdrop-blur-2xl border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-8 overflow-hidden z-10"
+        >
+          {/* Hairline highlight superior */}
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+          <div className="flex flex-col items-center text-center">
+            {/* Emblema Mecanizado */}
+            <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-3 text-zinc-100">
+              <Shield className="w-6 h-6 text-zinc-100" />
             </div>
 
-            <h1 className="text-2xl font-bold tracking-tight text-white mb-1.5">
+            {/* Micro-badge Superior */}
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 rounded-full mb-2">
+              ZERO-KNOWLEDGE VAULT • CLIENT-SIDE ONLY
+            </div>
+
+            {/* Título & Subtítulo */}
+            <h1 className="text-2xl font-bold tracking-tight text-white font-sans mb-1.5">
               Revolt Pass
             </h1>
-            <p className="text-xs text-zinc-400 mb-6 max-w-xs">
+            <p className="text-sm text-zinc-400 leading-relaxed max-w-sm mx-auto mb-6">
               Configura tu bóveda personal Zero-Knowledge. Tu Contraseña Maestra nunca saldrá de este dispositivo.
             </p>
 
+            {/* Formulario */}
             <form onSubmit={handleRegister} className="w-full space-y-4 text-left">
+              {/* Campo Nombre de Usuario */}
               <div>
-                <label className="text-xs font-semibold text-zinc-300 mb-1.5 block">
+                <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                   Nombre de Usuario
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ej. rojas, admin, personal"
-                  value={regUsername}
-                  onChange={(e) => setRegUsername(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ej. rojas, admin, personal"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                  />
+                </div>
               </div>
 
+              {/* Campo Contraseña Maestra */}
               <div>
-                <label className="text-xs font-semibold text-zinc-300 mb-1.5 block">
+                <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                   Contraseña Maestra (Master Password)
                 </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Mínimo 8 caracteres de alta entropía"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showRegPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Mínimo 8 caracteres de alta entropía"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 pr-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Medidor de Entropía en Tiempo Real de 4 Bloques */}
+                {regPassword.length > 0 && (
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex items-center justify-between text-[11px] font-mono">
+                      <span className="text-zinc-500">Fuerza de la clave</span>
+                      <span className={passwordEntropy.color}>{passwordEntropy.label}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 h-1">
+                      {[1, 2, 3, 4].map((seg) => (
+                        <div
+                          key={seg}
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            passwordEntropy.level >= seg
+                              ? passwordEntropy.level === 1
+                                ? 'bg-rose-500'
+                                : passwordEntropy.level === 2
+                                ? 'bg-amber-500'
+                                : passwordEntropy.level === 3
+                                ? 'bg-emerald-500'
+                                : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                              : 'bg-zinc-800'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Campo Confirmar Contraseña Maestra */}
               <div>
-                <label className="text-xs font-semibold text-zinc-300 mb-1.5 block">
+                <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                   Confirmar Contraseña Maestra
                 </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Repite tu contraseña maestra"
-                  value={regConfirmPassword}
-                  onChange={(e) => setRegConfirmPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showRegConfirmPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Repite tu contraseña maestra"
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 pr-16 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-1.5">
+                    {isConfirmMatch && (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowRegConfirmPassword((prev) => !prev)}
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      {showRegConfirmPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
 
+              {/* Botón de Acción Principal (CTA) */}
               <button
                 type="submit"
                 disabled={isAuthenticating}
-                className="w-full mt-2 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold rounded-xl text-xs shadow-xl shadow-violet-600/25 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                className="w-full mt-3 bg-white text-zinc-950 font-semibold hover:bg-zinc-200 active:scale-[0.99] transition-all rounded-lg py-2.5 px-4 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isAuthenticating ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
                     <span>Derivando Claves (PBKDF2 600k)...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
+                    <Lock className="w-4 h-4 text-zinc-950" />
                     <span>Crear Bóveda Segura</span>
                   </>
                 )}
               </button>
             </form>
+
+            {/* Trust Badges en el Pie de Tarjeta */}
+            <div className="w-full mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-zinc-400">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                AES-GCM-256
+              </span>
+              <span>PBKDF2 600K ROUNDS</span>
+              <span>WEBAUTHN READY</span>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -509,19 +723,42 @@ export function App() {
     const hasFastUnlock = !!userConfig?.wrapped_master_key;
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-violet-500/30 selection:text-violet-200">
+      <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-white/20 selection:text-white relative overflow-hidden">
         <Toaster position="bottom-right" richColors theme="dark" />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-sm bg-zinc-900/60 border border-zinc-800 rounded-3xl p-8 shadow-2xl backdrop-blur-2xl relative overflow-hidden"
-        >
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-800/80 border border-zinc-700/80 flex items-center justify-center mb-4 text-violet-400 shadow-lg">
-              <Lock className="w-7 h-7" />
+        {/* Malla técnica con máscara radial */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+            maskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
+          }}
+        />
+
+        {/* Spotlight superior */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-indigo-500/10 via-violet-500/5 to-transparent blur-3xl pointer-events-none" />
+
+        {/* Tarjeta de Desbloqueo */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          className="relative w-full max-w-sm bg-zinc-900/60 backdrop-blur-2xl border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-8 overflow-hidden z-10"
+        >
+          {/* Hairline highlight */}
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+          <div className="flex flex-col items-center text-center">
+            {/* Emblema Mecanizado */}
+            <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-3 text-zinc-100">
+              <Lock className="w-6 h-6 text-zinc-100" />
+            </div>
+
+            {/* Micro-badge */}
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 rounded-full mb-2">
+              SESSION LOCKED • RAM PURGED
             </div>
 
             <h1 className="text-xl font-bold text-white mb-1">Revolt Pass</h1>
@@ -529,56 +766,77 @@ export function App() {
               Usuario: <strong className="text-zinc-200">{userConfig?.username}</strong>
             </p>
 
-            {/* Opción 1: Desbloqueo Rápido con Windows Hello / Biometría */}
+            {/* Opción 1: Desbloqueo Rápido con Windows Hello / PIN */}
             {hasFastUnlock && (
               <div className="w-full mb-5">
                 <button
                   type="button"
                   onClick={handleUnlockWithPasskey}
                   disabled={isAuthenticating}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-xl shadow-violet-600/30 flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-50"
+                  className="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700/80 text-white font-semibold text-xs border border-white/10 shadow-sm flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
-                  <Fingerprint className="w-4 h-4" />
+                  <Fingerprint className="w-4 h-4 text-zinc-300" />
                   <span>Desbloquear con Windows Hello / PIN</span>
                 </button>
 
                 <div className="flex items-center my-4 text-xs text-zinc-600">
-                  <div className="flex-1 h-px bg-zinc-800" />
-                  <span className="px-3">o contraseña maestra</span>
-                  <div className="flex-1 h-px bg-zinc-800" />
+                  <div className="flex-1 h-px bg-white/[0.06]" />
+                  <span className="px-3 font-mono text-[11px] text-zinc-500">o contraseña maestra</span>
+                  <div className="flex-1 h-px bg-white/[0.06]" />
                 </div>
               </div>
             )}
 
             {/* Opción 2: Desbloqueo con Master Password */}
             <form onSubmit={handleUnlockWithPassword} className="w-full space-y-3">
-              <input
-                type="password"
-                required
-                placeholder="Contraseña Maestra..."
-                value={unlockPassword}
-                onChange={(e) => setUnlockPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-zinc-950/80 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors text-center"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type={showUnlockPassword ? 'text' : 'password'}
+                  required
+                  placeholder="Contraseña Maestra..."
+                  value={unlockPassword}
+                  onChange={(e) => setUnlockPassword(e.target.value)}
+                  className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 pr-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowUnlockPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  {showUnlockPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
 
               <button
                 type="submit"
                 disabled={isAuthenticating}
-                className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                className="w-full py-2.5 px-4 bg-white hover:bg-zinc-200 text-zinc-950 font-semibold rounded-lg text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.2)] disabled:opacity-50"
               >
                 {isAuthenticating ? (
                   <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
                     <span>Verificando...</span>
                   </>
                 ) : (
                   <>
-                    <Unlock className="w-3.5 h-3.5" />
-                    <span>Desbloquear</span>
+                    <Unlock className="w-4 h-4 text-zinc-950" />
+                    <span>Desbloquear Bóveda</span>
                   </>
                 )}
               </button>
             </form>
+
+            {/* Trust Badges en el Pie */}
+            <div className="w-full mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-zinc-400">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                AES-GCM-256
+              </span>
+              <span>ZERO-KNOWLEDGE</span>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -589,23 +847,23 @@ export function App() {
   // RENDER: PANTALLA PRINCIPAL (BÓVEDA DESBLOQUEADA)
   // -------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#0a0a0d] text-zinc-100 flex flex-col selection:bg-violet-500/30 selection:text-violet-200">
+    <div className="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col selection:bg-white/20 selection:text-white relative">
       <Toaster position="bottom-right" richColors theme="dark" />
 
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl px-4 md:px-8 py-3.5">
+      <header className="sticky top-0 z-40 w-full border-b border-white/[0.06] bg-zinc-950/80 backdrop-blur-xl px-4 md:px-8 py-3.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           {/* Logo y Branding */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-md shadow-violet-600/20">
-              <Shield className="w-5 h-5 text-white" />
+            <div className="h-9 w-9 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center text-zinc-100">
+              <Shield className="w-5 h-5 text-zinc-100" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm md:text-base text-white tracking-tight">
                   Revolt Pass
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-white/[0.08] text-zinc-400">
                   v1.0
                 </span>
               </div>
@@ -652,7 +910,7 @@ export function App() {
             <button
               type="button"
               onClick={() => setIsCmdPaletteOpen(true)}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 transition-colors flex items-center gap-1.5 text-xs"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors flex items-center gap-1.5 text-xs"
               title="Buscar (Ctrl + K)"
             >
               <Search className="w-4 h-4" />
@@ -665,10 +923,20 @@ export function App() {
             <button
               type="button"
               onClick={() => setIsGeneratorOpen(true)}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 transition-colors"
+              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors"
               title="Generador de Contraseñas"
             >
               <KeyRound className="w-4 h-4" />
+            </button>
+
+            {/* Botón Respaldo & Migración */}
+            <button
+              type="button"
+              onClick={() => setIsBackupOpen(true)}
+              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors"
+              title="Respaldo & Migración (Copia Cifrada / Texto Plano)"
+            >
+              <FolderArchive className="w-4 h-4" />
             </button>
 
             {/* Configurar Windows Hello si aún no está vinculado */}
@@ -676,10 +944,10 @@ export function App() {
               <button
                 type="button"
                 onClick={handleSetupPasskey}
-                className="px-3 py-1.5 rounded-xl bg-violet-600/10 border border-violet-500/30 hover:bg-violet-600/20 text-violet-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 border border-white/10 hover:bg-zinc-750 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
                 title="Habilitar PIN de Windows Hello o Biometría"
               >
-                <Fingerprint className="w-4 h-4" />
+                <Fingerprint className="w-4 h-4 text-zinc-300" />
                 <span className="hidden sm:inline">Vincular PIN</span>
               </button>
             )}
@@ -688,7 +956,7 @@ export function App() {
             <button
               type="button"
               onClick={handleLockVault}
-              className="p-2 rounded-xl text-zinc-400 hover:text-rose-300 bg-zinc-900 border border-zinc-800/80 hover:border-rose-900/50 hover:bg-rose-950/30 transition-colors"
+              className="p-2 rounded-xl text-zinc-400 hover:text-rose-300 bg-zinc-900 border border-white/[0.08] hover:border-rose-900/50 hover:bg-rose-950/30 transition-colors"
               title="Bloquear Bóveda (Purgar memoria RAM)"
             >
               <Lock className="w-4 h-4" />
@@ -709,7 +977,7 @@ export function App() {
       </main>
 
       {/* Footer Minimalista */}
-      <footer className="w-full py-4 text-center border-t border-zinc-900 text-zinc-600 text-[11px] font-mono">
+      <footer className="w-full py-4 text-center border-t border-white/[0.04] text-zinc-500 text-[11px] font-mono">
         Revolt Pass · Zero-Knowledge AES-GCM 256 · Cloudflare Edge & D1
       </footer>
 
@@ -723,6 +991,15 @@ export function App() {
       <PasswordGeneratorModal
         isOpen={isGeneratorOpen}
         onClose={() => setIsGeneratorOpen(false)}
+      />
+
+      <BackupModal
+        isOpen={isBackupOpen}
+        onClose={() => setIsBackupOpen(false)}
+        items={items}
+        masterKey={masterKey}
+        kdfSalt={userConfig?.kdf_salt || ''}
+        onVaultRestored={handleVaultRestored}
       />
 
       <CommandPalette

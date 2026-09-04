@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { BrandIcon } from './BrandIcon.tsx';
 import { generateTotp } from '../lib/crypto/totp.ts';
 import { getTimeDriftOffsetMs } from '../lib/sync/timeSync.ts';
+import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
 import type { VaultItem } from '../types/vault.ts';
 
 interface CommandPaletteProps {
@@ -74,14 +75,14 @@ export function CommandPalette({
     const code = tokens[item.id];
     if (!code || code === '------') return;
 
-    await navigator.clipboard.writeText(code);
+    await copyToClipboardSecurely(code, 45000);
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
         navigator.vibrate(40);
       } catch {}
     }
 
-    toast.success(`Código de ${item.issuer} copiado`);
+    toast.success(`Código de ${item.issuer} copiado (se borrará en 45s)`);
     onClose();
   };
 

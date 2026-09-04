@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { BrandIcon } from './BrandIcon.tsx';
 import { generateTotp, getTotpRemainingSeconds, getTotpProgress } from '../lib/crypto/totp.ts';
 import { getTimeDriftOffsetMs } from '../lib/sync/timeSync.ts';
+import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
 import type { VaultItem } from '../types/vault.ts';
 
 interface TotpCardProps {
@@ -74,7 +75,7 @@ export function TotpCard({
   // Copiar código TOTP principal
   const handleCopyToken = async () => {
     if (token === '------' || token === 'ERROR') return;
-    await navigator.clipboard.writeText(token);
+    await copyToClipboardSecurely(token, 45000);
 
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
@@ -83,22 +84,22 @@ export function TotpCard({
     }
 
     setIsCopied(true);
-    toast.success(`Código de ${item.issuer} copiado`);
+    toast.success(`Código de ${item.issuer} copiado (se borrará en 45s)`);
     setTimeout(() => setIsCopied(false), 2000);
   };
 
   // Copiar código de recuperación individual
   const handleCopyRecoveryCode = async (code: string, idx: number) => {
-    await navigator.clipboard.writeText(code);
+    await copyToClipboardSecurely(code, 45000);
     setCopiedCodeIdx(idx);
-    toast.success('Clave de recuperación copiada');
+    toast.success('Clave de recuperación copiada (se borrará en 45s)');
     setTimeout(() => setCopiedCodeIdx(null), 1500);
   };
 
   // Copiar secreto Base32
   const handleCopyBase32 = async () => {
-    await navigator.clipboard.writeText(item.secret);
-    toast.success('Secreto Base32 copiado al portapapeles');
+    await copyToClipboardSecurely(item.secret, 45000);
+    toast.success('Secreto Base32 copiado (se borrará en 45s)');
   };
 
   // Formateo del token: ej. "123 456" o "1234 5678"
