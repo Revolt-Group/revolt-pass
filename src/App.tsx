@@ -12,9 +12,15 @@ import {
   CheckCircle2,
   Loader2,
   FolderArchive,
+  Download,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Toaster, toast } from 'sonner';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 import {
   getLocalVault,
@@ -77,8 +83,40 @@ export function App() {
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [hasPasskeySupport, setHasPasskeySupport] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   const [, startTransition] = useTransition();
+
+  // Escuchar evento de instalación PWA (beforeinstallprompt)
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+      toast.success('Revolt Pass instalado correctamente');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      toast.success('Instalando Revolt Pass en tu sistema operativo...');
+    }
+    setInstallPrompt(null);
+  };
 
   // -------------------------------------------------------------------------
   // Cálculo de Entropía en Tiempo Real de la Contraseña Maestra
@@ -938,6 +976,19 @@ export function App() {
             >
               <FolderArchive className="w-4 h-4" />
             </button>
+
+            {/* Botón de Instalación PWA */}
+            {installPrompt && (
+              <button
+                type="button"
+                onClick={handleInstallApp}
+                className="px-2.5 py-1.5 rounded-xl bg-indigo-600/15 border border-indigo-500/30 hover:bg-indigo-600/25 text-indigo-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                title="Instalar Revolt Pass en tu sistema operativo (PWA)"
+              >
+                <Download className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">Instalar App</span>
+              </button>
+            )}
 
             {/* Configurar Windows Hello si aún no está vinculado */}
             {hasPasskeySupport && !userConfig?.wrapped_master_key && (

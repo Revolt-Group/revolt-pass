@@ -1,4 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+import fs from 'node:fs';
+import path from 'node:path';
+import sharp from 'sharp';
+
+const publicDir = path.resolve('public');
+
+// 1. Vector SVG definition for Revolt Pass (Technical Cybersecurity Aesthetic)
+function getSvg(size, isMaskable = false) {
+  // Safe zone scaling: maskable needs more margin (~60% of canvas)
+  const scale = isMaskable ? 0.6 : 0.72;
+  const center = size / 2;
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <defs>
     <!-- Background Gradient -->
     <radialGradient id="bgGrad" cx="50%" cy="30%" r="70%">
@@ -21,21 +34,21 @@
 
     <!-- Subtle Glow Filter -->
     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="1.28" result="blur" />
+      <feGaussianBlur stdDeviation="${size * 0.02}" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over" />
     </filter>
   </defs>
 
   <!-- Base Technical Dark Background -->
-  <rect width="64" height="64" fill="#090a0f" />
+  <rect width="${size}" height="${size}" fill="#090a0f" />
 
-  
+  ${!isMaskable ? `
   <!-- Squircle Base for standard icons -->
-  <rect x="2.56" y="2.56" width="58.88" height="58.88" rx="14.08" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.08)" stroke-width="0.96" />
-  
+  <rect x="${size * 0.04}" y="${size * 0.04}" width="${size * 0.92}" height="${size * 0.92}" rx="${size * 0.22}" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.08)" stroke-width="${size * 0.015}" />
+  ` : ''}
 
   <!-- Emblem Group centered and scaled -->
-  <g transform="translate(32, 32) scale(0.72) translate(-100, -100)">
+  <g transform="translate(${center}, ${center}) scale(${scale}) translate(-100, -100)">
     <!-- Outer Shield Shadow / Glow -->
     <path
       d="M100 20 L165 48 C165 110, 100 170, 100 170 C100 170, 35 110, 35 48 Z"
@@ -92,3 +105,49 @@
     <circle cx="100" cy="134" r="8" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.6" />
   </g>
 </svg>
+  `.trim();
+}
+
+async function run() {
+  console.log('Generating Revolt Pass PWA Icons...');
+
+  // 1. Favicon SVG (Standard 64px representation)
+  const faviconSvg = getSvg(64, false);
+  fs.writeFileSync(path.join(publicDir, 'favicon.svg'), faviconSvg, 'utf-8');
+  console.log('✓ public/favicon.svg created');
+
+  // 2. pwa-192x192.png
+  const svg192 = getSvg(192, false);
+  await sharp(Buffer.from(svg192))
+    .png()
+    .toFile(path.join(publicDir, 'pwa-192x192.png'));
+  console.log('✓ public/pwa-192x192.png created');
+
+  // 3. pwa-512x512.png
+  const svg512 = getSvg(512, false);
+  await sharp(Buffer.from(svg512))
+    .png()
+    .toFile(path.join(publicDir, 'pwa-512x512.png'));
+  console.log('✓ public/pwa-512x512.png created');
+
+  // 4. maskable-icon-512x512.png (with safe padding)
+  const svgMaskable = getSvg(512, true);
+  await sharp(Buffer.from(svgMaskable))
+    .png()
+    .toFile(path.join(publicDir, 'maskable-icon-512x512.png'));
+  console.log('✓ public/maskable-icon-512x512.png created');
+
+  // 5. apple-touch-icon.png (180x180)
+  const svg180 = getSvg(180, false);
+  await sharp(Buffer.from(svg180))
+    .png()
+    .toFile(path.join(publicDir, 'apple-touch-icon.png'));
+  console.log('✓ public/apple-touch-icon.png created');
+
+  console.log('All icons generated successfully!');
+}
+
+run().catch((err) => {
+  console.error('Error generating icons:', err);
+  process.exit(1);
+});
