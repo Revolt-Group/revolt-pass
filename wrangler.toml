@@ -3,16 +3,21 @@ main = "src/worker/index.ts"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Dominio personalizado de producción y workers.dev activo
+workers_dev = true
+routes = [
+  { pattern = "pass.revoltgroup.com.ar", custom_domain = true }
+]
+
 # Servir frontend estático compilado por Vite
 [assets]
 directory = "./dist"
 binding = "ASSETS"
 
-# Base de datos relacional serverless Cloudflare D1
 [[d1_databases]]
 binding = "DB"
 database_name = "revolt-pass-db"
-database_id = "revolt-pass-db" # ID a sincronizar con wrangler d1 create revolt-pass-db
+database_id = "71e43d83-619e-4d92-8e89-d17eaef9f439"
 
 # Variables de entorno públicas
 [vars]

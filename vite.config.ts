@@ -81,4 +81,24 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('@zxing')) {
+            return 'vendor-zxing';
+          }
+          if (
+            id.includes('motion') ||
+            id.includes('cmdk') ||
+            id.includes('sonner') ||
+            id.includes('@radix-ui')
+          ) {
+            return 'vendor-ui';
+          }
+        },
+      },
+    },
+  },
 })
