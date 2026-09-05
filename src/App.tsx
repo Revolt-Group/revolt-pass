@@ -54,6 +54,7 @@ import { QrModal } from './components/QrModal.tsx';
 import { PasswordGeneratorModal } from './components/PasswordGeneratorModal.tsx';
 import { CommandPalette } from './components/CommandPalette.tsx';
 import { BackupModal } from './components/BackupModal.tsx';
+import { EditAccountModal } from './components/EditAccountModal.tsx';
 
 import type { VaultItem, LocalUserConfig, SyncStatus } from './types/vault.ts';
 import type { ApiResponse } from './worker/types.ts';
@@ -75,6 +76,8 @@ export function App() {
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Formularios de Autenticación
   const [loginUsername, setLoginUsername] = useState('');
@@ -643,6 +646,21 @@ export function App() {
       await persistVaultChanges(updated);
       toast.success(`Cuenta de ${newItem.issuer} guardada y cifrada`);
     });
+  };
+
+  const handleUpdateAccount = async (updatedItem: VaultItem) => {
+    startTransition(async () => {
+      const updated = items.map((item) =>
+        item.id === updatedItem.id ? { ...updatedItem, updated_at: Date.now() } : item
+      );
+      await persistVaultChanges(updated);
+      toast.success(`Cuenta de ${updatedItem.issuer} actualizada`);
+    });
+  };
+
+  const handleOpenEditAccount = (item: VaultItem) => {
+    setEditingItem(item);
+    setIsEditModalOpen(true);
   };
 
   const handleTogglePin = async (id: string) => {
@@ -1337,6 +1355,7 @@ export function App() {
           onDelete={handleDeleteAccount}
           onToggleRecoveryCode={handleToggleRecoveryCode}
           onOpenAddModal={() => setIsQrModalOpen(true)}
+          onEditAccount={handleOpenEditAccount}
         />
       </main>
 
@@ -1350,6 +1369,13 @@ export function App() {
         isOpen={isQrModalOpen}
         onClose={() => setIsQrModalOpen(false)}
         onSaveAccount={handleSaveNewAccount}
+      />
+
+      <EditAccountModal
+        item={editingItem}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleUpdateAccount}
       />
 
       <PasswordGeneratorModal

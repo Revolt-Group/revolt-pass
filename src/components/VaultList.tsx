@@ -16,6 +16,7 @@ interface VaultListProps {
   onDelete: (id: string) => void;
   onToggleRecoveryCode: (id: string, codeIndex: number) => void;
   onOpenAddModal: () => void;
+  onEditAccount: (item: VaultItem) => void;
 }
 
 export function VaultList({
@@ -24,6 +25,7 @@ export function VaultList({
   onDelete,
   onToggleRecoveryCode,
   onOpenAddModal,
+  onEditAccount,
 }: VaultListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -188,6 +190,7 @@ export function VaultList({
                 onTogglePin={onTogglePin}
                 onDelete={onDelete}
                 onToggleRecoveryCode={onToggleRecoveryCode}
+                onEdit={onEditAccount}
               />
             ))}
           </div>
@@ -213,6 +216,7 @@ export function VaultList({
                 onTogglePin={onTogglePin}
                 onDelete={onDelete}
                 onToggleRecoveryCode={onToggleRecoveryCode}
+                onEdit={onEditAccount}
               />
             ))}
           </div>

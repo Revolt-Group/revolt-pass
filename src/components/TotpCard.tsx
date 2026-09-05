@@ -10,6 +10,8 @@ import {
   Trash2,
   Key,
   ShieldAlert,
+  Edit3,
+  Plus,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,6 +27,7 @@ interface TotpCardProps {
   onTogglePin: (id: string) => void;
   onDelete: (id: string) => void;
   onToggleRecoveryCode: (id: string, codeIndex: number) => void;
+  onEdit?: (item: VaultItem) => void;
 }
 
 export function TotpCard({
@@ -32,6 +35,7 @@ export function TotpCard({
   onTogglePin,
   onDelete,
   onToggleRecoveryCode,
+  onEdit,
 }: TotpCardProps) {
   const [token, setToken] = useState<string>('------');
   const [remaining, setRemaining] = useState<number>(30);
@@ -189,6 +193,14 @@ export function TotpCard({
                   className="w-48 rounded-xl bg-zinc-950 border border-zinc-800 p-1.5 shadow-2xl z-50 text-xs text-zinc-300 animate-in fade-in zoom-in-95 duration-100"
                 >
                   <DropdownMenu.Item
+                    onClick={() => onEdit?.(item)}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 hover:text-white cursor-pointer outline-none transition-colors"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-zinc-400" />
+                    Editar / Códigos de Respaldo
+                  </DropdownMenu.Item>
+
+                  <DropdownMenu.Item
                     onClick={handleCopyBase32}
                     className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 hover:text-white cursor-pointer outline-none transition-colors"
                   >
@@ -284,6 +296,21 @@ export function TotpCard({
         )}
       </div>
 
+      {/* Botón rápido para agregar códigos de respaldo si la cuenta aún no tiene */}
+      {(!item.recovery_codes || item.recovery_codes.length === 0) && (
+        <div className="mt-3 pt-2.5 border-t border-zinc-800/60 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => onEdit?.(item)}
+            className="text-[11px] text-zinc-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors group/btn py-0.5"
+            title="Añadir códigos de recuperación entregados por el servicio"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-500/70 group-hover/btn:text-amber-400" />
+            <span>+ Agregar códigos de respaldo</span>
+          </button>
+        </div>
+      )}
+
       {/* Sección Colapsable de Recovery Codes */}
       {item.recovery_codes && item.recovery_codes.length > 0 && (
         <div className="mt-4 pt-3 border-t border-zinc-800/80">
@@ -315,14 +342,25 @@ export function TotpCard({
                 <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/60 space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 pb-1 border-b border-zinc-800/60">
                     <span>Marca como usado o haz clic para copiar</span>
-                    <button
-                      type="button"
-                      onClick={() => setRevealCodes(!revealCodes)}
-                      className="text-violet-400 hover:text-violet-300 flex items-center gap-1"
-                    >
-                      {revealCodes ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                      {revealCodes ? 'Ocultar' : 'Revelar'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onEdit?.(item)}
+                        className="text-amber-400 hover:text-amber-300 flex items-center gap-1 text-[11px] font-sans"
+                        title="Gestionar o agregar más códigos"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Gestionar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRevealCodes(!revealCodes)}
+                        className="text-violet-400 hover:text-violet-300 flex items-center gap-1"
+                      >
+                        {revealCodes ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        {revealCodes ? 'Ocultar' : 'Revelar'}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-1.5 max-h-36 overflow-y-auto pr-1">
