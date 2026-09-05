@@ -30,8 +30,12 @@ export class AutoLockManager {
   private boundVisibilityHandler: () => void;
 
   constructor(options: AutoLockOptions = {}) {
-    this.inactivityTimeoutMs = options.inactivityTimeoutMs ?? 5 * 60 * 1000; // 5 min
-    this.backgroundGraceMs = options.backgroundGraceMs ?? 30 * 1000; // 30s
+    const rawTimeout = options.inactivityTimeoutMs ?? 5 * 60 * 1000;
+    this.inactivityTimeoutMs = rawTimeout > 0 ? rawTimeout : 5 * 60 * 1000;
+
+    const rawGrace = options.backgroundGraceMs ?? 30 * 1000;
+    this.backgroundGraceMs = rawGrace > 0 ? rawGrace : 30 * 1000;
+
     this.immediateLockOnHide = options.immediateLockOnHide ?? false;
 
     this.boundActivityHandler = this.handleUserActivity.bind(this);
@@ -54,10 +58,14 @@ export class AutoLockManager {
       const activityEvents = [
         'mousemove',
         'mousedown',
+        'mouseup',
         'keydown',
         'touchstart',
+        'touchend',
+        'touchmove',
         'scroll',
         'wheel',
+        'pointerdown',
       ];
 
       activityEvents.forEach((evt) => {
@@ -83,10 +91,14 @@ export class AutoLockManager {
       const activityEvents = [
         'mousemove',
         'mousedown',
+        'mouseup',
         'keydown',
         'touchstart',
+        'touchend',
+        'touchmove',
         'scroll',
         'wheel',
+        'pointerdown',
       ];
 
       activityEvents.forEach((evt) => {
