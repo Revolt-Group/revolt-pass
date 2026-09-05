@@ -13,15 +13,17 @@
 
 ---
 
-## 🏛️ Suite de Documentación de Ingeniería
+## 🏛️ Suite de Documentación de Ingeniería / Engineering Documentation
 
-La especificación técnica canónica y única fuente de verdad del proyecto se encuentra en el directorio [`/docs`](./docs):
+La especificación técnica canónica se encuentra disponible en Español e Inglés dentro del directorio [`/docs`](./docs):
 
-- **[docs/01-PRD.md](./docs/01-PRD.md):** Requerimientos de producto, alcance (In-Scope vs. Out-of-Scope), especificación funcional y no funcional, métricas de éxito.
-- **[docs/02-ARCHITECTURE.md](./docs/02-ARCHITECTURE.md):** Diagramas C4, flujos integrales de datos, contratos REST OpenAPI, tipos canónicos TypeScript y esquema D1.
-- **[docs/03-SECURITY-AND-THREAT-MODEL.md](./docs/03-SECURITY-AND-THREAT-MODEL.md):** Parámetros criptográficos (PBKDF2 600k, AES-GCM 256, WebAuthn), modelo de amenazas STRIDE y mitigaciones de memoria/clipboard.
-- **[docs/04-ADRS.md](./docs/04-ADRS.md):** Registros de decisiones arquitectónicas (ADR-001 a ADR-006) en formato Nygard.
-- **[docs/05-ROADMAP.md](./docs/05-ROADMAP.md):** Plan de ejecución secuencial de 8 fases con criterios *Definition of Done* (DoD).
+| Documento (Español) | Document (English) | Descripción / Description |
+| :--- | :--- | :--- |
+| **[01-PRD.md](./docs/01-PRD.md)** | **[01-PRD.md](./docs/en/01-PRD.md)** | Requerimientos de producto, alcance y KPIs / Product Requirements & KPIs |
+| **[02-ARCHITECTURE.md](./docs/02-ARCHITECTURE.md)** | **[02-ARCHITECTURE.md](./docs/en/02-ARCHITECTURE.md)** | Arquitectura C4, flujos de datos y esquema D1 / System Architecture & D1 Schema |
+| **[03-SECURITY-AND-THREAT-MODEL.md](./docs/03-SECURITY-AND-THREAT-MODEL.md)** | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/en/03-SECURITY-AND-THREAT-MODEL.md)** | Criptografía, modelo STRIDE e higiene / Cryptography & Threat Model |
+| **[04-ADRS.md](./docs/04-ADRS.md)** | **[04-ADRS.md](./docs/en/04-ADRS.md)** | Registros de decisiones arquitectónicas / Architecture Decision Records |
+| **[05-ROADMAP.md](./docs/05-ROADMAP.md)** | **[05-ROADMAP.md](./docs/en/05-ROADMAP.md)** | Plan de fases secuenciales y DoD / Sequential Execution Roadmap & DoD |
 
 ---
 
