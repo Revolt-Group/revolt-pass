@@ -57,10 +57,44 @@ export interface LocalUserConfig {
   user_id: string;
   username: string;
   kdf_salt: string;
+  session_token?: string;
   webauthn_credential_id?: string;
   wrapped_master_key?: string;
   auto_lock_minutes: number;
   clipboard_clear_seconds: number;
+}
+
+export interface SessionInfo {
+  id: string;
+  user_id: string;
+  device_name: string;
+  user_agent?: string;
+  ip_country?: string;
+  last_active_at: number;
+  created_at: number;
+  expires_at: number;
+  is_revoked: number;
+  is_current?: boolean;
+}
+
+export interface PasskeyInfo {
+  id: string;
+  user_id: string;
+  name: string;
+  device_name?: string;
+  created_at: number;
+  last_used_at?: number;
+  is_revoked: number;
+}
+
+export interface AuditLogItem {
+  id: number;
+  user_id: string;
+  event_type: string;
+  device_name?: string;
+  ip_country?: string;
+  metadata?: string;
+  created_at: number;
 }
 
 export interface ActiveSessionState {
@@ -69,3 +103,4 @@ export interface ActiveSessionState {
   timeDriftOffsetMs: number;
   lastActivityTimestamp: number;
 }
+

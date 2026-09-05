@@ -36,3 +36,47 @@ export interface VaultUpdateRequestBody {
   iv: string;
   version: number;
 }
+
+export interface SessionItem {
+  id: string;
+  user_id: string;
+  device_name: string;
+  user_agent?: string;
+  ip_country?: string;
+  last_active_at: number;
+  created_at: number;
+  expires_at: number;
+  is_revoked: number;
+  is_current?: boolean;
+}
+
+export interface PasskeyRecord {
+  id: string;
+  user_id: string;
+  name: string;
+  device_name?: string;
+  created_at: number;
+  last_used_at?: number;
+  is_revoked: number;
+}
+
+export interface AuditLogRecord {
+  id: number;
+  user_id: string;
+  event_type: string;
+  device_name?: string;
+  ip_country?: string;
+  metadata?: string;
+  created_at: number;
+}
+
+export interface CreateSessionRequestBody {
+  device_name?: string;
+}
+
+export interface RegisterPasskeyRequestBody {
+  credential_id: string;
+  name: string;
+  device_name?: string;
+}
+

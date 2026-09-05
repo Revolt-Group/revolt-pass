@@ -1,6 +1,7 @@
 /**
  * Zero-Knowledge REST API Router for Cloudflare Workers / Pages Functions.
- * Implements strict security headers, uniform error handling, and optimistic concurrency control.
+ * Implements strict security headers, uniform error handling, active session management,
+ * passkey registry, and optimistic concurrency control.
  */
 
 import type {
@@ -8,6 +9,11 @@ import type {
   ApiResponse,
   RegisterRequestBody,
   VaultUpdateRequestBody,
+  SessionItem,
+  PasskeyRecord,
+  AuditLogRecord,
+  CreateSessionRequestBody,
+  RegisterPasskeyRequestBody,
 } from './types.ts';
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -16,8 +22,8 @@ const SECURITY_HEADERS: Record<string, string> = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, If-None-Match',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Session-Token, If-None-Match',
 };
 
 /**
@@ -64,6 +70,118 @@ export function errorResponse(
 }
 
 /**
+ * Hashes a raw session token using SHA-256 for secure server-side storage.
+ */
+export async function hashToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Generates a cryptographically random session token (64 hex characters).
+ */
+export function generateToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Parses User-Agent header into a clean, human-readable device string.
+ */
+export function parseDeviceName(userAgent?: string | null): string {
+  if (!userAgent) return 'Dispositivo desconocido';
+
+  let os = 'Dispositivo';
+  if (userAgent.includes('Windows NT 10.0') || userAgent.includes('Windows')) {
+    os = 'Windows';
+  } else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS X')) {
+    os = 'macOS';
+  } else if (userAgent.includes('iPhone')) {
+    os = 'iPhone';
+  } else if (userAgent.includes('iPad')) {
+    os = 'iPad';
+  } else if (userAgent.includes('Android')) {
+    os = 'Android';
+  } else if (userAgent.includes('Linux')) {
+    os = 'Linux';
+  }
+
+  let browser = 'Navegador';
+  if (userAgent.includes('Edg/')) {
+    browser = 'Edge';
+  } else if (userAgent.includes('Chrome/') && !userAgent.includes('Edg/')) {
+    browser = 'Chrome';
+  } else if (userAgent.includes('Firefox/')) {
+    browser = 'Firefox';
+  } else if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) {
+    browser = 'Safari';
+  } else if (userAgent.includes('OPR/') || userAgent.includes('Opera/')) {
+    browser = 'Opera';
+  }
+
+  return `${os} · ${browser}`;
+}
+
+/**
+ * Extracts the user country code from Cloudflare request headers or cf properties.
+ */
+function getIpCountry(request: Request): string | undefined {
+  return request.headers.get('CF-IPCountry') || (request as unknown as { cf?: { country?: string } }).cf?.country || undefined;
+}
+
+/**
+ * Validates the provided session token if present.
+ * If revoked or expired, returns an HTTP 401 error response.
+ */
+async function checkSessionValidity(
+  request: Request,
+  env: Env,
+  userId: string
+): Promise<Response | null> {
+  const sessionToken = request.headers.get('X-Session-Token');
+  if (!sessionToken) {
+    return null;
+  }
+
+  const tokenHash = await hashToken(sessionToken);
+  const session = await env.DB.prepare(
+    'SELECT id, user_id, is_revoked, expires_at FROM sessions WHERE token_hash = ?'
+  )
+    .bind(tokenHash)
+    .first<{ id: string; user_id: string; is_revoked: number; expires_at: number }>();
+
+  if (!session || session.is_revoked === 1 || session.user_id !== userId) {
+    return errorResponse(
+      'SESSION_REVOKED',
+      'Sesión revocada o inválida. Por favor, vuelva a iniciar sesión.',
+      401
+    );
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (session.expires_at < nowSeconds) {
+    return errorResponse('SESSION_EXPIRED', 'La sesión ha expirado', 401);
+  }
+
+  try {
+    await env.DB.prepare('UPDATE sessions SET last_active_at = unixepoch() WHERE id = ?')
+      .bind(session.id)
+      .run();
+  } catch {
+    // Non-fatal if update fails
+  }
+
+  return null;
+}
+
+/**
  * Main REST API request handler.
  */
 export async function handleApiRequest(request: Request, env: Env): Promise<Response> {
@@ -100,14 +218,14 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     // POST /api/auth/register: Atomic initial registration of user and vault
     // -----------------------------------------------------------------------
     if (request.method === 'POST' && (path === '/api/auth/register' || path === '/api/v1/auth/register')) {
-      let body: RegisterRequestBody;
+      let body: RegisterRequestBody & { device_name?: string };
       try {
-        body = (await request.json()) as RegisterRequestBody;
+        body = (await request.json()) as RegisterRequestBody & { device_name?: string };
       } catch {
         return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400);
       }
 
-      const { username, kdf_salt, encrypted_blob, iv, passkey_credential_id } = body;
+      const { username, kdf_salt, encrypted_blob, iv, passkey_credential_id, device_name } = body;
 
       if (!username || !kdf_salt || !encrypted_blob || !iv) {
         return errorResponse(
@@ -137,11 +255,18 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         );
       }
 
-      // 2. Generate canonical user UUID
+      // 2. Generate canonical user UUID and initial session token
       const userId = `usr_${crypto.randomUUID()}`;
+      const sessionToken = generateToken();
+      const tokenHash = await hashToken(sessionToken);
+      const sessionId = `ses_${crypto.randomUUID()}`;
+      const resolvedDeviceName = device_name || parseDeviceName(request.headers.get('User-Agent'));
+      const userAgent = request.headers.get('User-Agent') || null;
+      const ipCountry = getIpCountry(request) || null;
+      const sessionExpiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // 30 days
 
-      // 3. Atomically insert user and version 1 vault into Cloudflare D1
-      await env.DB.batch([
+      // 3. Atomically insert user, initial vault, session, and audit logs into Cloudflare D1
+      const batchStatements = [
         env.DB.prepare(
           `INSERT INTO users (id, username, kdf_salt, passkey_credential_id, created_at, updated_at) 
            VALUES (?, ?, ?, ?, unixepoch(), unixepoch())`
@@ -151,10 +276,29 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
            VALUES (?, ?, ?, 1, unixepoch())`
         ).bind(userId, encrypted_blob, iv),
         env.DB.prepare(
-          `INSERT INTO sync_logs (user_id, action, client_version, server_version, created_at) 
-           VALUES (?, 'REGISTER', 1, 1, unixepoch())`
-        ).bind(userId),
-      ]);
+          `INSERT INTO sessions (id, user_id, token_hash, device_name, user_agent, ip_country, last_active_at, created_at, expires_at, is_revoked)
+           VALUES (?, ?, ?, ?, ?, ?, unixepoch(), unixepoch(), ?, 0)`
+        ).bind(sessionId, userId, tokenHash, resolvedDeviceName, userAgent, ipCountry, sessionExpiresAt),
+        env.DB.prepare(
+          `INSERT INTO sync_logs (user_id, action, client_version, server_version, ip_country, created_at) 
+           VALUES (?, 'REGISTER', 1, 1, ?, unixepoch())`
+        ).bind(userId, ipCountry),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, device_name, ip_country, metadata, created_at)
+           VALUES (?, 'REGISTER', ?, ?, ?, unixepoch())`
+        ).bind(userId, resolvedDeviceName, ipCountry, JSON.stringify({ session_id: sessionId })),
+      ];
+
+      if (passkey_credential_id) {
+        batchStatements.push(
+          env.DB.prepare(
+            `INSERT INTO passkeys (id, user_id, name, device_name, created_at, is_revoked)
+             VALUES (?, ?, ?, ?, unixepoch(), 0)`
+          ).bind(passkey_credential_id, userId, 'Windows Hello / Dispositivo Principal', resolvedDeviceName)
+        );
+      }
+
+      await env.DB.batch(batchStatements);
 
       return jsonResponse(
         {
@@ -162,6 +306,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           data: {
             user_id: userId,
             version: 1,
+            session_token: sessionToken,
             updated_at: Math.floor(Date.now() / 1000),
           },
           timestamp: Date.now(),
@@ -203,6 +348,333 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
+    // POST /api/auth/session: Generate active session upon login / unlock
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/auth/session' || path === '/api/v1/auth/session')) {
+      let body: CreateSessionRequestBody & { user_id?: string; username?: string } = {};
+      try {
+        body = (await request.json()) as CreateSessionRequestBody & { user_id?: string; username?: string };
+      } catch {
+        // Body is optional
+      }
+
+      const headerUserId = request.headers.get('X-User-Id');
+      let targetUserId = headerUserId || body.user_id;
+
+      if (!targetUserId && body.username) {
+        const cleanUsername = body.username.trim().toLowerCase();
+        const user = await env.DB.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE')
+          .bind(cleanUsername)
+          .first<{ id: string }>();
+        if (user) {
+          targetUserId = user.id;
+        }
+      }
+
+      if (!targetUserId) {
+        return errorResponse('UNAUTHORIZED', 'Identificador de usuario requerido', 401);
+      }
+
+      const sessionToken = generateToken();
+      const tokenHash = await hashToken(sessionToken);
+      const sessionId = `ses_${crypto.randomUUID()}`;
+      const resolvedDeviceName = body.device_name || parseDeviceName(request.headers.get('User-Agent'));
+      const userAgent = request.headers.get('User-Agent') || null;
+      const ipCountry = getIpCountry(request) || null;
+      const sessionExpiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // 30 days
+
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO sessions (id, user_id, token_hash, device_name, user_agent, ip_country, last_active_at, created_at, expires_at, is_revoked)
+           VALUES (?, ?, ?, ?, ?, ?, unixepoch(), unixepoch(), ?, 0)`
+        ).bind(sessionId, targetUserId, tokenHash, resolvedDeviceName, userAgent, ipCountry, sessionExpiresAt),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, device_name, ip_country, metadata, created_at)
+           VALUES (?, 'LOGIN', ?, ?, ?, unixepoch())`
+        ).bind(targetUserId, resolvedDeviceName, ipCountry, JSON.stringify({ session_id: sessionId })),
+      ]);
+
+      return jsonResponse({
+        success: true,
+        data: {
+          session_token: sessionToken,
+          session: {
+            id: sessionId,
+            user_id: targetUserId,
+            device_name: resolvedDeviceName,
+            user_agent: userAgent,
+            ip_country: ipCountry,
+            last_active_at: Math.floor(Date.now() / 1000),
+            created_at: Math.floor(Date.now() / 1000),
+            expires_at: sessionExpiresAt,
+            is_revoked: 0,
+            is_current: true,
+          },
+        },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /api/sessions: List active sessions for user
+    // -----------------------------------------------------------------------
+    if (request.method === 'GET' && (path === '/api/sessions' || path === '/api/v1/sessions')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const { results } = await env.DB.prepare(
+        `SELECT id, user_id, device_name, user_agent, ip_country, last_active_at, created_at, expires_at, is_revoked
+         FROM sessions 
+         WHERE user_id = ? AND is_revoked = 0 
+         ORDER BY last_active_at DESC`
+      )
+        .bind(userId)
+        .all<SessionItem>();
+
+      let currentSessionId: string | null = null;
+      const sessionToken = request.headers.get('X-Session-Token');
+      if (sessionToken) {
+        const tokenHash = await hashToken(sessionToken);
+        const cur = await env.DB.prepare('SELECT id FROM sessions WHERE token_hash = ?')
+          .bind(tokenHash)
+          .first<{ id: string }>();
+        if (cur) currentSessionId = cur.id;
+      }
+
+      const sessions = (results || []).map((s) => ({
+        ...s,
+        is_current: s.id === currentSessionId,
+      }));
+
+      return jsonResponse({
+        success: true,
+        data: { sessions },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/sessions/revoke-others: Revoke all other sessions for user
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/sessions/revoke-others' || path === '/api/v1/sessions/revoke-others')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionToken = request.headers.get('X-Session-Token');
+      if (!sessionToken) {
+        return errorResponse('MISSING_SESSION_TOKEN', 'Cabecera X-Session-Token requerida para revocar otras sesiones', 400);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const currentHash = await hashToken(sessionToken);
+
+      await env.DB.batch([
+        env.DB.prepare(
+          'UPDATE sessions SET is_revoked = 1 WHERE user_id = ? AND token_hash != ? AND is_revoked = 0'
+        ).bind(userId, currentHash),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
+           VALUES (?, 'REVOKE_OTHER_SESSIONS', ?, unixepoch())`
+        ).bind(userId, JSON.stringify({ current_token_hash_prefix: currentHash.slice(0, 8) })),
+      ]);
+
+      return jsonResponse({
+        success: true,
+        data: { message: 'Todas las demás sesiones han sido revocadas exitosamente' },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // DELETE /api/sessions/:id: Remote revocation of individual session
+    // -----------------------------------------------------------------------
+    const sessionMatch = path.match(/^\/api(?:\/v1)?\/sessions\/([^/]+)$/);
+    if (request.method === 'DELETE' && sessionMatch) {
+      const targetSessionId = decodeURIComponent(sessionMatch[1]);
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      await env.DB.batch([
+        env.DB.prepare(
+          'UPDATE sessions SET is_revoked = 1 WHERE id = ? AND user_id = ?'
+        ).bind(targetSessionId, userId),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
+           VALUES (?, 'SESSION_REVOKED', ?, unixepoch())`
+        ).bind(userId, JSON.stringify({ revoked_session_id: targetSessionId })),
+      ]);
+
+      return jsonResponse({
+        success: true,
+        data: { revoked_session_id: targetSessionId },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /api/passkeys: List enrolled passkeys for user
+    // -----------------------------------------------------------------------
+    if (request.method === 'GET' && (path === '/api/passkeys' || path === '/api/v1/passkeys')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const { results } = await env.DB.prepare(
+        `SELECT id, user_id, name, device_name, created_at, last_used_at, is_revoked
+         FROM passkeys 
+         WHERE user_id = ? AND is_revoked = 0 
+         ORDER BY created_at DESC`
+      )
+        .bind(userId)
+        .all<PasskeyRecord>();
+
+      return jsonResponse({
+        success: true,
+        data: { passkeys: results || [] },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/passkeys: Enroll new passkey for user
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/passkeys' || path === '/api/v1/passkeys')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: RegisterPasskeyRequestBody;
+      try {
+        body = (await request.json()) as RegisterPasskeyRequestBody;
+      } catch {
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400);
+      }
+
+      const { credential_id, name, device_name } = body;
+      if (!credential_id || !name) {
+        return errorResponse('MISSING_REQUIRED_FIELDS', 'Los campos credential_id y name son obligatorios', 400);
+      }
+
+      const resolvedDeviceName = device_name || parseDeviceName(request.headers.get('User-Agent'));
+
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO passkeys (id, user_id, name, device_name, created_at, is_revoked)
+           VALUES (?, ?, ?, ?, unixepoch(), 0)`
+        ).bind(credential_id, userId, name.trim(), resolvedDeviceName),
+        env.DB.prepare(
+          'UPDATE users SET passkey_credential_id = ? WHERE id = ? AND passkey_credential_id IS NULL'
+        ).bind(credential_id, userId),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
+           VALUES (?, 'PASSKEY_ADDED', ?, unixepoch())`
+        ).bind(userId, JSON.stringify({ passkey_id: credential_id, name: name.trim() })),
+      ]);
+
+      return jsonResponse(
+        {
+          success: true,
+          data: {
+            passkey: {
+              id: credential_id,
+              user_id: userId,
+              name: name.trim(),
+              device_name: resolvedDeviceName,
+              created_at: Math.floor(Date.now() / 1000),
+            },
+          },
+          timestamp: Date.now(),
+        },
+        201
+      );
+    }
+
+    // -----------------------------------------------------------------------
+    // DELETE /api/passkeys/:id: Remote revocation of individual passkey
+    // -----------------------------------------------------------------------
+    const passkeyMatch = path.match(/^\/api(?:\/v1)?\/passkeys\/([^/]+)$/);
+    if (request.method === 'DELETE' && passkeyMatch) {
+      const targetPasskeyId = decodeURIComponent(passkeyMatch[1]);
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      await env.DB.batch([
+        env.DB.prepare(
+          'UPDATE passkeys SET is_revoked = 1 WHERE id = ? AND user_id = ?'
+        ).bind(targetPasskeyId, userId),
+        env.DB.prepare(
+          'UPDATE users SET passkey_credential_id = NULL WHERE id = ? AND passkey_credential_id = ?'
+        ).bind(userId, targetPasskeyId),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
+           VALUES (?, 'PASSKEY_REVOKED', ?, unixepoch())`
+        ).bind(userId, JSON.stringify({ revoked_passkey_id: targetPasskeyId })),
+      ]);
+
+      return jsonResponse({
+        success: true,
+        data: { revoked_passkey_id: targetPasskeyId },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /api/audit: Retrieve security event audit logs
+    // -----------------------------------------------------------------------
+    if (request.method === 'GET' && (path === '/api/audit' || path === '/api/v1/audit')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const { results } = await env.DB.prepare(
+        `SELECT id, user_id, event_type, device_name, ip_country, metadata, created_at
+         FROM audit_logs 
+         WHERE user_id = ? 
+         ORDER BY created_at DESC 
+         LIMIT 50`
+      )
+        .bind(userId)
+        .all<AuditLogRecord>();
+
+      return jsonResponse({
+        success: true,
+        data: { audit_logs: results || [] },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
     // GET /api/vault: Retrieve current encrypted vault blob
     // -----------------------------------------------------------------------
     if (request.method === 'GET' && (path === '/api/vault' || path === '/api/v1/vault')) {
@@ -211,6 +683,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       if (!userId) {
         return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
       }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
 
       const vault = await env.DB.prepare(
         'SELECT user_id, encrypted_blob, iv, version, updated_at FROM vaults WHERE user_id = ?'
@@ -269,6 +744,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
       }
 
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
       let body: VaultUpdateRequestBody;
       try {
         body = (await request.json()) as VaultUpdateRequestBody;
@@ -309,7 +787,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         );
       }
 
-      // Update vault and append audit log entry
+      const resolvedDeviceName = parseDeviceName(request.headers.get('User-Agent'));
+
+      // Update vault and append sync log and audit log entries
       await env.DB.batch([
         env.DB.prepare(
           `UPDATE vaults 
@@ -320,6 +800,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           `INSERT INTO sync_logs (user_id, action, client_version, server_version, created_at) 
            VALUES (?, 'SYNC_PUSH', ?, ?, unixepoch())`
         ).bind(userId, version, version),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
+           VALUES (?, 'VAULT_SYNC', ?, ?, unixepoch())`
+        ).bind(userId, resolvedDeviceName, JSON.stringify({ version })),
       ]);
 
       return jsonResponse({

@@ -36,6 +36,7 @@ import { encryptVault, decryptVault } from './lib/crypto/vault.ts';
 import {
   checkWebAuthnSupport,
   registerPlatformPasskey,
+  verifyPlatformPasskey,
   wrapMasterKey,
   unwrapMasterKey,
   type WrappedKeyPackage,
@@ -55,6 +56,7 @@ import { PasswordGeneratorModal } from './components/PasswordGeneratorModal.tsx'
 import { CommandPalette } from './components/CommandPalette.tsx';
 import { BackupModal } from './components/BackupModal.tsx';
 import { EditAccountModal } from './components/EditAccountModal.tsx';
+import { SecurityModal } from './components/SecurityModal.tsx';
 
 import type { VaultItem, LocalUserConfig, SyncStatus } from './types/vault.ts';
 import type { ApiResponse } from './worker/types.ts';
@@ -78,6 +80,7 @@ export function App() {
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSecurityOpen, setIsSecurityOpen] = useState(false);
 
   // Authentication Forms
   const [loginUsername, setLoginUsername] = useState('');
@@ -102,6 +105,20 @@ export function App() {
   masterKeyRef.current = masterKey;
 
   const [, startTransition] = useTransition();
+
+  // Listen for remote session revocation
+  useEffect(() => {
+    const handleRevoked = () => {
+      setMasterKey(null);
+      setScreen('locked');
+      toast.error('Tu sesión ha sido revocada remotamente.', {
+        description: 'Por motivos de seguridad, las claves en memoria RAM fueron destruidas.',
+        duration: 8000,
+      });
+    };
+    window.addEventListener('revolt:session-revoked', handleRevoked);
+    return () => window.removeEventListener('revolt:session-revoked', handleRevoked);
+  }, []);
 
   // Listen for PWA installation event (beforeinstallprompt)
   useEffect(() => {
@@ -420,6 +437,7 @@ export function App() {
 
       // 3. Register user in Cloudflare D1
       let userId = `usr_${crypto.randomUUID()}`;
+      let sessionToken: string | undefined = undefined;
       try {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
@@ -442,8 +460,9 @@ export function App() {
           throw new Error(errData?.error?.message || 'Error al registrar en el servidor');
         }
 
-        const resJson = (await res.json()) as ApiResponse<{ user_id: string }>;
+        const resJson = (await res.json()) as ApiResponse<{ user_id: string; session_token?: string }>;
         if (resJson.data?.user_id) userId = resJson.data.user_id;
+        if (resJson.data?.session_token) sessionToken = resJson.data.session_token;
       } catch (e) {
         if (e instanceof Error && e.message.includes('ya existe')) {
           throw e;
@@ -456,6 +475,7 @@ export function App() {
         user_id: userId,
         username: cleanUsername,
         kdf_salt: saltBase64,
+        session_token: sessionToken,
         auto_lock_minutes: 5,
         clipboard_clear_seconds: 45,
       };
@@ -521,7 +541,25 @@ export function App() {
 
       toast.success('Bóveda desbloqueada correctamente');
 
-      // 4. Attempt remote synchronization in the background
+      // 4. Refresh or establish active session in background
+      if (userConfig.user_id) {
+        fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userConfig.user_id }),
+        })
+          .then((r) => r.json() as Promise<ApiResponse<{ session_token: string }>>)
+          .then(async (resData) => {
+            if (resData.success && resData.data?.session_token) {
+              const updated = { ...userConfig, session_token: resData.data.session_token };
+              await saveUserConfig(updated);
+              setUserConfig(updated);
+            }
+          })
+          .catch(() => {});
+      }
+
+      // 5. Attempt remote synchronization in the background
       pullRemoteVault().catch(() => {});
     } catch (err: unknown) {
       toast.error('Contraseña Maestra incorrecta o bóveda corrupta');
@@ -542,7 +580,14 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // Unwrap master key protected by platform authenticator key
+      // 1. Strictly enforce physical OS prompt (Windows Hello PIN or Biometrics)
+      const verified = await verifyPlatformPasskey(userConfig.webauthn_credential_id);
+      if (!verified) {
+        toast.error('Autenticación con Windows Hello cancelada o no autorizada.');
+        return;
+      }
+
+      // 2. Unwrap master key protected by platform authenticator key
       const wrappedPkg = JSON.parse(userConfig.wrapped_master_key) as WrappedKeyPackage;
       const key = await unwrapMasterKey(
         wrappedPkg,
@@ -564,6 +609,25 @@ export function App() {
       setScreen('unlocked');
 
       toast.success('Desbloqueado con Windows Hello');
+
+      // 3. Refresh or establish active session in background
+      if (userConfig.user_id) {
+        fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userConfig.user_id }),
+        })
+          .then((r) => r.json() as Promise<ApiResponse<{ session_token: string }>>)
+          .then(async (resData) => {
+            if (resData.success && resData.data?.session_token) {
+              const updated = { ...userConfig, session_token: resData.data.session_token };
+              await saveUserConfig(updated);
+              setUserConfig(updated);
+            }
+          })
+          .catch(() => {});
+      }
+
       pullRemoteVault().catch(() => {});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error en la verificación biométrica';
@@ -583,6 +647,25 @@ export function App() {
       toast.info('Solicitando credencial de Windows Hello...');
       const reg = await registerPlatformPasskey(userConfig.user_id, userConfig.username);
       const wrappedPkg = await wrapMasterKey(masterKey, reg.credentialId);
+
+      // Register passkey in remote database if online
+      if (userConfig.user_id) {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'X-User-Id': userConfig.user_id,
+        };
+        if (userConfig.session_token) {
+          headers['X-Session-Token'] = userConfig.session_token;
+        }
+        fetch('/api/passkeys', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            credential_id: reg.credentialId,
+            name: 'Windows Hello / Dispositivo Local',
+          }),
+        }).catch(() => {});
+      }
 
       const updatedConfig: LocalUserConfig = {
         ...userConfig,
@@ -1233,7 +1316,7 @@ export function App() {
                   Revolt Pass
                 </span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-white/[0.08] text-zinc-400">
-                  v1.0
+                  v1.1
                 </span>
               </div>
               <p className="text-[10px] text-zinc-500 hidden sm:block">
@@ -1306,6 +1389,16 @@ export function App() {
               title="Respaldo & Migración (Copia Cifrada / Texto Plano)"
             >
               <FolderArchive className="w-4 h-4" />
+            </button>
+
+            {/* Security & Sessions Panel Button */}
+            <button
+              type="button"
+              onClick={() => setIsSecurityOpen(true)}
+              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors"
+              title="Panel de Seguridad, Sesiones y Passkeys"
+            >
+              <Shield className="w-4 h-4 text-violet-400" />
             </button>
 
             {/* PWA Installation Button */}
@@ -1391,6 +1484,18 @@ export function App() {
         kdfSalt={userConfig?.kdf_salt || ''}
         onVaultRestored={handleVaultRestored}
       />
+
+      {isSecurityOpen && userConfig && (
+        <SecurityModal
+          isOpen={isSecurityOpen}
+          onClose={() => setIsSecurityOpen(false)}
+          userId={userConfig.user_id}
+          sessionToken={userConfig.session_token}
+          userConfig={userConfig}
+          masterKey={masterKey}
+          onConfigUpdated={(cfg) => setUserConfig(cfg)}
+        />
+      )}
 
       <CommandPalette
         isOpen={isCmdPaletteOpen}

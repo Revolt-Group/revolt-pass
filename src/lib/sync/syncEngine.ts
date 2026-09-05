@@ -77,6 +77,12 @@ export function reconcileVaultItems(
   return Array.from(itemMap.values());
 }
 
+function handleAuthStatus(status: number): void {
+  if (status === 401 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('revolt:session-revoked'));
+  }
+}
+
 /**
  * Downloads latest version of remote vault if server has changes (Pull Sync).
  */
@@ -100,6 +106,10 @@ export async function pullRemoteVault(
       'Accept': 'application/json',
     };
 
+    if (userConfig.session_token) {
+      headers['X-Session-Token'] = userConfig.session_token;
+    }
+
     if (localVersion > 0) {
       headers['If-None-Match'] = `"v${localVersion}"`;
     }
@@ -108,6 +118,11 @@ export async function pullRemoteVault(
       method: 'GET',
       headers,
     });
+
+    if (response.status === 401) {
+      handleAuthStatus(401);
+      throw new Error('SESSION_REVOKED');
+    }
 
     // 304 Not Modified: Server and client are identically synchronized
     if (response.status === 304) {
@@ -178,14 +193,25 @@ export async function pushLocalVault(
       version: localVault.version,
     };
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-User-Id': userConfig.user_id,
+    };
+
+    if (userConfig.session_token) {
+      headers['X-Session-Token'] = userConfig.session_token;
+    }
+
     const response = await customFetch(`${baseUrl}/api/vault`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': userConfig.user_id,
-      },
+      headers,
       body: JSON.stringify(payload),
     });
+
+    if (response.status === 401) {
+      handleAuthStatus(401);
+      throw new Error('SESSION_REVOKED');
+    }
 
     // 200 OK: Synchronization successful
     if (response.ok) {
@@ -232,10 +258,23 @@ export async function resolveConflict(
   if (!userConfig || !localVault) return false;
 
   // 1. Fetch full remote version
+  const getHeaders: Record<string, string> = {
+    'X-User-Id': userConfig.user_id,
+  };
+  if (userConfig.session_token) {
+    getHeaders['X-Session-Token'] = userConfig.session_token;
+  }
+
   const getRes = await customFetch(`${baseUrl}/api/vault`, {
     method: 'GET',
-    headers: { 'X-User-Id': userConfig.user_id },
+    headers: getHeaders,
   });
+
+  if (getRes.status === 401) {
+    handleAuthStatus(401);
+    updateSyncState('error');
+    return false;
+  }
 
   if (!getRes.ok) {
     updateSyncState('error');

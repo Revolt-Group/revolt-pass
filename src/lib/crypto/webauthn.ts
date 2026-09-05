@@ -97,11 +97,24 @@ export async function registerPlatformPasskey(
 
 /**
  * Performs a WebAuthn assertion requesting Windows Hello PIN or biometrics.
+/**
+ * Safely converts Base64 or Base64URL strings into Uint8Array.
+ */
+function safeBase64ToBytes(input: string): Uint8Array {
+  let base64 = input.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) {
+    base64 += '=';
+  }
+  return base64ToBytes(base64);
+}
+
+/**
+ * Performs a WebAuthn assertion requesting Windows Hello PIN or biometrics.
  * 
- * @param credentialIdBase64 Pre-registered credential ID in Base64
+ * @param credentialId Pre-registered credential ID (Base64 or Base64URL)
  * @returns boolean indicating whether hardware verification succeeded
  */
-export async function verifyPlatformPasskey(credentialIdBase64: string): Promise<boolean> {
+export async function verifyPlatformPasskey(credentialId: string): Promise<boolean> {
   const support = await checkWebAuthnSupport();
   if (!support.isSupported || !support.hasPlatformAuthenticator) {
     throw new Error('Platform authenticator is not available.');
@@ -110,7 +123,7 @@ export async function verifyPlatformPasskey(credentialIdBase64: string): Promise
   const challenge = new Uint8Array(32);
   crypto.getRandomValues(challenge);
 
-  const credentialIdBytes = base64ToBytes(credentialIdBase64);
+  const credentialIdBytes = safeBase64ToBytes(credentialId);
 
   const requestOptions: PublicKeyCredentialRequestOptions = {
     challenge: challenge as unknown as ArrayBuffer,
@@ -126,11 +139,19 @@ export async function verifyPlatformPasskey(credentialIdBase64: string): Promise
     timeout: 60000,
   };
 
-  const assertion = (await navigator.credentials.get({
-    publicKey: requestOptions,
-  })) as PublicKeyCredential;
+  try {
+    const assertion = (await navigator.credentials.get({
+      publicKey: requestOptions,
+    })) as PublicKeyCredential;
 
-  return assertion !== null;
+    return assertion !== null;
+  } catch (err: unknown) {
+    // Handle user cancellation (AbortError or NotAllowedError) cleanly
+    if (err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 export interface WrappedKeyPackage {
