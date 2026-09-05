@@ -26,6 +26,7 @@ export interface VaultItem {
   notes?: string;
   pinned?: boolean;
   tags?: string[];
+  icon_url?: string; // URL externa o data URL (base64) del logo personalizado
   created_at: number;
   updated_at: number;
 }

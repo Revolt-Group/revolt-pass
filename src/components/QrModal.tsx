@@ -11,12 +11,17 @@ import {
   CheckCircle2,
   AlertCircle,
   QrCode,
+  ImageIcon,
+  Upload,
+  Link,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrowserQRCodeReader } from '@zxing/browser';
 import { toast } from 'sonner';
 import { parseOtpAuthUri } from '../lib/crypto/totp.ts';
 import { sanitizeBase32, isValidBase32 } from '../lib/crypto/base32.ts';
+import { BrandIcon } from './BrandIcon.tsx';
+import { resizeImageFile } from '../lib/utils/image.ts';
 import type { VaultItem, TotpAlgorithm, RecoveryCode } from '../types/vault.ts';
 
 interface QrModalProps {
@@ -40,6 +45,10 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
   const [recoveryCodes, setRecoveryCodes] = useState<RecoveryCode[]>([]);
   const [newRecoveryInput, setNewRecoveryInput] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [iconUrl, setIconUrl] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const iconFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Camera State
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -53,6 +62,24 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [scanSuccess, setScanSuccess] = useState(false);
 
+  const handleIconFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    try {
+      const dataUrl = await resizeImageFile(file, 96);
+      setIconUrl(dataUrl);
+      toast.success('Foto / Logo cargado y optimizado');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al procesar la imagen';
+      toast.error(msg);
+    } finally {
+      setIsUploadingImage(false);
+      if (iconFileInputRef.current) iconFileInputRef.current.value = '';
+    }
+  };
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -65,6 +92,9 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
       setRecoveryCodes([]);
       setNewRecoveryInput('');
       setTagsInput('');
+      setIconUrl('');
+      setShowUrlInput(false);
+      setIsUploadingImage(false);
       setScanSuccess(false);
       setCameraError(null);
     }
@@ -233,6 +263,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
       type: 'totp',
       issuer: issuer.trim(),
       account: account.trim(),
+      icon_url: iconUrl.trim() || undefined,
       secret: cleanSecret,
       digits,
       period,
@@ -446,6 +477,77 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                           <span>Código QR decodificado exitosamente. Revisa los datos y añade recovery codes si posees.</span>
                         </div>
                       )}
+
+                      {/* Logo / Foto de la Cuenta */}
+                      <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="relative group/avatar">
+                              <BrandIcon issuer={issuer || 'Cuenta'} iconUrl={iconUrl} size={40} className="shrink-0 ring-1 ring-white/10" />
+                              {iconUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => setIconUrl('')}
+                                  className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-zinc-800 border border-white/20 text-zinc-400 hover:text-rose-400 shadow-md transition-colors"
+                                  title="Restablecer logo por defecto"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
+                                <ImageIcon className="w-3.5 h-3.5 text-violet-400" />
+                                <span>Logo / Foto de la Cuenta (Opcional)</span>
+                              </h4>
+                              <p className="text-[11px] text-zinc-400">
+                                {iconUrl
+                                  ? 'Logo personalizado activo'
+                                  : 'Subí una foto o ingresá una URL'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              ref={iconFileInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleIconFileChange}
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => iconFileInputRef.current?.click()}
+                              disabled={isUploadingImage}
+                              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+                            >
+                              <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                              <span>{isUploadingImage ? 'Cargando...' : 'Subir Foto'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowUrlInput(!showUrlInput)}
+                              className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+                            >
+                              <Link className="w-3.5 h-3.5" />
+                              <span>{showUrlInput ? 'Ocultar' : 'URL'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {showUrlInput && (
+                          <div className="pt-2 border-t border-zinc-800/80">
+                            <input
+                              type="url"
+                              value={iconUrl.startsWith('data:') ? '' : iconUrl}
+                              onChange={(e) => setIconUrl(e.target.value)}
+                              placeholder="https://ejemplo.com/logo.png"
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-violet-500/50 transition-colors"
+                            />
+                          </div>
+                        )}
+                      </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>

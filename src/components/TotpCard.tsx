@@ -150,7 +150,7 @@ export function TotpCard({
       <div>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <BrandIcon issuer={item.issuer} size={40} className="shrink-0" />
+            <BrandIcon issuer={item.issuer} iconUrl={item.icon_url} size={40} className="shrink-0" />
             <div className="min-w-0">
               <h3 className="font-semibold text-sm md:text-base text-zinc-100 tracking-tight truncate">
                 {item.issuer}

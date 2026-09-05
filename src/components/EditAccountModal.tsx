@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   X,
-  ShieldAlert,
   Plus,
   Trash2,
   Copy,
@@ -12,10 +11,15 @@ import {
   User,
   Building,
   CheckCircle2,
+  Upload,
+  Link,
+  ImageIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { BrandIcon } from './BrandIcon.tsx';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
+import { resizeImageFile } from '../lib/utils/image.ts';
 import type { VaultItem, RecoveryCode } from '../types/vault.ts';
 
 interface EditAccountModalProps {
@@ -33,17 +37,24 @@ export function EditAccountModal({
 }: EditAccountModalProps) {
   const [issuer, setIssuer] = useState('');
   const [account, setAccount] = useState('');
+  const [iconUrl, setIconUrl] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
   const [notes, setNotes] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [recoveryCodes, setRecoveryCodes] = useState<RecoveryCode[]>([]);
   const [codeInput, setCodeInput] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (item && isOpen) {
       setIssuer(item.issuer || '');
       setAccount(item.account || '');
+      setIconUrl(item.icon_url || '');
+      setShowUrlInput(false);
       setNotes(item.notes || '');
       setTagsInput(item.tags?.join(', ') || '');
       setRecoveryCodes(item.recovery_codes ? [...item.recovery_codes] : []);
@@ -51,6 +62,51 @@ export function EditAccountModal({
       setCopiedIndex(null);
     }
   }, [item, isOpen]);
+
+  // Manejar selección de archivo de imagen
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    try {
+      const dataUrl = await resizeImageFile(file, 96);
+      setIconUrl(dataUrl);
+      toast.success('Foto / Logo cargado y optimizado para la bóveda');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al procesar la imagen';
+      toast.error(msg);
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Manejar pegado de imagen desde el portapapeles (Ctrl+V)
+  const handlePasteCapture = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          setIsUploadingImage(true);
+          try {
+            const dataUrl = await resizeImageFile(file, 96);
+            setIconUrl(dataUrl);
+            toast.success('Imagen pegada y guardada como logo');
+          } catch {
+            toast.error('No se pudo procesar la imagen pegada');
+          } finally {
+            setIsUploadingImage(false);
+          }
+          return;
+        }
+      }
+    }
+  };
 
   // Agregar uno o múltiples códigos (soporta pegado masivo separado por saltos de línea, comas o espacios)
   const handleAddCodes = () => {
@@ -113,6 +169,7 @@ export function EditAccountModal({
       ...item,
       issuer: issuer.trim(),
       account: account.trim(),
+      icon_url: iconUrl.trim() || undefined,
       notes: notes.trim() || undefined,
       tags: tags.length > 0 ? tags : undefined,
       recovery_codes: recoveryCodes.length > 0 ? recoveryCodes : undefined,
@@ -155,17 +212,16 @@ export function EditAccountModal({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 12 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                onPaste={handlePasteCapture}
                 className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-zinc-950 border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-6 z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none"
               >
                 {/* Cabecera del Modal */}
                 <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                      <ShieldAlert className="w-5 h-5" />
-                    </div>
+                    <BrandIcon issuer={issuer || item.issuer} iconUrl={iconUrl} size={42} className="shrink-0" />
                     <div>
                       <Dialog.Title className="text-base font-semibold tracking-tight text-white flex items-center gap-2">
-                        <span>Editar Cuenta & Códigos de Respaldo</span>
+                        <span>Editar Cuenta & Personalización</span>
                       </Dialog.Title>
                       <Dialog.Description className="text-xs text-zinc-400 font-mono">
                         {item.issuer} {item.account ? `· ${item.account}` : ''}
@@ -183,7 +239,93 @@ export function EditAccountModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-5 space-y-5">
-                  {/* SECCIÓN 1: CÓDIGOS DE RECUPERACIÓN / BACKUP */}
+                  {/* SECCIÓN 1: PERSONALIZACIÓN DEL LOGO / FOTO */}
+                  <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="relative group/avatar">
+                          <BrandIcon issuer={issuer || item.issuer} iconUrl={iconUrl} size={46} className="shrink-0 ring-2 ring-white/10" />
+                          {iconUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setIconUrl('')}
+                              className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-zinc-800 border border-white/20 text-zinc-400 hover:text-rose-400 shadow-md transition-colors"
+                              title="Restablecer logo por defecto"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
+                            <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Logo / Foto de la Cuenta</span>
+                          </h4>
+                          <p className="text-[11px] text-zinc-400">
+                            {iconUrl
+                              ? 'Logo personalizado activo (cifrado localmente)'
+                              : 'Subí una imagen o pegá una URL'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Botones de Acción para Logo */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingImage}
+                          className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-white/10 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-95"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                          <span>{isUploadingImage ? 'Cargando...' : 'Subir Foto'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowUrlInput(!showUrlInput)}
+                          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-white/10 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+                        >
+                          <Link className="w-3.5 h-3.5" />
+                          <span>{showUrlInput ? 'Ocultar URL' : 'URL Externa'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {showUrlInput && (
+                      <div className="pt-2 border-t border-white/[0.06] space-y-1">
+                        <label className="text-[11px] text-zinc-400 font-medium block">
+                          URL directa de la imagen (HTTPS)
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            value={iconUrl.startsWith('data:') ? '' : iconUrl}
+                            onChange={(e) => setIconUrl(e.target.value)}
+                            placeholder="https://ejemplo.com/hytale-logo.png"
+                            className="flex-1 bg-zinc-950 border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                          />
+                          {iconUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setIconUrl('')}
+                              className="px-2.5 py-1.5 text-xs text-zinc-400 hover:text-rose-400 transition-colors"
+                            >
+                              Limpiar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECCIÓN 2: CÓDIGOS DE RECUPERACIÓN / BACKUP */}
                   <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -284,7 +426,7 @@ export function EditAccountModal({
                     )}
                   </div>
 
-                  {/* SECCIÓN 2: INFORMACIÓN DE LA CUENTA */}
+                  {/* SECCIÓN 3: INFORMACIÓN DE LA CUENTA */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Servicio / Issuer */}
                     <div>

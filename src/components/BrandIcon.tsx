@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface BrandIconProps {
   issuer: string;
+  iconUrl?: string;
   size?: number;
   className?: string;
 }
@@ -85,20 +86,25 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase() || 'RP';
 }
 
-export function BrandIcon({ issuer, size = 36, className = '' }: BrandIconProps) {
+export function BrandIcon({ issuer, iconUrl, size = 36, className = '' }: BrandIconProps) {
   const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [iconUrl, issuer]);
 
   const cleanName = (issuer || 'Vault').trim();
   const normalizedKey = cleanName.toLowerCase();
   const slug = COMMON_BRAND_SLUGS[normalizedKey] || normalizedKey.replace(/[^a-z0-9]/g, '');
 
-  const iconUrl = slug ? `https://cdn.simpleicons.org/${slug}/white` : null;
+  // Si el usuario proporcionó un iconUrl (URL externa o data:image base64), tiene prioridad total
+  const effectiveIconUrl = iconUrl?.trim() || (slug ? `https://cdn.simpleicons.org/${slug}/white` : null);
 
   const gradientIdx = fnv1a(cleanName) % GRADIENT_PALETTES.length;
   const gradientClass = GRADIENT_PALETTES[gradientIdx];
   const initials = getInitials(cleanName);
 
-  if (!iconUrl || hasError) {
+  if (!effectiveIconUrl || hasError) {
     return (
       <div
         className={`flex items-center justify-center font-bold text-white shadow-md select-none rounded-xl bg-gradient-to-br ${gradientClass} ${className}`}
@@ -117,17 +123,17 @@ export function BrandIcon({ issuer, size = 36, className = '' }: BrandIconProps)
 
   return (
     <div
-      className={`relative flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800/80 p-2 shadow-inner overflow-hidden ${className}`}
+      className={`relative flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800/80 p-1.5 shadow-inner overflow-hidden ${className}`}
       style={{
         width: `${size}px`,
         height: `${size}px`,
       }}
     >
       <img
-        src={iconUrl}
+        src={effectiveIconUrl}
         alt={cleanName}
         loading="lazy"
-        className="w-full h-full object-contain filter drop-shadow transition-transform duration-200 hover:scale-110"
+        className="w-full h-full object-contain rounded-lg filter drop-shadow transition-transform duration-200 hover:scale-110"
         onError={() => setHasError(true)}
       />
     </div>
