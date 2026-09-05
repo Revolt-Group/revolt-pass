@@ -74,7 +74,7 @@ pnpm wrangler d1 execute revolt-pass-db --file=schema.sql --remote
 pnpm build
 pnpm wrangler deploy
 ```
-That's it! Cloudflare will grant you an active URL (e.g. `https://revolt-pass.<your-username>.workers.dev`), or you can attach your custom domain in the Worker settings.
+That's it! Cloudflare will grant you an active URL (e.g. `https://revolt-pass.<your-cloudflare-subdomain>.workers.dev`), or you can attach your custom domain in the Worker settings.
 
 ---
 

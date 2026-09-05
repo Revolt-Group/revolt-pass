@@ -29,7 +29,7 @@ Before writing code, please review our core architectural rules:
 ### Local Setup
 1. Fork and clone the repository:
    ```bash
-   git clone https://github.com/<your-username>/revolt-pass.git
+   git clone https://github.com/Revolt-Group/revolt-pass.git
    cd revolt-pass
    ```
 2. Install dependencies:
@@ -98,4 +98,4 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) stand
 
 If you discover a potential security vulnerability within Revolt Pass, please **do NOT report it publicly on GitHub Issues**.
 
-Instead, please send a responsible disclosure report directly to the maintainers at **security@revoltgroup.com.ar** or open a [GitHub Private Vulnerability Report](https://github.com/Revolt-Group/revolt-pass/security/advisories/new).
+Instead, please send a responsible disclosure report directly to the maintainers at **dev@revoltgroup.com.ar** or open a [GitHub Private Vulnerability Report](https://github.com/Revolt-Group/revolt-pass/security/advisories/new).

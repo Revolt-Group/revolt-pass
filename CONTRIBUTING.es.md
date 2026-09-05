@@ -29,7 +29,7 @@ Antes de escribir código, por favor revisa nuestras reglas de arquitectura fund
 ### Configuración Local
 1. Haz un fork y clona el repositorio:
    ```bash
-   git clone https://github.com/<tu-usuario>/revolt-pass.git
+   git clone https://github.com/Revolt-Group/revolt-pass.git
    cd revolt-pass
    ```
 2. Instala las dependencias:
@@ -98,4 +98,4 @@ Seguimos el estándar de [Conventional Commits](https://www.conventionalcommits.
 
 Si descubres una posible vulnerabilidad de seguridad en Revolt Pass, **por favor NO abras un Issue público en GitHub**.
 
-En su lugar, envía un reporte confidencial de divulgación responsable directamente a los mantenedores en **security@revoltgroup.com.ar** o abre un [GitHub Private Vulnerability Report](https://github.com/Revolt-Group/revolt-pass/security/advisories/new).
+En su lugar, envía un reporte confidencial de divulgación responsable directamente a los mantenedores en **dev@revoltgroup.com.ar** o abre un [GitHub Private Vulnerability Report](https://github.com/Revolt-Group/revolt-pass/security/advisories/new).
