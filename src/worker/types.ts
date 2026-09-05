@@ -82,3 +82,11 @@ export interface RegisterPasskeyRequestBody {
   device_name?: string;
 }
 
+export interface UpdateSessionRequestBody {
+  device_name: string;
+}
+
+export interface UpdatePasskeyRequestBody {
+  name: string;
+}
+

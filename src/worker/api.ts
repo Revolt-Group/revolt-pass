@@ -14,6 +14,8 @@ import type {
   AuditLogRecord,
   CreateSessionRequestBody,
   RegisterPasskeyRequestBody,
+  UpdateSessionRequestBody,
+  UpdatePasskeyRequestBody,
 } from './types.ts';
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -22,7 +24,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Session-Token, If-None-Match',
 };
 
@@ -670,19 +672,92 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       const sessionError = await checkSessionValidity(request, env, userId);
       if (sessionError) return sessionError;
 
+      const sessionItem = await env.DB.prepare(
+        'SELECT device_name FROM sessions WHERE id = ? AND user_id = ?'
+      )
+        .bind(targetSessionId, userId)
+        .first<{ device_name?: string }>();
+
+      const resolvedDevice = sessionItem?.device_name || parseDeviceName(request.headers.get('User-Agent'));
+
       await env.DB.batch([
         env.DB.prepare(
           'UPDATE sessions SET is_revoked = 1 WHERE id = ? AND user_id = ?'
         ).bind(targetSessionId, userId),
         env.DB.prepare(
-          `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
-           VALUES (?, 'SESSION_REVOKED', ?, unixepoch())`
-        ).bind(userId, JSON.stringify({ revoked_session_id: targetSessionId })),
+          `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
+           VALUES (?, 'SESSION_REVOKED', ?, ?, unixepoch())`
+        ).bind(userId, resolvedDevice, JSON.stringify({ revoked_session_id: targetSessionId, device_name: resolvedDevice })),
       ]);
 
       return jsonResponse({
         success: true,
         data: { revoked_session_id: targetSessionId },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // PATCH /api/sessions/:id: Rename device / session
+    // -----------------------------------------------------------------------
+    if ((request.method === 'PATCH' || request.method === 'PUT') && sessionMatch) {
+      const targetSessionId = decodeURIComponent(sessionMatch[1]);
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: UpdateSessionRequestBody;
+      try {
+        body = (await request.json()) as UpdateSessionRequestBody;
+      } catch {
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400);
+      }
+
+      const newDeviceName = body.device_name?.trim();
+      if (!newDeviceName) {
+        return errorResponse('MISSING_DEVICE_NAME', 'El campo device_name es obligatorio', 400);
+      }
+
+      const existingSession = await env.DB.prepare(
+        'SELECT id, device_name FROM sessions WHERE id = ? AND user_id = ? AND is_revoked = 0'
+      )
+        .bind(targetSessionId, userId)
+        .first<{ id: string; device_name: string }>();
+
+      if (!existingSession) {
+        return errorResponse('SESSION_NOT_FOUND', 'La sesión especificada no existe o fue revocada', 404);
+      }
+
+      const previousDeviceName = existingSession.device_name;
+
+      await env.DB.batch([
+        env.DB.prepare(
+          'UPDATE sessions SET device_name = ? WHERE id = ? AND user_id = ?'
+        ).bind(newDeviceName, targetSessionId, userId),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
+           VALUES (?, 'DEVICE_RENAMED', ?, ?, unixepoch())`
+        ).bind(
+          userId,
+          newDeviceName,
+          JSON.stringify({
+            session_id: targetSessionId,
+            previous_name: previousDeviceName,
+            new_name: newDeviceName,
+          })
+        ),
+      ]);
+
+      return jsonResponse({
+        success: true,
+        data: {
+          session_id: targetSessionId,
+          device_name: newDeviceName,
+        },
         timestamp: Date.now(),
       });
     }
@@ -798,9 +873,14 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           'UPDATE users SET passkey_credential_id = ? WHERE id = ?'
         ).bind(credential_id, userId),
         env.DB.prepare(
-          `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
-           VALUES (?, 'PASSKEY_ADDED', ?, unixepoch())`
-        ).bind(userId, JSON.stringify({ passkey_id: credential_id, name: name.trim() })),
+          `INSERT INTO audit_logs (user_id, event_type, device_name, ip_country, metadata, created_at)
+           VALUES (?, 'PASSKEY_ADDED', ?, ?, ?, unixepoch())`
+        ).bind(
+          userId,
+          resolvedDeviceName,
+          getIpCountry(request) || null,
+          JSON.stringify({ passkey_id: credential_id, name: name.trim() })
+        ),
       ]);
 
       return jsonResponse(
@@ -835,6 +915,14 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       const sessionError = await checkSessionValidity(request, env, userId);
       if (sessionError) return sessionError;
 
+      const existing = await env.DB.prepare(
+        'SELECT name, device_name FROM passkeys WHERE id = ? AND user_id = ?'
+      )
+        .bind(targetPasskeyId, userId)
+        .first<{ name?: string; device_name?: string }>();
+
+      const resolvedDevice = existing?.device_name || parseDeviceName(request.headers.get('User-Agent'));
+
       await env.DB.batch([
         env.DB.prepare(
           'UPDATE passkeys SET is_revoked = 1 WHERE id = ? AND user_id = ?'
@@ -843,14 +931,91 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           'UPDATE users SET passkey_credential_id = NULL WHERE id = ? AND passkey_credential_id = ?'
         ).bind(userId, targetPasskeyId),
         env.DB.prepare(
-          `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
-           VALUES (?, 'PASSKEY_REVOKED', ?, unixepoch())`
-        ).bind(userId, JSON.stringify({ revoked_passkey_id: targetPasskeyId })),
+          `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
+           VALUES (?, 'PASSKEY_REVOKED', ?, ?, unixepoch())`
+        ).bind(userId, resolvedDevice, JSON.stringify({ revoked_passkey_id: targetPasskeyId, name: existing?.name })),
       ]);
 
       return jsonResponse({
         success: true,
         data: { revoked_passkey_id: targetPasskeyId },
+        timestamp: Date.now(),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // PATCH /api/passkeys/:id: Rename passkey
+    // -----------------------------------------------------------------------
+    if ((request.method === 'PATCH' || request.method === 'PUT') && passkeyMatch) {
+      const targetPasskeyId = decodeURIComponent(passkeyMatch[1]);
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: UpdatePasskeyRequestBody;
+      try {
+        body = (await request.json()) as UpdatePasskeyRequestBody;
+      } catch {
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400);
+      }
+
+      const newPasskeyName = body.name?.trim();
+      if (!newPasskeyName) {
+        return errorResponse('MISSING_PASSKEY_NAME', 'El campo name es obligatorio', 400);
+      }
+
+      const existingPasskey = await env.DB.prepare(
+        'SELECT id, name, device_name FROM passkeys WHERE id = ? AND user_id = ? AND is_revoked = 0'
+      )
+        .bind(targetPasskeyId, userId)
+        .first<{ id: string; name: string; device_name?: string }>();
+
+      if (!existingPasskey) {
+        return errorResponse('PASSKEY_NOT_FOUND', 'La passkey especificada no existe o fue revocada', 404);
+      }
+
+      const previousName = existingPasskey.name;
+
+      let callerDeviceName: string | undefined;
+      const sessionToken = request.headers.get('X-Session-Token');
+      if (sessionToken) {
+        const tokenHash = await hashToken(sessionToken);
+        const cur = await env.DB.prepare('SELECT device_name FROM sessions WHERE token_hash = ?')
+          .bind(tokenHash)
+          .first<{ device_name: string }>();
+        if (cur?.device_name) callerDeviceName = cur.device_name;
+      }
+
+      const deviceName = callerDeviceName || existingPasskey.device_name || parseDeviceName(request.headers.get('User-Agent'));
+
+      await env.DB.batch([
+        env.DB.prepare(
+          'UPDATE passkeys SET name = ? WHERE id = ? AND user_id = ?'
+        ).bind(newPasskeyName, targetPasskeyId, userId),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
+           VALUES (?, 'PASSKEY_RENAMED', ?, ?, unixepoch())`
+        ).bind(
+          userId,
+          deviceName,
+          JSON.stringify({
+            passkey_id: targetPasskeyId,
+            previous_name: previousName,
+            new_name: newPasskeyName,
+          })
+        ),
+      ]);
+
+      return jsonResponse({
+        success: true,
+        data: {
+          passkey_id: targetPasskeyId,
+          name: newPasskeyName,
+        },
         timestamp: Date.now(),
       });
     }

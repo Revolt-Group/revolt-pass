@@ -60,6 +60,7 @@ import { SecurityModal } from './components/SecurityModal.tsx';
 
 import type { VaultItem, LocalUserConfig, SyncStatus } from './types/vault.ts';
 import type { ApiResponse } from './worker/types.ts';
+import { VERSION_NAME } from './constants/version.ts';
 
 type AppScreen = 'loading' | 'register' | 'locked' | 'unlocked';
 type AuthMode = 'login' | 'register';
@@ -1339,7 +1340,7 @@ export function App() {
                   Revolt Pass
                 </span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-zinc-400">
-                  v1.1
+                  {VERSION_NAME}
                 </span>
               </div>
             </div>

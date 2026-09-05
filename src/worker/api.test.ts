@@ -105,6 +105,28 @@ class MockD1Database {
               return null;
             }
 
+            // SELECT id, user_id, device_name FROM sessions WHERE id = ? AND user_id = ? AND is_revoked = 0
+            if (normalizedQuery.includes('from sessions where id =') && normalizedQuery.includes('user_id =')) {
+              const sessionId = String(params[0]);
+              const userId = String(params[1]);
+              const s = db.sessions.get(sessionId);
+              if (s && s.user_id === userId && s.is_revoked === 0) {
+                return { id: s.id, user_id: s.user_id, device_name: s.device_name } as unknown as T;
+              }
+              return null;
+            }
+
+            // SELECT id, user_id, name FROM passkeys WHERE id = ? AND user_id = ? AND is_revoked = 0
+            if (normalizedQuery.includes('from passkeys where id =') && normalizedQuery.includes('user_id =') && normalizedQuery.includes('is_revoked = 0')) {
+              const pkId = String(params[0]);
+              const userId = String(params[1]);
+              const p = db.passkeys.get(pkId);
+              if (p && p.user_id === userId && p.is_revoked === 0) {
+                return { id: p.id, user_id: p.user_id, name: p.name, device_name: p.device_name } as unknown as T;
+              }
+              return null;
+            }
+
             // SELECT id FROM passkeys WHERE id = ? AND is_revoked = 1
             if (normalizedQuery.includes('from passkeys where id =') && normalizedQuery.includes('is_revoked = 1')) {
               const pkId = String(params[0]);
@@ -351,6 +373,18 @@ class MockD1Database {
                 session.is_revoked = 1;
               }
             }
+          } else if (q.includes('update sessions set device_name =')) {
+            const [devName, id, user_id] = s.params as [string, string, string];
+            const session = db.sessions.get(id);
+            if (session && session.user_id === user_id) {
+              session.device_name = devName;
+            }
+          } else if (q.includes('update passkeys set name =')) {
+            const [pkName, id, user_id] = s.params as [string, string, string];
+            const passkey = db.passkeys.get(id);
+            if (passkey && passkey.user_id === user_id) {
+              passkey.name = pkName;
+            }
           } else if (q.includes('insert into passkeys')) {
             const [id, user_id, name, device_name] = s.params as [string, string, string, string];
             db.passkeys.set(id, {
@@ -378,13 +412,30 @@ class MockD1Database {
             const u = db.users.get(uId);
             if (u) u.passkey_credential_id = pkId;
           } else if (q.includes('insert into audit_logs')) {
-            const [user_id, event_type, device_name, ip_country, metadata] = s.params as [
-              string,
-              string,
-              string | undefined,
-              string | undefined,
-              string | undefined
-            ];
+            const eventMatch = s.query.match(/values\s*\(\s*\?,\s*'([^']+)'/i);
+            const event_type = (eventMatch ? eventMatch[1] : (s.params[1] as string)).toUpperCase();
+            const user_id = String(s.params[0]);
+            let device_name: string | undefined;
+            let ip_country: string | undefined;
+            let metadata: string | undefined;
+
+            if (eventMatch) {
+              if (s.params.length === 4) {
+                device_name = s.params[1] as string;
+                ip_country = s.params[2] as string;
+                metadata = s.params[3] as string;
+              } else if (s.params.length === 3) {
+                device_name = s.params[1] as string;
+                metadata = s.params[2] as string;
+              } else if (s.params.length === 2) {
+                metadata = s.params[1] as string;
+              }
+            } else {
+              device_name = s.params[2] as string;
+              ip_country = s.params[3] as string;
+              metadata = s.params[4] as string;
+            }
+
             db.auditLogs.push({
               id: db.auditLogs.length + 1,
               user_id,
@@ -927,7 +978,103 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     const res = await handleApiRequest(req, env);
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Methods')).toContain('PUT');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('PATCH');
     expect(res.headers.get('Access-Control-Allow-Methods')).toContain('DELETE');
     expect(res.headers.get('Access-Control-Allow-Headers')).toContain('X-Session-Token');
+  });
+
+  it('renames a session via PATCH /api/sessions/:id and creates an audit log', async () => {
+    const userId = 'usr_rename_sess';
+    const sessionToken = 'token_rename_test';
+    const tokenH = await hashToken(sessionToken);
+    const sessionId = 'sess_target_rename';
+
+    mockDb.sessions.set(sessionId, {
+      id: sessionId,
+      user_id: userId,
+      token_hash: tokenH,
+      device_name: 'Original Laptop Name',
+      user_agent: 'Chrome',
+      ip_country: 'AR',
+      last_active_at: Math.floor(Date.now() / 1000),
+      created_at: Math.floor(Date.now() / 1000),
+      expires_at: Math.floor(Date.now() / 1000) + 86400,
+      is_revoked: 0,
+    });
+
+    const req = new Request(`https://pass.example.com/api/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        'X-Session-Token': sessionToken,
+      },
+      body: JSON.stringify({ device_name: 'Work MacBook Pro M3' }),
+    });
+
+    const res = await handleApiRequest(req, env);
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as ApiResponse<{ success: boolean }>;
+    expect(json.success).toBe(true);
+
+    const updated = mockDb.sessions.get(sessionId);
+    expect(updated?.device_name).toBe('Work MacBook Pro M3');
+
+    const audit = mockDb.auditLogs.find((l) => l.event_type === 'DEVICE_RENAMED');
+    expect(audit).toBeDefined();
+    expect(audit?.device_name).toBe('Work MacBook Pro M3');
+  });
+
+  it('renames a passkey via PATCH /api/passkeys/:id and creates an audit log', async () => {
+    const userId = 'usr_rename_pk';
+    const sessionToken = 'token_rename_pk_test';
+    const tokenH = await hashToken(sessionToken);
+    const passkeyId = 'cred_pk_to_rename';
+
+    mockDb.sessions.set('sess_caller', {
+      id: 'sess_caller',
+      user_id: userId,
+      token_hash: tokenH,
+      device_name: 'Main Desktop',
+      user_agent: 'Chrome',
+      ip_country: 'US',
+      last_active_at: Math.floor(Date.now() / 1000),
+      created_at: Math.floor(Date.now() / 1000),
+      expires_at: Math.floor(Date.now() / 1000) + 86400,
+      is_revoked: 0,
+    });
+
+    mockDb.passkeys.set(passkeyId, {
+      id: passkeyId,
+      user_id: userId,
+      name: 'Old YubiKey',
+      device_name: 'USB-C Key',
+      created_at: Math.floor(Date.now() / 1000),
+      is_revoked: 0,
+    });
+
+    const req = new Request(`https://pass.example.com/api/passkeys/${passkeyId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        'X-Session-Token': sessionToken,
+      },
+      body: JSON.stringify({ name: 'Primary YubiKey 5C NFC' }),
+    });
+
+    const res = await handleApiRequest(req, env);
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as ApiResponse<{ success: boolean }>;
+    expect(json.success).toBe(true);
+
+    const updated = mockDb.passkeys.get(passkeyId);
+    expect(updated?.name).toBe('Primary YubiKey 5C NFC');
+
+    const audit = mockDb.auditLogs.find((l) => l.event_type === 'PASSKEY_RENAMED');
+    expect(audit).toBeDefined();
+    expect(audit?.device_name).toBe('Main Desktop');
   });
 });

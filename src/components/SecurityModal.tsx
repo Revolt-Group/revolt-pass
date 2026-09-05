@@ -14,6 +14,8 @@ import {
   RefreshCw,
   X,
   Fingerprint,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -51,11 +53,19 @@ export function SecurityModal({
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isRevokingOthers, setIsRevokingOthers] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionName, setEditingSessionName] = useState('');
+  const [isSavingSessionName, setIsSavingSessionName] = useState(false);
 
   // Passkeys state
   const [passkeys, setPasskeys] = useState<PasskeyInfo[]>([]);
   const [isLoadingPasskeys, setIsLoadingPasskeys] = useState(false);
   const [isEnrollingPasskey, setIsEnrollingPasskey] = useState(false);
+  const [showEnrollForm, setShowEnrollForm] = useState(false);
+  const [newPasskeyName, setNewPasskeyName] = useState('');
+  const [editingPasskeyId, setEditingPasskeyId] = useState<string | null>(null);
+  const [editingPasskeyName, setEditingPasskeyName] = useState('');
+  const [isSavingPasskeyName, setIsSavingPasskeyName] = useState(false);
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -198,6 +208,54 @@ export function SecurityModal({
   // ---------------------------------------------------------------------------
   // Action Handlers: Sessions
   // ---------------------------------------------------------------------------
+  const handleStartEditSession = (session: SessionInfo) => {
+    setEditingSessionId(session.id);
+    setEditingSessionName(session.device_name || '');
+  };
+
+  const handleCancelEditSession = () => {
+    setEditingSessionId(null);
+    setEditingSessionName('');
+  };
+
+  const handleSaveEditSession = async (sessionId: string) => {
+    const trimmed = editingSessionName.trim();
+    if (!trimmed) {
+      toast.error('El nombre del dispositivo no puede estar vacío');
+      return;
+    }
+
+    setIsSavingSessionName(true);
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+      };
+      if (sessionToken) {
+        headers['X-Session-Token'] = sessionToken;
+      }
+
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ device_name: trimmed }),
+      });
+
+      if (!res.ok) throw new Error('No se pudo actualizar el nombre del dispositivo');
+
+      toast.success('Dispositivo renombrado correctamente');
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, device_name: trimmed } : s))
+      );
+      setEditingSessionId(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al renombrar dispositivo';
+      toast.error(msg);
+    } finally {
+      setIsSavingSessionName(false);
+    }
+  };
+
   const handleRevokeSession = async (sessionId: string) => {
     try {
       const headers: Record<string, string> = {
@@ -253,6 +311,54 @@ export function SecurityModal({
   // ---------------------------------------------------------------------------
   // Action Handlers: Passkeys
   // ---------------------------------------------------------------------------
+  const handleStartEditPasskey = (pk: PasskeyInfo) => {
+    setEditingPasskeyId(pk.id);
+    setEditingPasskeyName(pk.name || '');
+  };
+
+  const handleCancelEditPasskey = () => {
+    setEditingPasskeyId(null);
+    setEditingPasskeyName('');
+  };
+
+  const handleSaveEditPasskey = async (passkeyId: string) => {
+    const trimmed = editingPasskeyName.trim();
+    if (!trimmed) {
+      toast.error('El nombre de la passkey no puede estar vacío');
+      return;
+    }
+
+    setIsSavingPasskeyName(true);
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+      };
+      if (sessionToken) {
+        headers['X-Session-Token'] = sessionToken;
+      }
+
+      const res = await fetch(`/api/passkeys/${encodeURIComponent(passkeyId)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ name: trimmed }),
+      });
+
+      if (!res.ok) throw new Error('No se pudo actualizar el nombre de la passkey');
+
+      toast.success('Passkey renombrada correctamente');
+      setPasskeys((prev) =>
+        prev.map((p) => (p.id === passkeyId ? { ...p, name: trimmed } : p))
+      );
+      setEditingPasskeyId(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al renombrar passkey';
+      toast.error(msg);
+    } finally {
+      setIsSavingPasskeyName(false);
+    }
+  };
+
   const handleRevokePasskey = async (passkeyId: string) => {
     try {
       const headers: Record<string, string> = {
@@ -288,11 +394,13 @@ export function SecurityModal({
     }
   };
 
-  const handleEnrollPasskey = async () => {
+  const handleEnrollPasskey = async (customName?: string) => {
     if (!masterKey || !userConfig) {
       toast.error('La bóveda debe estar desbloqueada para registrar una nueva passkey');
       return;
     }
+
+    const assignedName = (customName || '').trim() || 'Windows Hello / Este dispositivo';
 
     setIsEnrollingPasskey(true);
     try {
@@ -319,7 +427,7 @@ export function SecurityModal({
         headers,
         body: JSON.stringify({
           credential_id: reg.credentialId,
-          name: 'Windows Hello / Dispositivo Local',
+          name: assignedName,
         }),
       });
 
@@ -337,6 +445,8 @@ export function SecurityModal({
       onConfigUpdated(updatedConfig);
 
       toast.success('Passkey / Windows Hello vinculada correctamente');
+      setShowEnrollForm(false);
+      setNewPasskeyName('');
       await fetchPasskeys();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al registrar passkey';
@@ -349,6 +459,45 @@ export function SecurityModal({
   // ---------------------------------------------------------------------------
   // Helper Formatters
   // ---------------------------------------------------------------------------
+  const formatAuditMetadata = (log: AuditLogItem): string => {
+    if (!log.metadata) return '';
+    try {
+      const parsed = JSON.parse(log.metadata);
+      if (log.event_type === 'LOGIN') {
+        const device = parsed.device_name || log.device_name || 'este dispositivo';
+        return `Inicio de sesión exitoso desde ${device}`;
+      }
+      if (log.event_type === 'REGISTER') {
+        return 'Registro de cuenta e inicialización de bóveda';
+      }
+      if (log.event_type === 'PASSKEY_ADDED') {
+        const name = parsed.passkey_name || 'Passkey';
+        return `Nueva passkey vinculada: "${name}"`;
+      }
+      if (log.event_type === 'PASSKEY_RENAMED') {
+        const newName = parsed.new_name || parsed.name || 'Passkey';
+        return `Passkey renombrada a "${newName}"`;
+      }
+      if (log.event_type === 'DEVICE_RENAMED') {
+        const newName = parsed.new_name || parsed.device_name || 'Dispositivo';
+        return `Dispositivo renombrado a "${newName}"`;
+      }
+      if (log.event_type === 'SESSION_REVOKED') {
+        const target = parsed.target_device || parsed.device_name || 'dispositivo remoto';
+        return `Sesión cerrada para: ${target}`;
+      }
+      if (log.event_type === 'PASSKEY_REVOKED') {
+        const target = parsed.target_name || parsed.name || 'Passkey';
+        return `Passkey eliminada: "${target}"`;
+      }
+      if (log.event_type === 'ALL_SESSIONS_REVOKED') {
+        return 'Cierre masivo de todas las demás sesiones activas';
+      }
+      return Object.entries(parsed).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    } catch {
+      return log.metadata;
+    }
+  };
   const formatTimestamp = (tsSeconds: number) => {
     if (!tsSeconds) return 'Desconocido';
     const date = new Date(tsSeconds * 1000);
@@ -481,21 +630,64 @@ export function SecurityModal({
                         key={session.id}
                         className="p-3 rounded-lg bg-[#16181d]/50 border border-white/[0.06] flex items-center justify-between gap-4 hover:border-white/[0.12] transition-colors"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="p-2 rounded-md bg-[#08090a] border border-white/[0.06] shrink-0">
                             {getDeviceIcon(session.device_name)}
                           </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-white truncate">
-                                {session.device_name}
-                              </span>
-                              {session.is_current && (
-                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                                  Este dispositivo
+                          <div className="min-w-0 flex-1">
+                            {editingSessionId === session.id ? (
+                              <div className="flex items-center gap-1.5 py-0.5">
+                                <input
+                                  type="text"
+                                  value={editingSessionName}
+                                  onChange={(e) => setEditingSessionName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveEditSession(session.id);
+                                    if (e.key === 'Escape') handleCancelEditSession();
+                                  }}
+                                  disabled={isSavingSessionName}
+                                  className="bg-[#08090a] border border-white/20 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-white/50 w-48"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditSession(session.id)}
+                                  disabled={isSavingSessionName}
+                                  className="p-1 rounded bg-white/10 hover:bg-white/20 text-emerald-400 transition-colors"
+                                  title="Guardar"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditSession}
+                                  disabled={isSavingSessionName}
+                                  className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                                  title="Cancelar"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 group">
+                                <span className="font-medium text-white truncate">
+                                  {session.device_name}
                                 </span>
-                              )}
-                            </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditSession(session)}
+                                  className="opacity-40 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-zinc-200 transition-opacity"
+                                  title="Renombrar dispositivo"
+                                >
+                                  <Pencil className="w-2.5 h-2.5" />
+                                </button>
+                                {session.is_current && (
+                                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                                    Este dispositivo
+                                  </span>
+                                )}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5 font-mono">
                               {session.ip_country && (
                                 <span className="flex items-center gap-1">
@@ -539,14 +731,61 @@ export function SecurityModal({
                   </div>
                   <button
                     type="button"
-                    onClick={handleEnrollPasskey}
+                    onClick={() => {
+                      setShowEnrollForm(!showEnrollForm);
+                      if (!showEnrollForm) setNewPasskeyName('');
+                    }}
                     disabled={isEnrollingPasskey}
                     className="py-1.5 px-3 rounded-lg bg-white hover:bg-zinc-200 text-black font-medium text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-[0.99] disabled:opacity-50"
                   >
                     <Plus className="w-3.5 h-3.5 text-black" />
-                    <span>{isEnrollingPasskey ? 'Vinculando...' : 'Vincular Passkey'}</span>
+                    <span>{showEnrollForm ? 'Cancelar' : 'Vincular Passkey'}</span>
                   </button>
                 </div>
+
+                {/* Inline Enrollment Card */}
+                {showEnrollForm && (
+                  <div className="p-3 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-xs text-white">Nombre de la nueva passkey</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowEnrollForm(false)}
+                        className="text-zinc-400 hover:text-white p-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Ej: Windows Hello / Laptop Personal"
+                        value={newPasskeyName}
+                        onChange={(e) => setNewPasskeyName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleEnrollPasskey(newPasskeyName);
+                        }}
+                        className="flex-1 bg-[#08090a] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleEnrollPasskey(newPasskeyName)}
+                        disabled={isEnrollingPasskey}
+                        className="px-3 py-1.5 bg-white text-black font-medium text-xs rounded-lg hover:bg-zinc-200 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                      >
+                        {isEnrollingPasskey ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <span>Vinculando...</span>
+                          </>
+                        ) : (
+                          <span>Vincular ahora</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {isLoadingPasskeys ? (
                   <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
@@ -569,19 +808,62 @@ export function SecurityModal({
                           key={pk.id}
                           className="p-3 rounded-lg bg-[#16181d]/50 border border-white/[0.06] flex items-center justify-between gap-4 hover:border-white/[0.12] transition-colors"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
                             <div className="p-2 rounded-md bg-[#08090a] border border-white/[0.06] text-white shrink-0">
                               <Key className="w-3.5 h-3.5 text-zinc-300" />
                             </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-white truncate">{pk.name}</span>
-                                {isLocalCredential && (
-                                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.06] text-zinc-300 border border-white/[0.1] shrink-0">
-                                    Este equipo
-                                  </span>
-                                )}
-                              </div>
+                            <div className="min-w-0 flex-1">
+                              {editingPasskeyId === pk.id ? (
+                                <div className="flex items-center gap-1.5 py-0.5">
+                                  <input
+                                    type="text"
+                                    value={editingPasskeyName}
+                                    onChange={(e) => setEditingPasskeyName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveEditPasskey(pk.id);
+                                      if (e.key === 'Escape') handleCancelEditPasskey();
+                                    }}
+                                    disabled={isSavingPasskeyName}
+                                    className="bg-[#08090a] border border-white/20 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-white/50 w-48"
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEditPasskey(pk.id)}
+                                    disabled={isSavingPasskeyName}
+                                    className="p-1 rounded bg-white/10 hover:bg-white/20 text-emerald-400 transition-colors"
+                                    title="Guardar"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelEditPasskey}
+                                    disabled={isSavingPasskeyName}
+                                    className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 group">
+                                  <span className="font-medium text-white truncate">{pk.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditPasskey(pk)}
+                                    className="opacity-40 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-zinc-200 transition-opacity"
+                                    title="Renombrar passkey"
+                                  >
+                                    <Pencil className="w-2.5 h-2.5" />
+                                  </button>
+                                  {isLocalCredential && (
+                                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.06] text-zinc-300 border border-white/[0.1] shrink-0">
+                                      Este equipo
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               <div className="text-[11px] text-zinc-400 mt-0.5 font-mono">
                                 {pk.device_name && <span>{pk.device_name} · </span>}
                                 <span>Vinculado: {formatTimestamp(pk.created_at)}</span>
@@ -639,7 +921,11 @@ export function SecurityModal({
                             {log.event_type}
                           </span>
                         );
-                      } else if (log.event_type === 'SESSION_REVOKED' || log.event_type === 'PASSKEY_REVOKED') {
+                      } else if (
+                        log.event_type === 'SESSION_REVOKED' ||
+                        log.event_type === 'PASSKEY_REVOKED' ||
+                        log.event_type === 'ALL_SESSIONS_REVOKED'
+                      ) {
                         badge = (
                           <span className="px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 font-mono text-[10px]">
                             {log.event_type}
@@ -651,24 +937,42 @@ export function SecurityModal({
                             {log.event_type}
                           </span>
                         );
+                      } else if (log.event_type === 'PASSKEY_RENAMED' || log.event_type === 'DEVICE_RENAMED') {
+                        badge = (
+                          <span className="px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/20 text-sky-400 font-mono text-[10px]">
+                            {log.event_type}
+                          </span>
+                        );
                       }
+
+                      const displayedDevice =
+                        log.device_name && log.device_name !== 'Desconocido'
+                          ? log.device_name
+                          : (() => {
+                              try {
+                                const parsed = log.metadata ? JSON.parse(log.metadata) : {};
+                                return parsed.device_name || parsed.target_device || 'Dispositivo';
+                              } catch {
+                                return 'Dispositivo';
+                              }
+                            })();
 
                       return (
                         <div
                           key={log.id}
                           className="p-2.5 rounded-lg bg-[#16181d]/50 border border-white/[0.06] flex items-center justify-between text-[11px]"
                         >
-                          <div className="space-y-1">
+                          <div className="space-y-1 min-w-0 flex-1 pr-3">
                             <div className="flex items-center gap-2">
                               {badge}
-                              <span className="text-zinc-200">{log.device_name || 'Desconocido'}</span>
+                              <span className="text-zinc-200 font-medium">{displayedDevice}</span>
                               {log.ip_country && (
                                 <span className="text-zinc-500">({log.ip_country})</span>
                               )}
                             </div>
                             {log.metadata && (
-                              <p className="text-zinc-500 font-mono text-[10px] truncate max-w-md">
-                                {log.metadata}
+                              <p className="text-zinc-400 text-[11px] truncate max-w-lg">
+                                {formatAuditMetadata(log)}
                               </p>
                             )}
                           </div>
