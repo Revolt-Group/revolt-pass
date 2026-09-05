@@ -66,7 +66,7 @@ export default defineConfig({
               cacheName: 'simple-icons-cache',
               expiration: {
                 maxEntries: 250,
-                maxAgeSeconds: 15 * 24 * 60 * 60, // 15 días
+                maxAgeSeconds: 15 * 24 * 60 * 60, // 15 days
               },
               cacheableResponse: {
                 statuses: [0, 200],

@@ -1,6 +1,6 @@
 /**
- * Web Worker dedicado a la derivación de llaves maestras con PBKDF2-HMAC-SHA256.
- * Ejecuta el cálculo computacional pesado (600,000 rondas) fuera del hilo principal de UI.
+ * Dedicated Web Worker for PBKDF2-HMAC-SHA256 master key derivation.
+ * Executes heavy computation (600,000 rounds) off the main UI thread.
  */
 
 export interface KdfWorkerRequest {
@@ -24,7 +24,7 @@ export interface KdfWorkerErrorResponse {
 
 export type KdfWorkerResponse = KdfWorkerSuccessResponse | KdfWorkerErrorResponse;
 
-// En Web Worker, self es DedicatedWorkerGlobalScope
+// In Web Worker context, self is DedicatedWorkerGlobalScope
 self.onmessage = async (event: MessageEvent<KdfWorkerRequest>) => {
   const { id, password, salt, iterations = 600000 } = event.data;
 
@@ -32,7 +32,7 @@ self.onmessage = async (event: MessageEvent<KdfWorkerRequest>) => {
     const encoder = new TextEncoder();
     const passwordBuffer = encoder.encode(password);
 
-    // 1. Importar la contraseña en bruto como clave base PBKDF2
+    // 1. Import raw password as PBKDF2 base key
     const baseKey = await crypto.subtle.importKey(
       'raw',
       passwordBuffer,
@@ -41,7 +41,7 @@ self.onmessage = async (event: MessageEvent<KdfWorkerRequest>) => {
       ['deriveBits']
     );
 
-    // 2. Derivar 256 bits (32 bytes) usando HMAC-SHA256 con las rondas especificadas
+    // 2. Derive 256 bits (32 bytes) using HMAC-SHA256 with specified rounds
     const derivedBits = await crypto.subtle.deriveBits(
       {
         name: 'PBKDF2',
@@ -53,7 +53,7 @@ self.onmessage = async (event: MessageEvent<KdfWorkerRequest>) => {
       256
     );
 
-    // 3. Responder transfiriendo el buffer (transferable object) para vaciar la memoria del worker
+    // 3. Respond by transferring buffer (transferable object) to clear worker memory
     const response: KdfWorkerSuccessResponse = {
       id,
       success: true,
@@ -62,7 +62,7 @@ self.onmessage = async (event: MessageEvent<KdfWorkerRequest>) => {
 
     (self as unknown as Worker).postMessage(response, [derivedBits]);
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Error en la derivación KDF';
+    const errorMessage = err instanceof Error ? err.message : 'KDF derivation error';
     const response: KdfWorkerErrorResponse = {
       id,
       success: false,

@@ -1,5 +1,5 @@
 /**
- * Revolt Pass - Tipos para Cloudflare Worker y D1
+ * Revolt Pass - Types for Cloudflare Worker & D1
  */
 
 export interface Env {

@@ -23,7 +23,7 @@ describe('IndexedDB Storage Layer (idb)', () => {
     closeDb();
   });
 
-  it('debe guardar y recuperar la bóveda local cifrada correctamente', async () => {
+  it('correctly saves and retrieves local encrypted vault', async () => {
     const vaultRecord: LocalVaultRecord = {
       user_id: 'usr_idb_1',
       encrypted_blob: 'VGhpcyBpcyBhIGJsb2I...',
@@ -43,7 +43,7 @@ describe('IndexedDB Storage Layer (idb)', () => {
     expect(retrieved?.sync_status).toBe('synced');
   });
 
-  it('debe actualizar el sync_status sin sobreescribir el contenido de la bóveda', async () => {
+  it('updates sync_status without overwriting vault content', async () => {
     const vaultRecord: LocalVaultRecord = {
       user_id: 'usr_idb_status',
       encrypted_blob: 'blob_status',
@@ -62,7 +62,7 @@ describe('IndexedDB Storage Layer (idb)', () => {
     expect(updated?.last_sync_attempt).toBeDefined();
   });
 
-  it('debe guardar y recuperar la configuración de usuario (user_config)', async () => {
+  it('saves and retrieves user configuration (user_config)', async () => {
     const userConfig: LocalUserConfig = {
       user_id: 'usr_cfg_1',
       username: 'revolt_user',
@@ -83,7 +83,7 @@ describe('IndexedDB Storage Layer (idb)', () => {
     expect(retrieved?.auto_lock_minutes).toBe(5);
   });
 
-  it('debe encolar, listar y desencolar operaciones en sync_queue', async () => {
+  it('enqueues, lists, and removes operations in sync_queue', async () => {
     const op1 = {
       action: 'PUSH_VAULT' as const,
       payload: {
@@ -124,7 +124,7 @@ describe('IndexedDB Storage Layer (idb)', () => {
     expect(queueAfter[0].id).toBe(id2);
   });
 
-  it('debe purgar todos los almacenes al ejecutar clearLocalData', async () => {
+  it('purges all stores when executing clearLocalData', async () => {
     await saveLocalVault({
       user_id: 'usr_wipe',
       encrypted_blob: 'b',

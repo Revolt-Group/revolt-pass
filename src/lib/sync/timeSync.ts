@@ -1,50 +1,49 @@
 /**
- * Módulo de Compensación de Desfase Horario (Time Drift Compensation).
- * Consulta el endpoint GET /api/time midiendo el Round-Trip Time (RTT) y
- * calcula la discrepancia exacta con el servidor de Cloudflare con filtros de robustez NTP.
+ * Time Drift Compensation Module.
+ * Queries GET /api/time measuring Round-Trip Time (RTT) and
+ * computes exact discrepancy against Cloudflare edge server with NTP robustness filters.
  */
 
 let currentTimeDriftOffsetMs = 0;
 
 /**
- * Devuelve el desfase actual calculado en milisegundos.
+ * Returns current computed time drift offset in milliseconds.
  */
 export function getTimeDriftOffsetMs(): number {
   return currentTimeDriftOffsetMs;
 }
 
 /**
- * Asigna manualmente el desfase en milisegundos (útil para pruebas unitarias).
+ * Manually sets time drift offset in milliseconds (useful for unit tests).
  */
 export function setTimeDriftOffsetMs(offsetMs: number): void {
   currentTimeDriftOffsetMs = offsetMs;
 }
 
 /**
- * Devuelve la marca de tiempo actual en milisegundos compensada con el reloj del servidor.
+ * Returns current timestamp in milliseconds calibrated against server clock.
  */
 export function getCalibratedNow(): number {
   return Date.now() + currentTimeDriftOffsetMs;
 }
 
 /**
- * Consulta el endpoint /api/time para calibrar el reloj local respecto al servidor UTC.
+ * Queries /api/time endpoint to calibrate local clock against UTC server clock.
  * 
- * Fórmula matemática (filtro NTP / SNTP simplificado):
- * RTT = t_fin - t_inicio
- * offset = t_servidor - (t_inicio + RTT / 2)
+ * Mathematical formula (simplified NTP / SNTP filter):
+ * RTT = t_end - t_start
+ * offset = t_server - (t_start + RTT / 2)
  * 
- * Criterios de robustez y salvaguardas:
- * 1. Timeout estricto de 3 segundos para no congelar la app ante caídas de red.
- * 2. Descarte de muestras con RTT > 3000 ms para evitar errores por asimetría de red.
- * 3. Validación de rango temporal canónico del servidor (entre 2024 y 2049).
- * 4. Banda muerta (Deadband) de 1000 ms: si el desfase es menor a 1 segundo,
- *    se asume que el reloj del dispositivo está en perfecta sincronía nativa (GPS/NTP)
- *    y se evita inyectar jitter de red (offset = 0).
- * 5. Límite máximo de seguridad de 24 horas: descarta anomalías extremas.
+ * Robustness criteria and safeguards:
+ * 1. Strict 3-second timeout to prevent application hanging on slow networks.
+ * 2. Discard samples with RTT > 3000 ms to avoid network asymmetry errors.
+ * 3. Canonical server epoch range validation (between 2024 and 2049).
+ * 4. 1000 ms deadband: if offset is under 1 second, local clock is assumed
+ *    to be in perfect sync (GPS/NTP) to avoid injecting network jitter (offset = 0).
+ * 5. 24-hour sanity ceiling: discards extreme anomalies.
  * 
- * @param baseUrl URL base de la API (default: cadena vacía para ruta relativa)
- * @returns Desfase calculado en milisegundos
+ * @param baseUrl API base URL (default: empty string for relative path)
+ * @returns Computed offset in milliseconds
  */
 export async function syncTimeWithServer(baseUrl = ''): Promise<number> {
   const t0 = Date.now();
@@ -52,7 +51,7 @@ export async function syncTimeWithServer(baseUrl = ''): Promise<number> {
   try {
     const url = `${baseUrl}/api/time`;
     
-    // Timeout estricto de 3000 ms para no bloquear conexiones lentas
+    // Strict 3000 ms timeout to avoid blocking slow connections
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
 
@@ -71,15 +70,15 @@ export async function syncTimeWithServer(baseUrl = ''): Promise<number> {
     }
 
     if (!response.ok) {
-      throw new Error(`Error en sincronización de tiempo: HTTP ${response.status}`);
+      throw new Error(`Time sync error: HTTP ${response.status}`);
     }
 
     const t1 = Date.now();
     const rtt = t1 - t0;
 
-    // Si la latencia de red supera 3 segundos, la asimetría de red invalida la precisión de la muestra
+    // If network latency exceeds 3 seconds, network asymmetry invalidates sample precision
     if (rtt > 3000) {
-      console.warn(`TimeSync descartado por alta latencia de red (RTT: ${rtt}ms)`);
+      console.warn(`TimeSync discarded due to high network latency (RTT: ${rtt}ms)`);
       return currentTimeDriftOffsetMs;
     }
 
@@ -91,28 +90,27 @@ export async function syncTimeWithServer(baseUrl = ''): Promise<number> {
     if (body.success && body.data && typeof body.data.server_time_utc === 'number') {
       const serverTimeUtc = body.data.server_time_utc;
 
-      // Validación de cordura del timestamp del servidor (entre 2024 y 2049)
+      // Server timestamp sanity check (between 2024 and 2049)
       const MIN_EPOCH = 1704067200000; // 2024-01-01
       const MAX_EPOCH = 2500000000000; // ~2049
       if (serverTimeUtc < MIN_EPOCH || serverTimeUtc > MAX_EPOCH) {
-        console.warn(`Timestamp de servidor fuera de rango razonable: ${serverTimeUtc}`);
+        console.warn(`Server timestamp out of reasonable range: ${serverTimeUtc}`);
         return currentTimeDriftOffsetMs;
       }
 
-      // Estimar el momento exacto en que el servidor emitió la respuesta
+      // Estimate exact instant when server emitted response
       const estimatedLocalServerTime = t0 + Math.floor(rtt / 2);
       const rawOffset = serverTimeUtc - estimatedLocalServerTime;
 
-      // Límite de seguridad: desfases mayores a 24 horas se consideran anomalías
+      // Safety ceiling: offsets greater than 24 hours are treated as anomalies
       const MAX_OFFSET_MS = 24 * 60 * 60 * 1000;
       if (Math.abs(rawOffset) > MAX_OFFSET_MS) {
-        console.warn(`Desfase horario anómalo (> 24h) ignorado: ${rawOffset}ms`);
+        console.warn(`Anomalous time drift (> 24h) ignored: ${rawOffset}ms`);
         return currentTimeDriftOffsetMs;
       }
 
-      // Banda muerta de 1000 ms: si el desfase es menor a 1 segundo, el reloj local
-      // del teléfono/PC ya está perfectamente sincronizado con el estándar UTC.
-      // Mantener offset = 0 evita saltos por jitter de conexión.
+      // 1000 ms deadband: if drift is under 1 second, local clock is already
+      // synchronized with UTC. Preserving offset = 0 prevents jitter jumps.
       if (Math.abs(rawOffset) < 1000) {
         currentTimeDriftOffsetMs = 0;
       } else {
@@ -121,11 +119,11 @@ export async function syncTimeWithServer(baseUrl = ''): Promise<number> {
 
       return currentTimeDriftOffsetMs;
     } else {
-      throw new Error('Formato de respuesta de tiempo inválido');
+      throw new Error('Invalid time response payload');
     }
   } catch (err) {
-    // Si la conexión falla, se conserva el estado actual sin interrumpir la experiencia
-    console.warn('No se pudo sincronizar la deriva horaria con el servidor:', err);
+    // If connection fails, retain current state without interrupting experience
+    console.warn('Could not synchronize time drift with server:', err);
     return currentTimeDriftOffsetMs;
   }
 }

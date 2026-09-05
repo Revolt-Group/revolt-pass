@@ -22,7 +22,7 @@ import { deriveMasterKeyDirect, generateSalt } from '../crypto/kdf.ts';
 import { encryptVault } from '../crypto/vault.ts';
 import type { VaultItem } from '../../types/vault.ts';
 
-describe('Sincronización y Reconciliación de Bóveda', () => {
+describe('Vault Synchronization and Reconciliation', () => {
   beforeEach(async () => {
     await clearLocalData();
     setTimeDriftOffsetMs(0);
@@ -34,12 +34,12 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
   });
 
   // =========================================================================
-  // 1. Pruebas de Time Drift Compensation
+  // 1. Time Drift Compensation Tests
   // =========================================================================
   describe('Time Drift Compensation (timeSync)', () => {
-    it('debe devolver y ajustar manualmente el offset de deriva temporal', () => {
+    it('returns and manually sets time drift offset', () => {
       expect(getTimeDriftOffsetMs()).toBe(0);
-      setTimeDriftOffsetMs(5000); // 5 segundos de adelanto respecto al servidor
+      setTimeDriftOffsetMs(5000); // 5 seconds ahead of server
       expect(getTimeDriftOffsetMs()).toBe(5000);
 
       const before = Date.now();
@@ -47,8 +47,8 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       expect(calibrated).toBeGreaterThanOrEqual(before + 5000);
     });
 
-    it('debe calcular el offset exacto contra /api/time descontando el RTT', async () => {
-      const simulatedServerTime = Date.now() + 15000; // El servidor está 15s adelantado
+    it('calculates exact offset against /api/time subtracting RTT', async () => {
+      const simulatedServerTime = Date.now() + 15000; // Server is 15s ahead
 
       const mockFetch = vi.fn().mockImplementation(async () => {
         return new Response(
@@ -69,7 +69,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
 
       try {
         const calculatedOffset = await syncTimeWithServer('https://pass.example.com');
-        // El offset debe rondar los ~15,000 ms
+        // Offset should be around ~15,000 ms
         expect(Math.abs(calculatedOffset - 15000)).toBeLessThan(500);
         expect(getTimeDriftOffsetMs()).toBe(calculatedOffset);
       } finally {
@@ -77,8 +77,8 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       }
     });
 
-    it('debe aplicar banda muerta (offset 0) si la diferencia es menor a 1 segundo para evitar jitter', async () => {
-      const simulatedServerTime = Date.now() + 400; // Solo 400ms de diferencia (ruido de red habitual)
+    it('applies deadband (offset 0) if difference is under 1 second to prevent jitter', async () => {
+      const simulatedServerTime = Date.now() + 400; // Only 400ms difference (routine network noise)
 
       const mockFetch = vi.fn().mockImplementation(async () => {
         return new Response(
@@ -102,8 +102,8 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       }
     });
 
-    it('debe descartar timestamps con anomalías (> 24h) y no corromper el reloj', async () => {
-      const simulatedServerTime = Date.now() + 48 * 60 * 60 * 1000; // 48 horas en el futuro (anomalía extrema)
+    it('discards timestamp anomalies (> 24h) without corrupting clock', async () => {
+      const simulatedServerTime = Date.now() + 48 * 60 * 60 * 1000; // 48 hours in future (extreme anomaly)
       setTimeDriftOffsetMs(0);
 
       const mockFetch = vi.fn().mockImplementation(async () => {
@@ -128,7 +128,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       }
     });
 
-    it('debe manejar caídas de red o HTTP 500 sin romper la aplicación', async () => {
+    it('handles network failures or HTTP 500 without breaking application', async () => {
       setTimeDriftOffsetMs(0);
 
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
@@ -146,10 +146,10 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
   });
 
   // =========================================================================
-  // 2. Pruebas de Reconciliación de Ítems (3-Way Merge / Last-Write-Wins)
+  // 2. Item Reconciliation Tests (3-Way Merge / Last-Write-Wins)
   // =========================================================================
-  describe('Algoritmo de Reconciliación (reconcileVaultItems)', () => {
-    it('debe combinar ítems únicos de ambas fuentes sin pérdidas', () => {
+  describe('Reconciliation Algorithm (reconcileVaultItems)', () => {
+    it('merges unique items from both sources without loss', () => {
       const localItems: VaultItem[] = [
         {
           id: 'item-1',
@@ -186,7 +186,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       expect(reconciled.map((i) => i.id)).toContain('item-2');
     });
 
-    it('debe prevalecer la versión con updated_at más reciente ante colisión en el mismo ítem', () => {
+    it('prefers version with more recent updated_at on collision on same item', () => {
       const localItemOld: VaultItem = {
         id: 'shared-item',
         type: 'totp',
@@ -197,7 +197,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         period: 30,
         algorithm: 'SHA1',
         created_at: 1000,
-        updated_at: 2000, // Versión local antigua
+        updated_at: 2000, // Older local version
       };
 
       const remoteItemNew: VaultItem = {
@@ -210,7 +210,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         period: 30,
         algorithm: 'SHA1',
         created_at: 1000,
-        updated_at: 3000, // Versión remota más reciente
+        updated_at: 3000, // Newer remote version
       };
 
       const reconciled = reconcileVaultItems([localItemOld], [remoteItemNew]);
@@ -220,7 +220,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       expect(reconciled[0].updated_at).toBe(3000);
     });
 
-    it('debe prevalecer la versión local si updated_at es más reciente que en el servidor', () => {
+    it('prefers local version if updated_at is more recent than on server', () => {
       const localItemNew: VaultItem = {
         id: 'shared-item',
         type: 'totp',
@@ -231,7 +231,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         period: 30,
         algorithm: 'SHA1',
         created_at: 1000,
-        updated_at: 5000, // Modificado en este dispositivo más recientemente
+        updated_at: 5000, // Modified more recently on this device
       };
 
       const remoteItemOld: VaultItem = {
@@ -256,10 +256,10 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
   });
 
   // =========================================================================
-  // 3. Pruebas de Flujo de Push/Pull y Resolución Automática de Conflictos
+  // 3. Push/Pull and Automatic Conflict Resolution Flow Tests
   // =========================================================================
   describe('Pull / Push Sync Engine', () => {
-    it('Pull Sync: debe respetar HTTP 304 Not Modified y no alterar la versión local', async () => {
+    it('Pull Sync: respects HTTP 304 Not Modified and does not alter local version', async () => {
       await saveUserConfig({
         user_id: 'usr_pull_test',
         username: 'pull_user',
@@ -290,7 +290,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       expect(vault?.sync_status).toBe('synced');
     });
 
-    it('Push Sync con Resolución Automática de Conflicto 409', async () => {
+    it('Push Sync with Automatic 409 Conflict Resolution', async () => {
       const salt = generateSalt(16);
       const masterKey = await deriveMasterKeyDirect('ContraseñaTest!123', salt, 1000);
 
@@ -329,7 +329,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         updated_at: 200,
       };
 
-      // Cifrar estado local versión 2 (desactualizado)
+      // Encrypt outdated local version 2
       const localEnc = await encryptVault([localItem], masterKey, 2);
       await saveLocalVault({
         user_id: userId,
@@ -340,14 +340,14 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         sync_status: 'dirty',
       });
 
-      // Simular que en el servidor la versión actual ya es la 3
+      // Simulate that server current version is already 3
       const remoteEnc = await encryptVault([remoteItem], masterKey, 3);
 
       let putAttempts = 0;
       const mockFetch = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
         const method = init.method || 'GET';
 
-        // 1. Primer PUT: El servidor rechaza con 409 (servidor está en v3, cliente envió v2)
+        // 1. First PUT: Server rejects with 409 (server is at v3, client sent v2)
         if (method === 'PUT' && putAttempts === 0) {
           putAttempts++;
           return new Response(
@@ -355,7 +355,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
               success: false,
               error: {
                 code: 'VAULT_VERSION_CONFLICT',
-                message: 'Conflicto de versión',
+                message: 'Version conflict',
                 details: { server_version: 3, client_version: 2 },
               },
             }),
@@ -363,7 +363,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
           );
         }
 
-        // 2. GET /api/vault: El motor descarga la versión 3 del servidor para conciliar
+        // 2. GET /api/vault: Sync engine fetches version 3 from server to reconcile
         if (method === 'GET') {
           return new Response(
             JSON.stringify({
@@ -380,7 +380,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
           );
         }
 
-        // 3. Segundo PUT: El motor resolvió el conflicto y envía la versión 4 (3 + 1)
+        // 3. Second PUT: Sync engine resolved conflict and sends version 4 (3 + 1)
         if (method === 'PUT' && putAttempts > 0) {
           const body = JSON.parse(init.body as string);
           expect(body.version).toBe(4);
@@ -396,11 +396,11 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         return new Response('Not Found', { status: 404 });
       });
 
-      // Ejecutar Push Sync con masterKey presente
+      // Execute Push Sync with masterKey present
       const success = await pushLocalVault('', masterKey, mockFetch as unknown as typeof fetch);
       expect(success).toBe(true);
 
-      // Verificar que la bóveda local ahora está en versión 4 y en estado 'synced'
+      // Verify local vault is now at version 4 and in 'synced' state
       const vaultAfter = await getLocalVault();
       expect(vaultAfter?.version).toBe(4);
       expect(vaultAfter?.sync_status).toBe('synced');

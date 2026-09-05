@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { generateSalt, deriveMasterKeyDirect, deriveMasterKey } from './kdf.ts';
 
-describe('Derivación de Clave Maestra (PBKDF2-HMAC-SHA256)', () => {
-  it('debe generar salts criptográficos de 16 bytes no repetitivos', () => {
+describe('Master Key Derivation (PBKDF2-HMAC-SHA256)', () => {
+  it('generates non-repeating 16-byte cryptographic salts', () => {
     const salt1 = generateSalt();
     const salt2 = generateSalt();
 
@@ -11,11 +11,11 @@ describe('Derivación de Clave Maestra (PBKDF2-HMAC-SHA256)', () => {
     expect(salt1).not.toEqual(salt2);
   });
 
-  it('debe derivar una CryptoKey AES-GCM de 256 bits consistente', async () => {
+  it('derives consistent 256-bit AES-GCM CryptoKey', async () => {
     const salt = generateSalt(16);
-    const password = 'PasswordDePruebaSegura!2026';
+    const password = 'TestSecurePassword!2026';
 
-    // Para pruebas unitarias rápidas usamos 1,000 iteraciones
+    // Use 1,000 iterations for fast unit tests
     const key1 = await deriveMasterKeyDirect(password, salt, 1000);
     const key2 = await deriveMasterKeyDirect(password, salt, 1000);
 
@@ -23,9 +23,9 @@ describe('Derivación de Clave Maestra (PBKDF2-HMAC-SHA256)', () => {
     expect((key1.algorithm as AesKeyGenParams).length).toBe(256);
     expect(key1.type).toBe('secret');
 
-    // Comprobar que ambas claves derivadas del mismo salt y password son funcionalmente idénticas
+    // Verify both keys derived from same salt and password are functionally identical
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const plaintext = new TextEncoder().encode('Dato Confidencial');
+    const plaintext = new TextEncoder().encode('Confidential Data');
 
     const encrypted = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
@@ -39,19 +39,19 @@ describe('Derivación de Clave Maestra (PBKDF2-HMAC-SHA256)', () => {
       encrypted
     );
 
-    expect(new TextDecoder().decode(decrypted)).toBe('Dato Confidencial');
+    expect(new TextDecoder().decode(decrypted)).toBe('Confidential Data');
   });
 
-  it('debe generar claves completamente distintas si el salt difiere', async () => {
+  it('generates completely distinct keys if salt differs', async () => {
     const saltA = generateSalt(16);
     const saltB = generateSalt(16);
-    const password = 'MismaPassword123!';
+    const password = 'SamePassword123!';
 
     const keyA = await deriveMasterKeyDirect(password, saltA, 1000);
     const keyB = await deriveMasterKeyDirect(password, saltB, 1000);
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const plaintext = new TextEncoder().encode('Prueba de Aislamiento');
+    const plaintext = new TextEncoder().encode('Isolation Test');
 
     const encrypted = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
@@ -59,13 +59,13 @@ describe('Derivación de Clave Maestra (PBKDF2-HMAC-SHA256)', () => {
       plaintext
     );
 
-    // keyB debe fallar al intentar descifrar datos de keyA
+    // keyB must fail when attempting to decrypt data encrypted with keyA
     await expect(
       crypto.subtle.decrypt({ name: 'AES-GCM', iv }, keyB, encrypted)
     ).rejects.toThrow();
   });
 
-  it('debe funcionar a través del wrapper principal deriveMasterKey', async () => {
+  it('works through the main deriveMasterKey wrapper', async () => {
     const salt = generateSalt(16);
     const key = await deriveMasterKey('PasswordWrapperTest!99', salt, 1000);
 

@@ -1,7 +1,7 @@
 /**
- * Módulo de Autenticación WebAuthn FIDO2 / Platform Authenticator.
- * Soporta Windows Hello (PIN / Biometría en PC) y sensores biométricos en móviles (Touch ID, Face ID, Huella).
- * Permite el desbloqueo rápido seguro mediante envoltura local de la Master Key.
+ * WebAuthn FIDO2 / Platform Authenticator Authentication Module.
+ * Supports Windows Hello (PIN / Biometrics on PC) and mobile biometric sensors (Touch ID, Face ID, Fingerprint).
+ * Enables fast secure unlocking via local wrapping of the Master Key.
  */
 
 import { bytesToBase64, base64ToBytes, generateIv } from './vault.ts';
@@ -12,7 +12,7 @@ export interface WebAuthnSupportStatus {
 }
 
 /**
- * Comprueba si el entorno soporta WebAuthn y autenticador de plataforma (Windows Hello / Biometría).
+ * Checks whether the environment supports WebAuthn and platform authenticators (Windows Hello / Biometrics).
  */
 export async function checkWebAuthnSupport(): Promise<WebAuthnSupportStatus> {
   if (typeof window === 'undefined' || !window.PublicKeyCredential) {
@@ -36,8 +36,8 @@ export interface RegisterPasskeyResult {
 }
 
 /**
- * Enrola el dispositivo actual utilizando el autenticador de plataforma del sistema operativo.
- * En Windows solicita el PIN de Windows Hello; en smartphones solicita huella o Face ID.
+ * Enrolls the current device using the operating system's platform authenticator.
+ * Prompts for Windows Hello PIN on Windows; fingerprint or Face ID on smartphones.
  */
 export async function registerPlatformPasskey(
   userId: string,
@@ -45,7 +45,7 @@ export async function registerPlatformPasskey(
 ): Promise<RegisterPasskeyResult> {
   const support = await checkWebAuthnSupport();
   if (!support.isSupported || !support.hasPlatformAuthenticator) {
-    throw new Error('El autenticador de plataforma (Windows Hello / Biometría) no está disponible en este dispositivo.');
+    throw new Error('Platform authenticator (Windows Hello / Biometrics) is not available on this device.');
   }
 
   const challenge = new Uint8Array(32);
@@ -53,7 +53,7 @@ export async function registerPlatformPasskey(
 
   const userIdBytes = new TextEncoder().encode(userId);
 
-  // Opciones estándar WebAuthn Level 3
+  // Standard WebAuthn Level 3 options
   const creationOptions: PublicKeyCredentialCreationOptions = {
     challenge: challenge as unknown as ArrayBuffer,
     rp: {
@@ -70,8 +70,8 @@ export async function registerPlatformPasskey(
       { alg: -257, type: 'public-key' }, // RS256
     ],
     authenticatorSelection: {
-      authenticatorAttachment: 'platform', // Fuerza autenticador local de hardware
-      userVerification: 'required', // Fuerza PIN de Windows Hello o biometría
+      authenticatorAttachment: 'platform', // Enforce local hardware authenticator
+      userVerification: 'required', // Enforce Windows Hello PIN or biometrics
       residentKey: 'preferred',
     },
     timeout: 60000,
@@ -83,7 +83,7 @@ export async function registerPlatformPasskey(
   })) as PublicKeyCredential;
 
   if (!credential) {
-    throw new Error('No se pudo registrar la credencial de plataforma');
+    throw new Error('Failed to register platform credential');
   }
 
   const rawIdBytes = new Uint8Array(credential.rawId);
@@ -96,15 +96,15 @@ export async function registerPlatformPasskey(
 }
 
 /**
- * Ejecuta una aserción de WebAuthn solicitando el PIN de Windows Hello o biometría.
+ * Performs a WebAuthn assertion requesting Windows Hello PIN or biometrics.
  * 
- * @param credentialIdBase64 ID de la credencial registrada previamente en Base64
- * @returns boolean indicando si la verificación de hardware fue exitosa
+ * @param credentialIdBase64 Pre-registered credential ID in Base64
+ * @returns boolean indicating whether hardware verification succeeded
  */
 export async function verifyPlatformPasskey(credentialIdBase64: string): Promise<boolean> {
   const support = await checkWebAuthnSupport();
   if (!support.isSupported || !support.hasPlatformAuthenticator) {
-    throw new Error('El autenticador de plataforma no está disponible.');
+    throw new Error('Platform authenticator is not available.');
   }
 
   const challenge = new Uint8Array(32);
@@ -134,17 +134,17 @@ export async function verifyPlatformPasskey(credentialIdBase64: string): Promise
 }
 
 export interface WrappedKeyPackage {
-  wrappedKey: string; // Base64 del ciphertext de la clave de envoltura
-  iv: string; // Base64 del IV de envoltura
-  deviceSalt: string; // Base64 del salt local del dispositivo
+  wrappedKey: string; // Base64 ciphertext of wrapped key
+  iv: string; // Base64 wrapping IV
+  deviceSalt: string; // Base64 local device salt
 }
 
 /**
- * Envuelve localmente la MasterKey para habilitar el Desbloqueo Rápido.
+ * Locally wraps the MasterKey to enable Fast Unlock.
  * 
- * @param masterKey CryptoKey derivada de la Master Password
- * @param deviceBindingToken Token derivado o ID de la credencial de plataforma
- * @returns Paquete de clave envuelta apto para persistir en IndexedDB
+ * @param masterKey CryptoKey derived from Master Password
+ * @param deviceBindingToken Derived token or platform credential ID
+ * @returns Wrapped key package suitable for IndexedDB persistence
  */
 export async function wrapMasterKey(
   masterKey: CryptoKey,
@@ -153,7 +153,7 @@ export async function wrapMasterKey(
   const deviceSalt = new Uint8Array(16);
   crypto.getRandomValues(deviceSalt);
 
-  // Derivar una clave simétrica local de envoltura vinculada a la credencial
+  // Derive local symmetric wrapping key bound to the credential
   const tokenEncoder = new TextEncoder();
   const tokenKey = await crypto.subtle.importKey(
     'raw',
@@ -178,7 +178,7 @@ export async function wrapMasterKey(
 
   const iv = generateIv();
 
-  // Envolver la MasterKey exportándola de forma cifrada bajo AES-GCM
+  // Wrap MasterKey by exporting it encrypted under AES-GCM
   const wrappedBuffer = await crypto.subtle.wrapKey(
     'raw',
     masterKey,
@@ -198,11 +198,11 @@ export async function wrapMasterKey(
 }
 
 /**
- * Desenvuelve la MasterKey una vez completada la aserción de Windows Hello / Biometría.
+ * Unwraps the MasterKey once Windows Hello / Biometric assertion succeeds.
  * 
- * @param wrappedPackage Paquete almacenado en IndexedDB
- * @param deviceBindingToken Token de vinculación de hardware
- * @returns CryptoKey lista para usar en RAM
+ * @param wrappedPackage Package stored in IndexedDB
+ * @param deviceBindingToken Hardware binding token
+ * @returns CryptoKey ready for in-memory use
  */
 export async function unwrapMasterKey(
   wrappedPackage: WrappedKeyPackage,

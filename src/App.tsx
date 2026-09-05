@@ -71,7 +71,7 @@ export function App() {
   const [vaultVersion, setVaultVersion] = useState<number>(1);
   const [syncStatus, setSyncStatusState] = useState<SyncStatus>('synced');
 
-  // Modales
+  // Modals
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
@@ -79,7 +79,7 @@ export function App() {
   const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Formularios de Autenticación
+  // Authentication Forms
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -97,13 +97,13 @@ export function App() {
   const [hasPasskeySupport, setHasPasskeySupport] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
-  // Referencia mutable a masterKey para listeners de red sin re-disparar efectos de inicialización
+  // Mutable reference to masterKey for network listeners without re-triggering init effects
   const masterKeyRef = useRef<CryptoKey | null>(null);
   masterKeyRef.current = masterKey;
 
   const [, startTransition] = useTransition();
 
-  // Escuchar evento de instalación PWA (beforeinstallprompt)
+  // Listen for PWA installation event (beforeinstallprompt)
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -135,7 +135,7 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
-  // Cálculo de Entropía en Tiempo Real de la Contraseña Maestra
+  // Real-time Master Password Entropy Calculation
   // -------------------------------------------------------------------------
   const passwordEntropy = useMemo(() => {
     if (!regPassword) {
@@ -162,20 +162,20 @@ export function App() {
   }, [regPassword]);
 
   // -------------------------------------------------------------------------
-  // 1. Inicialización de la Aplicación y Detección de Estado (Solo al montar)
+  // 1. Application Initialization & State Detection (Mount only)
   // -------------------------------------------------------------------------
   useEffect(() => {
     let isMounted = true;
 
     async function initApp() {
-      // 1. Comprobar soporte de WebAuthn en el dispositivo actual
+      // 1. Check WebAuthn support on the current device
       const webauthn = await checkWebAuthnSupport();
       if (isMounted) setHasPasskeySupport(webauthn.hasPlatformAuthenticator);
 
-      // 2. Sincronizar deriva temporal con el servidor en segundo plano
+      // 2. Synchronize time drift with server in the background
       syncTimeWithServer().catch(() => {});
 
-      // 3. Suscribirse a estados de sincronización y conectividad
+      // 3. Subscribe to sync state and network connectivity
       const unsubSync = onSyncStateChange((status) => {
         if (isMounted) setSyncStatusState(status);
       });
@@ -190,7 +190,7 @@ export function App() {
         }
       );
 
-      // 4. Cargar perfil local desde IndexedDB
+      // 4. Load local profile from IndexedDB
       try {
         const config = await getUserConfig();
         if (!config || !config.user_id) {
@@ -225,7 +225,7 @@ export function App() {
   }, []);
 
   // -------------------------------------------------------------------------
-  // Auto-lock de Memoria por Inactividad (5 min) y Cambio de Visibilidad (30s)
+  // Memory Auto-lock on Inactivity (5 min) and Visibility Change (30s)
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (screen !== 'unlocked' || !masterKey) return;
@@ -247,7 +247,7 @@ export function App() {
     };
   }, [screen, masterKey, userConfig?.auto_lock_minutes]);
 
-  // Atajo universal Ctrl + K / Cmd + K
+  // Universal shortcut Ctrl + K / Cmd + K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -263,7 +263,7 @@ export function App() {
   }, [screen]);
 
   // -------------------------------------------------------------------------
-  // 2. Inicio de Sesión / Vinculación de Bóveda Existente (Multi-Dispositivo)
+  // 2. Login / Existing Vault Linking (Multi-Device)
   // -------------------------------------------------------------------------
   const handleLoginExisting = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,7 +281,7 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // 1. Obtener salt del usuario desde Cloudflare D1
+      // 1. Fetch user salt from Cloudflare D1
       const saltRes = await fetch(`/api/auth/salt?username=${encodeURIComponent(cleanUsername)}`);
       if (!saltRes.ok) {
         if (saltRes.status === 404) {
@@ -303,11 +303,11 @@ export function App() {
 
       const { user_id, kdf_salt } = saltData.data;
 
-      // 2. Derivar MasterKey con PBKDF2 600k rondas usando el salt remoto
+      // 2. Derive MasterKey via PBKDF2 600k rounds using remote salt
       const saltBytes = Uint8Array.from(atob(kdf_salt), (c) => c.charCodeAt(0));
       const key = await deriveMasterKey(loginPassword, saltBytes, 600000);
 
-      // 3. Descargar la bóveda cifrada desde Cloudflare D1
+      // 3. Download encrypted vault from Cloudflare D1
       const vaultRes = await fetch('/api/vault', {
         headers: {
           'X-User-Id': user_id,
@@ -332,7 +332,7 @@ export function App() {
 
       const remoteVault = vaultData.data;
 
-      // 4. Intentar descifrar la bóveda con la clave derivada (Zero-Knowledge verification)
+      // 4. Attempt to decrypt vault with derived key (Zero-Knowledge verification)
       let decryptedItems: VaultItem[] = [];
       try {
         decryptedItems = await decryptVault(
@@ -344,7 +344,7 @@ export function App() {
         throw new Error('Contraseña Maestra incorrecta');
       }
 
-      // 5. Guardar perfil y bóveda en IndexedDB local
+      // 5. Save profile and vault into local IndexedDB
       const config: LocalUserConfig = {
         user_id,
         username: cleanUsername,
@@ -382,7 +382,7 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
-  // 3. Registro Inicial de Usuario y Bóveda (Zero-Knowledge)
+  // 3. Initial User & Vault Registration (Zero-Knowledge)
   // -------------------------------------------------------------------------
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -410,15 +410,15 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // 1. Generar salt de 16 bytes y derivar MasterKey vía Web Worker (PBKDF2 600k)
+      // 1. Generate 16-byte salt and derive MasterKey via Web Worker (PBKDF2 600k)
       const salt = generateSalt(16);
       const saltBase64 = btoa(String.fromCharCode(...salt));
       const key = await deriveMasterKey(regPassword, salt, 600000);
 
-      // 2. Cifrar bóveda inicial vacía
+      // 2. Encrypt empty initial vault
       const initialEnc = await encryptVault([], key, 1);
 
-      // 3. Registrar usuario en Cloudflare D1
+      // 3. Register user in Cloudflare D1
       let userId = `usr_${crypto.randomUUID()}`;
       try {
         const res = await fetch('/api/auth/register', {
@@ -448,10 +448,10 @@ export function App() {
         if (e instanceof Error && e.message.includes('ya existe')) {
           throw e;
         }
-        // Modo offline: se guardará localmente con sync_status dirty
+        // Offline mode: save locally with dirty sync_status
       }
 
-      // 4. Guardar configuración y bóveda inicial en IndexedDB
+      // 4. Save configuration and initial vault into IndexedDB
       const config: LocalUserConfig = {
         user_id: userId,
         username: cleanUsername,
@@ -488,7 +488,7 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
-  // 3. Desbloqueo de Bóveda con Master Password
+  // 4. Vault Unlock with Master Password
   // -------------------------------------------------------------------------
   const handleUnlockWithPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -496,17 +496,17 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // 1. Derivar clave maestra a partir del salt almacenado
+      // 1. Derive master key from stored salt
       const saltBytes = Uint8Array.from(atob(userConfig.kdf_salt), (c) => c.charCodeAt(0));
       const key = await deriveMasterKey(unlockPassword, saltBytes, 600000);
 
-      // 2. Obtener bóveda local de IndexedDB
+      // 2. Retrieve local vault from IndexedDB
       const localVault = await getLocalVault();
       if (!localVault) {
         throw new Error('No se encontró ninguna bóveda local almacenada.');
       }
 
-      // 3. Descifrar la bóveda con AES-GCM-256
+      // 3. Decrypt vault with AES-GCM-256
       const decryptedItems = await decryptVault(
         localVault.encrypted_blob,
         localVault.iv,
@@ -521,7 +521,7 @@ export function App() {
 
       toast.success('Bóveda desbloqueada correctamente');
 
-      // 4. Intentar sincronización remota en segundo plano
+      // 4. Attempt remote synchronization in the background
       pullRemoteVault().catch(() => {});
     } catch (err: unknown) {
       toast.error('Contraseña Maestra incorrecta o bóveda corrupta');
@@ -532,7 +532,7 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
-  // 4. Desbloqueo Rápido con Windows Hello / Biometría WebAuthn
+  // 5. Fast Unlock with Windows Hello / WebAuthn Biometrics
   // -------------------------------------------------------------------------
   const handleUnlockWithPasskey = async () => {
     if (!userConfig?.wrapped_master_key || !userConfig.webauthn_credential_id) {
@@ -542,7 +542,7 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // Desempaquetar la clave maestra protegida por la clave de plataforma
+      // Unwrap master key protected by platform authenticator key
       const wrappedPkg = JSON.parse(userConfig.wrapped_master_key) as WrappedKeyPackage;
       const key = await unwrapMasterKey(
         wrappedPkg,
@@ -574,7 +574,7 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
-  // 5. Vincular PIN de Windows Hello o Biometría
+  // 6. Link Windows Hello PIN or Biometrics
   // -------------------------------------------------------------------------
   const handleSetupPasskey = async () => {
     if (!masterKey || !userConfig) return;
@@ -603,7 +603,7 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
-  // 6. Bloqueo Manual de Bóveda (Purga Estricta de RAM)
+  // 7. Manual Vault Lock (Strict RAM Purge)
   // -------------------------------------------------------------------------
   const handleLockVault = useCallback(() => {
     setMasterKey(null);
@@ -612,7 +612,7 @@ export function App() {
   }, []);
 
   // -------------------------------------------------------------------------
-  // 7. Persistencia y Actualización de Cuentas
+  // 8. Account Persistence & Updates
   // -------------------------------------------------------------------------
   const persistVaultChanges = async (newItems: VaultItem[]) => {
     if (!masterKey || !userConfig) return;
@@ -632,7 +632,7 @@ export function App() {
         sync_status: 'dirty',
       });
 
-      // Disparar sincronización asíncrona hacia Cloudflare D1
+      // Trigger asynchronous synchronization to Cloudflare D1
       pushLocalVault(userConfig.user_id, masterKey).catch(() => {});
     } catch (err: unknown) {
       console.error('Error al persistir cambios de la bóveda:', err);
@@ -693,19 +693,19 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
-  // 8. Restauración de Bóveda desde BackupModal
+  // 9. Vault Restoration from BackupModal
   // -------------------------------------------------------------------------
   const handleVaultRestored = async (newItems: VaultItem[]) => {
     await persistVaultChanges(newItems);
   };
 
   // -------------------------------------------------------------------------
-  // RENDER: PANTALLA DE CARGA INICIAL
+  // RENDER: INITIAL LOADING SCREEN
   // -------------------------------------------------------------------------
   if (screen === 'loading') {
     return (
       <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 relative overflow-hidden">
-        {/* Malla técnica con máscara radial */}
+        {/* Technical grid with radial mask */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -726,7 +726,7 @@ export function App() {
   }
 
   // -------------------------------------------------------------------------
-  // RENDER: PANTALLA DE ACCESO / REGISTRO INICIAL (DISEÑO ANTI-AI CLICHÉS)
+  // RENDER: INITIAL ACCESS / REGISTRATION SCREEN
   // -------------------------------------------------------------------------
   if (screen === 'register') {
     const isConfirmMatch =
@@ -736,7 +736,7 @@ export function App() {
       <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-white/20 selection:text-white relative overflow-hidden">
         <Toaster position="bottom-right" richColors theme="dark" />
 
-        {/* 1. Malla técnica con máscara radial */}
+        {/* 1. Technical grid with radial mask */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -747,21 +747,21 @@ export function App() {
           }}
         />
 
-        {/* 2. Spotlight superior tenue */}
+        {/* 2. Subtle top spotlight */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-indigo-500/10 via-violet-500/5 to-transparent blur-3xl pointer-events-none" />
 
-        {/* 3. La Bóveda (Card Craftsmanship) */}
+        {/* 3. The Vault card container */}
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
           className="relative w-full max-w-md bg-zinc-900/60 backdrop-blur-2xl border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-8 overflow-hidden z-10"
         >
-          {/* Hairline highlight superior */}
+          {/* Top hairline highlight */}
           <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
           <div className="flex flex-col items-center text-center">
-            {/* Botón Volver a la Bóveda si ya existe perfil local */}
+            {/* Back to vault button if local profile exists */}
             {userConfig && (
               <div className="w-full flex justify-start mb-2">
                 <button
@@ -775,17 +775,17 @@ export function App() {
               </div>
             )}
 
-            {/* Emblema Mecanizado */}
+            {/* Machined emblem */}
             <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-3 text-zinc-100">
               <Shield className="w-6 h-6 text-zinc-100" />
             </div>
 
-            {/* Micro-badge Superior */}
+            {/* Top micro-badge */}
             <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 rounded-full mb-2">
               ZERO-KNOWLEDGE VAULT • CLIENT-SIDE ONLY
             </div>
 
-            {/* Título & Subtítulo */}
+            {/* Title & Subtitle */}
             <h1 className="text-2xl font-bold tracking-tight text-white font-sans mb-1.5">
               Revolt Pass
             </h1>
@@ -795,7 +795,7 @@ export function App() {
                 : 'Configura tu bóveda personal Zero-Knowledge. Tu Contraseña Maestra nunca saldrá de este dispositivo.'}
             </p>
 
-            {/* Selector de Modo: Iniciar Sesión vs Crear Bóveda */}
+            {/* Mode Selector: Log In vs Create Vault */}
             <div className="w-full grid grid-cols-2 p-1 bg-zinc-950/80 border border-white/[0.08] rounded-xl mb-5">
               <button
                 type="button"
@@ -823,10 +823,10 @@ export function App() {
               </button>
             </div>
 
-            {/* FORMULARIO 1: INICIAR SESIÓN (VINCULAR CUENTA EXISTENTE) */}
+            {/* FORM 1: LOG IN (LINK EXISTING ACCOUNT) */}
             {authMode === 'login' && (
               <form onSubmit={handleLoginExisting} className="w-full space-y-4 text-left">
-                {/* Campo Nombre de Usuario */}
+                {/* Username Field */}
                 <div>
                   <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                     Nombre de Usuario
@@ -846,7 +846,7 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Campo Contraseña Maestra */}
+                {/* Master Password Field */}
                 <div>
                   <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                     Contraseña Maestra (Master Password)
@@ -873,7 +873,7 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Botón CTA Iniciar Sesión */}
+                {/* CTA Log In Button */}
                 <button
                   type="submit"
                   disabled={isAuthenticating}
@@ -907,10 +907,10 @@ export function App() {
               </form>
             )}
 
-            {/* FORMULARIO 2: REGISTRO NUEVA BÓVEDA */}
+            {/* FORM 2: NEW VAULT REGISTRATION */}
             {authMode === 'register' && (
               <form onSubmit={handleRegister} className="w-full space-y-4 text-left">
-                {/* Campo Nombre de Usuario */}
+                {/* Username Field */}
                 <div>
                   <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                     Nombre de Usuario
@@ -930,7 +930,7 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Campo Contraseña Maestra */}
+                {/* Master Password Field */}
                 <div>
                   <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                     Contraseña Maestra (Master Password)
@@ -956,7 +956,7 @@ export function App() {
                     </button>
                   </div>
 
-                  {/* Medidor de Entropía en Tiempo Real de 4 Bloques */}
+                  {/* Real-time 4-block entropy meter */}
                   {regPassword.length > 0 && (
                     <div className="space-y-1.5 pt-2">
                       <div className="flex items-center justify-between text-[11px] font-mono">
@@ -985,7 +985,7 @@ export function App() {
                   )}
                 </div>
 
-                {/* Campo Confirmar Contraseña Maestra */}
+                {/* Confirm Master Password Field */}
                 <div>
                   <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
                     Confirmar Contraseña Maestra
@@ -1021,7 +1021,7 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Botón CTA Registro */}
+                {/* CTA Register Button */}
                 <button
                   type="submit"
                   disabled={isAuthenticating}
@@ -1055,7 +1055,7 @@ export function App() {
               </form>
             )}
 
-            {/* Trust Badges en el Pie de Tarjeta */}
+            {/* Trust Badges in Card Footer */}
             <div className="w-full mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-zinc-400">
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1071,7 +1071,7 @@ export function App() {
   }
 
   // -------------------------------------------------------------------------
-  // RENDER: PANTALLA DE DESBLOQUEO (LOCK SCREEN)
+  // RENDER: LOCK SCREEN
   // -------------------------------------------------------------------------
   if (screen === 'locked') {
     const hasFastUnlock = !!userConfig?.wrapped_master_key;
@@ -1080,7 +1080,7 @@ export function App() {
       <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-white/20 selection:text-white relative overflow-hidden">
         <Toaster position="bottom-right" richColors theme="dark" />
 
-        {/* Malla técnica con máscara radial */}
+        {/* Technical grid with radial mask */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -1091,10 +1091,10 @@ export function App() {
           }}
         />
 
-        {/* Spotlight superior */}
+        {/* Top spotlight */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-indigo-500/10 via-violet-500/5 to-transparent blur-3xl pointer-events-none" />
 
-        {/* Tarjeta de Desbloqueo */}
+        {/* Unlock card container */}
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -1105,7 +1105,7 @@ export function App() {
           <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
           <div className="flex flex-col items-center text-center">
-            {/* Emblema Mecanizado */}
+            {/* Machined emblem */}
             <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-3 text-zinc-100">
               <Lock className="w-6 h-6 text-zinc-100" />
             </div>
@@ -1120,7 +1120,7 @@ export function App() {
               Usuario: <strong className="text-zinc-200">{userConfig?.username}</strong>
             </p>
 
-            {/* Opción 1: Desbloqueo Rápido con Windows Hello / PIN */}
+            {/* Option 1: Fast Unlock with Windows Hello / PIN */}
             {hasFastUnlock && (
               <div className="w-full mb-5">
                 <button
@@ -1141,7 +1141,7 @@ export function App() {
               </div>
             )}
 
-            {/* Opción 2: Desbloqueo con Master Password */}
+            {/* Option 2: Unlock with Master Password */}
             <form onSubmit={handleUnlockWithPassword} className="w-full space-y-3">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
@@ -1183,7 +1183,7 @@ export function App() {
               </button>
             </form>
 
-            {/* Opción para cambiar de cuenta o vincular otro usuario */}
+            {/* Option to switch account or link another user */}
             <div className="w-full mt-4 text-center">
               <button
                 type="button"
@@ -1198,7 +1198,7 @@ export function App() {
               </button>
             </div>
 
-            {/* Trust Badges en el Pie */}
+            {/* Footer Trust Badges */}
             <div className="w-full mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-zinc-400">
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1213,7 +1213,7 @@ export function App() {
   }
 
   // -------------------------------------------------------------------------
-  // RENDER: PANTALLA PRINCIPAL (BÓVEDA DESBLOQUEADA)
+  // RENDER: MAIN SCREEN (UNLOCKED VAULT)
   // -------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col selection:bg-white/20 selection:text-white relative">
@@ -1222,7 +1222,7 @@ export function App() {
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-40 w-full border-b border-white/[0.06] bg-zinc-950/80 backdrop-blur-xl px-4 md:px-8 py-3.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          {/* Logo y Branding */}
+          {/* Logo and Branding */}
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center text-zinc-100">
               <Shield className="w-5 h-5 text-zinc-100" />
@@ -1242,9 +1242,9 @@ export function App() {
             </div>
           </div>
 
-          {/* Acciones Superiores y Estado de Sincronización */}
+          {/* Top Actions and Sync Status */}
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Pill de Sincronización */}
+            {/* Sync Status Pill */}
             <div
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
                 syncStatus === 'synced'
@@ -1275,7 +1275,7 @@ export function App() {
               </span>
             </div>
 
-            {/* Botón Command Palette */}
+            {/* Command Palette Button */}
             <button
               type="button"
               onClick={() => setIsCmdPaletteOpen(true)}
@@ -1288,7 +1288,7 @@ export function App() {
               </kbd>
             </button>
 
-            {/* Botón Generador de Contraseñas */}
+            {/* Password Generator Button */}
             <button
               type="button"
               onClick={() => setIsGeneratorOpen(true)}
@@ -1298,7 +1298,7 @@ export function App() {
               <KeyRound className="w-4 h-4" />
             </button>
 
-            {/* Botón Respaldo & Migración */}
+            {/* Backup & Migration Button */}
             <button
               type="button"
               onClick={() => setIsBackupOpen(true)}
@@ -1308,7 +1308,7 @@ export function App() {
               <FolderArchive className="w-4 h-4" />
             </button>
 
-            {/* Botón de Instalación PWA */}
+            {/* PWA Installation Button */}
             {installPrompt && (
               <button
                 type="button"
@@ -1321,7 +1321,7 @@ export function App() {
               </button>
             )}
 
-            {/* Configurar Windows Hello si aún no está vinculado */}
+            {/* Setup Windows Hello if not yet configured */}
             {hasPasskeySupport && !userConfig?.wrapped_master_key && (
               <button
                 type="button"
@@ -1334,7 +1334,7 @@ export function App() {
               </button>
             )}
 
-            {/* Botón de Bloqueo Manual */}
+            {/* Manual Lock Button */}
             <button
               type="button"
               onClick={handleLockVault}
@@ -1359,12 +1359,12 @@ export function App() {
         />
       </main>
 
-      {/* Footer Minimalista */}
+      {/* Minimalist Footer */}
       <footer className="w-full py-4 text-center border-t border-white/[0.04] text-zinc-500 text-[11px] font-mono">
         Revolt Pass · Zero-Knowledge AES-GCM 256 · Cloudflare Edge & D1
       </footer>
 
-      {/* Modales Flotantes */}
+      {/* Floating Modals */}
       <QrModal
         isOpen={isQrModalOpen}
         onClose={() => setIsQrModalOpen(false)}

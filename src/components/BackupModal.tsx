@@ -228,7 +228,7 @@ export function BackupModal({
           {/* TAB 1: EXPORT */}
           {activeTab === 'export' && (
             <div className="space-y-4 text-xs">
-              {/* Opción 1: Respaldo Cifrado (Recomendado) */}
+              {/* Option 1: Encrypted Backup (Recommended) */}
               <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.08] space-y-3">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
@@ -268,7 +268,7 @@ export function BackupModal({
                 </button>
               </div>
 
-              {/* Opción 2: Respaldo en Texto Plano (Sensible) */}
+              {/* Option 2: Plaintext Backup (Sensitive) */}
               <div className="p-4 rounded-xl bg-zinc-950/60 border border-amber-500/20 space-y-3">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">

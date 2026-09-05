@@ -10,9 +10,9 @@ interface PasswordGeneratorModalProps {
 }
 
 const CHAR_POOLS = {
-  uppercase: 'ABCDEFGHJKLMNPQRSTUVWXYZ', // Sin O, I para evitar ambigüedades
-  lowercase: 'abcdefghijkmnopqrstuvwxyz', // Sin l
-  numbers: '23456789', // Sin 0, 1
+  uppercase: 'ABCDEFGHJKLMNPQRSTUVWXYZ', // Excluding O, I to avoid visual ambiguity
+  lowercase: 'abcdefghijkmnopqrstuvwxyz', // Excluding l
+  numbers: '23456789', // Excluding 0, 1
   symbols: '!@#$%^&*()_+-=[]{}|;:,.<>?',
   ambiguousUpper: 'IO',
   ambiguousLower: 'l',
@@ -69,7 +69,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
     }
   }, [isOpen, generatePassword]);
 
-  // Cálculo de entropía de Shannon: E = L * log2(N)
+  // Shannon entropy calculation: E = L * log2(N)
   let poolSize = 0;
   if (includeUpper) poolSize += avoidAmbiguous ? 24 : 26;
   if (includeLower) poolSize += avoidAmbiguous ? 25 : 26;
@@ -153,7 +153,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                   </Dialog.Close>
                 </div>
 
-                {/* Display de contraseña generada */}
+                {/* Generated password display */}
                 <div className="mt-5 relative">
                   <div className="flex items-center justify-between p-3.5 bg-zinc-900/90 border border-zinc-800 rounded-xl font-mono text-sm md:text-base break-all select-all text-zinc-100 shadow-inner">
                     <span className="tracking-wider pr-10">{password}</span>
@@ -183,7 +183,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                     </div>
                   </div>
 
-                  {/* Barra de fortaleza y entropía */}
+                  {/* Strength and entropy bar */}
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-xs mb-1.5">
                       <span className="text-zinc-400 flex items-center gap-1.5">
@@ -209,7 +209,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                   </div>
                 </div>
 
-                {/* Controles y Ajustes */}
+                {/* Controls and Settings */}
                 <div className="mt-6 space-y-4 text-sm">
                   <div>
                     <div className="flex items-center justify-between mb-2">

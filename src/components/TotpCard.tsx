@@ -49,7 +49,7 @@ export function TotpCard({
 
   const period = item.period || 30;
 
-  // Actualización del token TOTP y temporizador circular
+  // TOTP token update and circular countdown timer
   const updateCode = useCallback(async () => {
     try {
       const offsetMs = getTimeDriftOffsetMs();
@@ -76,7 +76,7 @@ export function TotpCard({
     return () => clearInterval(interval);
   }, [updateCode]);
 
-  // Copiar código TOTP principal
+  // Copy main TOTP code
   const handleCopyToken = async () => {
     if (token === '------' || token === 'ERROR') return;
     await copyToClipboardSecurely(token, 45000);
@@ -92,7 +92,7 @@ export function TotpCard({
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  // Copiar código de recuperación individual
+  // Copy individual recovery code
   const handleCopyRecoveryCode = async (code: string, idx: number) => {
     await copyToClipboardSecurely(code, 45000);
     setCopiedCodeIdx(idx);
@@ -100,13 +100,13 @@ export function TotpCard({
     setTimeout(() => setCopiedCodeIdx(null), 1500);
   };
 
-  // Copiar secreto Base32
+  // Copy Base32 secret
   const handleCopyBase32 = async () => {
     await copyToClipboardSecurely(item.secret, 45000);
     toast.success('Secreto Base32 copiado (se borrará en 45s)');
   };
 
-  // Formateo del token: ej. "123 456" o "1234 5678"
+  // Token formatting: e.g. "123 456" or "1234 5678"
   const formattedToken =
     token.length === 8
       ? `${token.slice(0, 4)} ${token.slice(4)}`
@@ -114,7 +114,7 @@ export function TotpCard({
       ? `${token.slice(0, 3)} ${token.slice(3)}`
       : token;
 
-  // Dinámica de color del temporizador circular
+  // Dynamic color logic for circular countdown timer
   let timerColor = '#10b981'; // Emerald (> 10s)
   let timerTextClass = 'text-emerald-400';
   if (remaining <= 5) {
@@ -141,12 +141,12 @@ export function TotpCard({
         item.pinned ? 'border-violet-500/40 shadow-lg shadow-violet-950/20' : 'border-zinc-800/80'
       } backdrop-blur-xl p-5 hover:border-zinc-700/80 transition-all flex flex-col justify-between overflow-hidden`}
     >
-      {/* Glow ambiental tenue en pinned */}
+      {/* Subtle ambient glow on pinned items */}
       {item.pinned && (
         <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/10 rounded-full blur-2xl pointer-events-none" />
       )}
 
-      {/* Cabecera de la Tarjeta */}
+      {/* Card Header */}
       <div>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -175,7 +175,7 @@ export function TotpCard({
               <Pin className={`w-4 h-4 transition-transform ${item.pinned ? 'rotate-45' : ''}`} />
             </button>
 
-            {/* Dropdown contextual Radix */}
+            {/* Contextual Radix Dropdown */}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button
@@ -223,7 +223,7 @@ export function TotpCard({
           </div>
         </div>
 
-        {/* Display del Código TOTP y Temporizador */}
+        {/* TOTP Code Display and Timer */}
         <div
           onClick={handleCopyToken}
           className="group/code relative flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 hover:border-violet-500/40 cursor-pointer transition-all active:scale-[0.99] select-none"
@@ -239,10 +239,10 @@ export function TotpCard({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Temporizador Circular SVG */}
+            {/* SVG Circular Timer */}
             <div className="relative w-9 h-9 flex items-center justify-center">
               <svg className="w-9 h-9 -rotate-90">
-                {/* Círculo de fondo */}
+                {/* Background circle */}
                 <circle
                   cx="18"
                   cy="18"
@@ -251,7 +251,7 @@ export function TotpCard({
                   stroke="#27272a"
                   strokeWidth="2.5"
                 />
-                {/* Círculo de progreso dinámico */}
+                {/* Dynamic progress circle */}
                 <circle
                   cx="18"
                   cy="18"
@@ -270,7 +270,7 @@ export function TotpCard({
               </span>
             </div>
 
-            {/* Icono de feedback copiado */}
+            {/* Copy feedback icon */}
             <div
               className={`p-1.5 rounded-lg transition-colors ${
                 isCopied ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 group-hover/code:text-zinc-300'
@@ -281,7 +281,7 @@ export function TotpCard({
           </div>
         </div>
 
-        {/* Tags opcionales */}
+        {/* Optional tags */}
         {item.tags && item.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
             {item.tags.map((tag) => (
@@ -296,7 +296,7 @@ export function TotpCard({
         )}
       </div>
 
-      {/* Botón rápido para agregar códigos de respaldo si la cuenta aún no tiene */}
+      {/* Quick button to add backup codes if none exist */}
       {(!item.recovery_codes || item.recovery_codes.length === 0) && (
         <div className="mt-3 pt-2.5 border-t border-zinc-800/60 flex items-center justify-between">
           <button
@@ -311,7 +311,7 @@ export function TotpCard({
         </div>
       )}
 
-      {/* Sección Colapsable de Recovery Codes */}
+      {/* Collapsible Recovery Codes Section */}
       {item.recovery_codes && item.recovery_codes.length > 0 && (
         <div className="mt-4 pt-3 border-t border-zinc-800/80">
           <button

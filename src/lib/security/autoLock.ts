@@ -1,17 +1,17 @@
 /**
- * Módulo de Auto-Bloqueo de Bóveda (Inactividad y Cambio de Pestaña)
+ * Vault Auto-Lock Manager (Inactivity & Tab Visibility Changes)
  *
- * Escucha eventos de actividad del usuario y cambios de visibilidad en el documento.
- * Si transcurren 5 minutos de inactividad o la pestaña permanece oculta por más de 30 segundos,
- * se ejecuta el callback de bloqueo para purgar las claves criptográficas de la memoria RAM.
+ * Listens to user activity events and document visibility changes.
+ * If 5 minutes of inactivity elapse or tab remains hidden for over 30 seconds,
+ * the lock callback executes to purge cryptographic keys from RAM.
  */
 
 export interface AutoLockOptions {
-  /** Tiempo de inactividad en milisegundos antes de bloquear (por defecto: 5 minutos = 300,000 ms) */
+  /** Inactivity timeout in milliseconds before locking (default: 5 minutes = 300,000 ms) */
   inactivityTimeoutMs?: number;
-  /** Tiempo de gracia en milisegundos al ocultar la pestaña antes de bloquear (por defecto: 30 segundos = 30,000 ms) */
+  /** Grace period in milliseconds when tab is hidden before locking (default: 30 seconds = 30,000 ms) */
   backgroundGraceMs?: number;
-  /** Si es true, bloquea inmediatamente al ocultar la pestaña sin periodo de gracia */
+  /** If true, immediately locks when tab is hidden without grace period */
   immediateLockOnHide?: boolean;
 }
 
@@ -43,8 +43,8 @@ export class AutoLockManager {
   }
 
   /**
-   * Inicia el monitoreo de inactividad y visibilidad.
-   * @param onLock Callback ejecutado cuando se decide bloquear la aplicación y purgar RAM.
+   * Starts inactivity and visibility monitoring.
+   * @param onLock Callback executed when app locks and purges RAM.
    */
   public start(onLock: () => void): void {
     if (this.isRunning) {
@@ -81,7 +81,7 @@ export class AutoLockManager {
   }
 
   /**
-   * Detiene el monitoreo y limpia todos los temporizadores y listeners.
+   * Stops monitoring and clears all timers and listeners.
    */
   public stop(): void {
     this.isRunning = false;
@@ -114,7 +114,7 @@ export class AutoLockManager {
   }
 
   /**
-   * Fuerza el bloqueo inmediato de la sesión.
+   * Forces immediate session lock.
    */
   public triggerLock(): void {
     this.clearTimers();
@@ -124,7 +124,7 @@ export class AutoLockManager {
   }
 
   /**
-   * Manejador de eventos de interacción física del usuario.
+   * Physical user interaction event handler.
    */
   private handleUserActivity(): void {
     if (!this.isRunning) return;
@@ -132,7 +132,7 @@ export class AutoLockManager {
   }
 
   /**
-   * Manejador de cambio de visibilidad de pestaña.
+   * Tab visibility change handler.
    */
   private handleVisibilityChange(): void {
     if (!this.isRunning || typeof document === 'undefined') return;
@@ -141,7 +141,7 @@ export class AutoLockManager {
       if (this.immediateLockOnHide) {
         this.triggerLock();
       } else {
-        // Iniciar temporizador de gracia en segundo plano
+        // Start background grace timer
         if (this.backgroundTimer) clearTimeout(this.backgroundTimer);
         this.backgroundTimer = setTimeout(() => {
           if (document.hidden) {
@@ -150,7 +150,7 @@ export class AutoLockManager {
         }, this.backgroundGraceMs);
       }
     } else {
-      // El usuario regresó a la pestaña: cancelar temporizador de gracia
+      // User returned to tab: cancel grace timer
       if (this.backgroundTimer) {
         clearTimeout(this.backgroundTimer);
         this.backgroundTimer = null;
@@ -160,7 +160,7 @@ export class AutoLockManager {
   }
 
   /**
-   * Reinicia el temporizador de inactividad principal.
+   * Resets main inactivity timer.
    */
   private resetInactivityTimer(): void {
     if (this.inactivityTimer) {
@@ -173,7 +173,7 @@ export class AutoLockManager {
   }
 
   /**
-   * Cancela todos los temporizadores activos.
+   * Cancels all active timers.
    */
   private clearTimers(): void {
     if (this.inactivityTimer) {

@@ -2,34 +2,34 @@ import { describe, it, expect } from 'vitest';
 import { wrapMasterKey, unwrapMasterKey, checkWebAuthnSupport } from './webauthn.ts';
 import { deriveMasterKeyDirect, generateSalt } from './kdf.ts';
 
-describe('WebAuthn & Envoltura Local de Llave (Key Wrapping)', () => {
-  it('debe comprobar el soporte de WebAuthn sin lanzar excepciones en el entorno actual', async () => {
+describe('WebAuthn & Local Key Wrapping', () => {
+  it('checks WebAuthn support without throwing exceptions in current environment', async () => {
     const status = await checkWebAuthnSupport();
     expect(status).toHaveProperty('isSupported');
     expect(status).toHaveProperty('hasPlatformAuthenticator');
   });
 
-  it('debe envolver y desenvolver la MasterKey preservando su capacidad criptográfica (Roundtrip Test)', async () => {
+  it('wraps and unwraps MasterKey preserving cryptographic capability (Roundtrip Test)', async () => {
     const salt = generateSalt(16);
-    const masterKey = await deriveMasterKeyDirect('PasswordOriginal123!', salt, 1000);
+    const masterKey = await deriveMasterKeyDirect('OriginalPassword123!', salt, 1000);
     const deviceToken = 'cred_windows_hello_token_xyz_987';
 
-    // 1. Envolver la llave
+    // 1. Wrap key
     const wrappedPackage = await wrapMasterKey(masterKey, deviceToken);
 
     expect(wrappedPackage.wrappedKey).toBeDefined();
     expect(wrappedPackage.iv).toBeDefined();
     expect(wrappedPackage.deviceSalt).toBeDefined();
 
-    // 2. Desenvolver la llave con el mismo token
+    // 2. Unwrap key with same token
     const unwrappedKey = await unwrapMasterKey(wrappedPackage, deviceToken);
 
     expect(unwrappedKey.algorithm.name).toBe('AES-GCM');
     expect(unwrappedKey.type).toBe('secret');
 
-    // 3. Probar que la llave desenvuelta puede descifrar datos cifrados con la original
+    // 3. Prove unwrapped key can decrypt data encrypted with original
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const plaintext = new TextEncoder().encode('Dato Protegido por Windows Hello');
+    const plaintext = new TextEncoder().encode('Windows Hello Protected Data');
 
     const encrypted = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
@@ -43,10 +43,10 @@ describe('WebAuthn & Envoltura Local de Llave (Key Wrapping)', () => {
       encrypted
     );
 
-    expect(new TextDecoder().decode(decrypted)).toBe('Dato Protegido por Windows Hello');
+    expect(new TextDecoder().decode(decrypted)).toBe('Windows Hello Protected Data');
   });
 
-  it('debe rechazar el desenvolvimiento si el token de dispositivo no coincide', async () => {
+  it('rejects unwrapping if device token does not match', async () => {
     const salt = generateSalt(16);
     const masterKey = await deriveMasterKeyDirect('Password123!', salt, 1000);
     const validToken = 'cred_token_valido';
@@ -54,7 +54,7 @@ describe('WebAuthn & Envoltura Local de Llave (Key Wrapping)', () => {
 
     const wrappedPackage = await wrapMasterKey(masterKey, validToken);
 
-    // Intentar desenvolver con un token incorrecto DEBE arrojar error criptográfico
+    // Attempting to unwrap with wrong token MUST throw cryptographic error
     await expect(
       unwrapMasterKey(wrappedPackage, invalidToken)
     ).rejects.toThrow();

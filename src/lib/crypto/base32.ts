@@ -1,19 +1,19 @@
 /**
- * Decodificador y Codificador Base32 puro según RFC 4648.
- * Diseñado para secretos TOTP y autenticación sin dependencias externas.
+ * Pure RFC 4648 Base32 Encoder and Decoder.
+ * Designed for TOTP secrets and zero-dependency client authentication.
  */
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
-// Tabla de búsqueda inversa O(1)
+// Reverse lookup table O(1)
 const BASE32_LOOKUP: Record<string, number> = {};
 for (let i = 0; i < BASE32_ALPHABET.length; i++) {
   BASE32_LOOKUP[BASE32_ALPHABET[i]] = i;
 }
 
 /**
- * Sanitiza una cadena Base32 eliminando espacios en blanco, tabulaciones,
- * saltos de línea, guiones y caracteres de relleno '='.
+ * Sanitizes a Base32 string by removing whitespace, tabs, newlines,
+ * hyphens, and padding '=' characters.
  */
 export function sanitizeBase32(input: string): string {
   return input
@@ -22,7 +22,7 @@ export function sanitizeBase32(input: string): string {
 }
 
 /**
- * Valida si una cadena cumple con el formato Base32 (alfabeto A-Z, 2-7).
+ * Validates whether a string adheres to Base32 format (alphabet A-Z, 2-7).
  */
 export function isValidBase32(input: string): boolean {
   const sanitized = sanitizeBase32(input);
@@ -36,12 +36,12 @@ export function isValidBase32(input: string): boolean {
 }
 
 /**
- * Decodifica una cadena Base32 a un Uint8Array de bytes.
- * Tolera espacios, guiones y padding omitido o presente.
+ * Decodes a Base32 string into a Uint8Array of bytes.
+ * Tolerates whitespace, hyphens, and omitted or present padding.
  * 
- * @param input Cadena codificada en Base32
- * @returns Uint8Array con los bytes decodificados
- * @throws Error si contiene caracteres fuera del alfabeto RFC 4648
+ * @param input Base32 encoded string
+ * @returns Uint8Array containing decoded bytes
+ * @throws Error if invalid characters outside RFC 4648 alphabet are encountered
  */
 export function decodeBase32(input: string): Uint8Array {
   const sanitized = sanitizeBase32(input);
@@ -57,7 +57,7 @@ export function decodeBase32(input: string): Uint8Array {
     const char = sanitized[i];
     const val = BASE32_LOOKUP[char];
     if (val === undefined) {
-      throw new Error(`Carácter Base32 no válido: "${char}" en posición ${i}`);
+      throw new Error(`Invalid Base32 character: "${char}" at position ${i}`);
     }
 
     value = (value << 5) | val;
@@ -73,11 +73,11 @@ export function decodeBase32(input: string): Uint8Array {
 }
 
 /**
- * Codifica un Uint8Array a una cadena Base32.
+ * Encodes a Uint8Array into a Base32 string.
  * 
- * @param buffer Bytes a codificar
- * @param pad Si es true, añade '=' al final según RFC 4648 (default: false)
- * @returns Cadena Base32
+ * @param buffer Bytes to encode
+ * @param pad If true, appends '=' padding according to RFC 4648 (default: false)
+ * @returns Base32 encoded string
  */
 export function encodeBase32(buffer: Uint8Array, pad = false): string {
   if (buffer.length === 0) {

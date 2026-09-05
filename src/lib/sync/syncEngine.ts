@@ -1,7 +1,7 @@
 /**
- * Orquestador de Sincronización Bidireccional y Modo Offline.
- * Maneja la máquina de estados reactiva, eventos de red y el protocolo
- * de resolución de conflictos Last-Write-Wins a nivel de ítem.
+ * Bidirectional Synchronization and Offline Mode Orchestrator.
+ * Manages reactive state machine, network connectivity listeners,
+ * and Last-Write-Wins item-level conflict resolution.
  */
 
 import {
@@ -20,14 +20,14 @@ let currentSyncState: SyncStatus = 'synced';
 const syncListeners: Set<SyncListener> = new Set();
 
 /**
- * Devuelve el estado actual de sincronización.
+ * Returns the current synchronization status.
  */
 export function getSyncState(): SyncStatus {
   return currentSyncState;
 }
 
 /**
- * Suscribe un callback a las transiciones de estado de sincronización.
+ * Subscribes a listener callback to sync state transitions.
  */
 export function onSyncStateChange(listener: SyncListener): () => void {
   syncListeners.add(listener);
@@ -41,12 +41,12 @@ function updateSyncState(newState: SyncStatus): void {
 }
 
 /**
- * Algoritmo de conciliación Last-Write-Wins a nivel de ítem individual (3-Way Merge).
- * Resuelve colisiones entre ediciones simultáneas en cliente y servidor.
+ * Item-level Last-Write-Wins reconciliation algorithm (3-Way Merge).
+ * Resolves collisions between simultaneous edits on client and server.
  * 
- * @param localItems Ítems descifrados de la bóveda local
- * @param remoteItems Ítems descifrados de la bóveda remota
- * @returns Lista combinada sin duplicados, conservando la versión más reciente de cada cuenta
+ * @param localItems Decrypted items from local vault
+ * @param remoteItems Decrypted items from remote vault
+ * @returns Deduplicated unified list retaining the latest version of each account
  */
 export function reconcileVaultItems(
   localItems: VaultItem[],
@@ -54,20 +54,20 @@ export function reconcileVaultItems(
 ): VaultItem[] {
   const itemMap = new Map<string, VaultItem>();
 
-  // 1. Cargar todos los ítems remotos en el mapa
+  // 1. Load all remote items into map
   for (const item of remoteItems) {
     itemMap.set(item.id, item);
   }
 
-  // 2. Comparar con los ítems locales
+  // 2. Compare against local items
   for (const localItem of localItems) {
     const remoteItem = itemMap.get(localItem.id);
 
     if (!remoteItem) {
-      // El ítem solo existe en local (añadido offline) -> Conservarlo
+      // Item exists only locally (added offline) -> Retain
       itemMap.set(localItem.id, localItem);
     } else {
-      // El ítem existe en ambos -> Conservar el que tenga updated_at más reciente
+      // Item exists in both -> Retain the one with more recent updated_at timestamp
       if (localItem.updated_at >= remoteItem.updated_at) {
         itemMap.set(localItem.id, localItem);
       }
@@ -78,7 +78,7 @@ export function reconcileVaultItems(
 }
 
 /**
- * Descarga la última versión de la bóveda remota si el servidor tiene cambios (Pull Sync).
+ * Downloads latest version of remote vault if server has changes (Pull Sync).
  */
 export async function pullRemoteVault(
   baseUrl = '',
@@ -109,7 +109,7 @@ export async function pullRemoteVault(
       headers,
     });
 
-    // 304 Not Modified: El servidor y el cliente están exactamente sincronizados
+    // 304 Not Modified: Server and client are identically synchronized
     if (response.status === 304) {
       await setSyncStatus('synced');
       updateSyncState('synced');
@@ -117,17 +117,17 @@ export async function pullRemoteVault(
     }
 
     if (!response.ok) {
-      throw new Error(`Error en Pull Sync: HTTP ${response.status}`);
+      throw new Error(`Pull Sync failed: HTTP ${response.status}`);
     }
 
     const resJson = (await response.json()) as ApiResponse<EncryptedVaultPayload>;
     if (!resJson.success || !resJson.data) {
-      throw new Error('Respuesta de bóveda remota inválida');
+      throw new Error('Invalid remote vault response payload');
     }
 
     const remote = resJson.data;
 
-    // Solo actualizar localmente si la versión remota es más nueva
+    // Only update locally if remote version is newer
     if (remote.version > localVersion) {
       await saveLocalVault({
         ...remote,
@@ -141,15 +141,15 @@ export async function pullRemoteVault(
     updateSyncState('synced');
     return { pulled: false, version: localVersion };
   } catch (err) {
-    await setSyncStatus('error', err instanceof Error ? err.message : 'Fallo en pull sync');
+    await setSyncStatus('error', err instanceof Error ? err.message : 'Pull sync failure');
     updateSyncState('error');
     return { pulled: false };
   }
 }
 
 /**
- * Envía la versión local de la bóveda a Cloudflare D1 (Push Sync).
- * Si ocurre un conflicto de versión (HTTP 409), dispara la conciliación automática.
+ * Pushes local vault version to Cloudflare D1 (Push Sync).
+ * If version conflict occurs (HTTP 409), triggers automatic reconciliation.
  */
 export async function pushLocalVault(
   baseUrl = '',
@@ -163,7 +163,7 @@ export async function pushLocalVault(
     return false;
   }
 
-  // Si ya está sincronizado y no hay cambios sucios, no hacer push redundante
+  // If already synced and clean, do not perform redundant push
   if (localVault.sync_status === 'synced') {
     updateSyncState('synced');
     return true;
@@ -187,39 +187,39 @@ export async function pushLocalVault(
       body: JSON.stringify(payload),
     });
 
-    // 200 OK: Sincronización exitosa
+    // 200 OK: Synchronization successful
     if (response.ok) {
       await setSyncStatus('synced');
       updateSyncState('synced');
       return true;
     }
 
-    // 409 Conflict: La versión del servidor cambió mientras estábamos offline
+    // 409 Conflict: Server version changed while we were offline
     if (response.status === 409) {
       updateSyncState('conflict');
 
       if (masterKey) {
-        // Resolver conflicto de forma autónoma con la MasterKey en RAM
+        // Autonomously resolve conflict with in-memory MasterKey
         return await resolveConflict(baseUrl, masterKey, customFetch);
       } else {
-        await setSyncStatus('error', 'Conflicto de sincronización: se requiere MasterKey para conciliar');
+        await setSyncStatus('error', 'Sync conflict: MasterKey required to reconcile');
         updateSyncState('conflict');
         return false;
       }
     }
 
-    throw new Error(`Error en Push Sync: HTTP ${response.status}`);
+    throw new Error(`Push Sync failed: HTTP ${response.status}`);
   } catch (err) {
-    await setSyncStatus('error', err instanceof Error ? err.message : 'Fallo en push sync');
+    await setSyncStatus('error', err instanceof Error ? err.message : 'Push sync failure');
     updateSyncState('error');
     return false;
   }
 }
 
 /**
- * Protocolo de resolución de conflictos de versión (HTTP 409).
- * Descarga la copia remota, descifra ambas en memoria, concilia ítems con Last-Write-Wins,
- * cifra la versión resultante con version = remote.version + 1 y reintenta el push.
+ * Version conflict resolution protocol (HTTP 409).
+ * Downloads remote copy, decrypts both in RAM, reconciles items via Last-Write-Wins,
+ * encrypts resulting version with version = remote.version + 1 and retries push.
  */
 export async function resolveConflict(
   baseUrl: string,
@@ -231,7 +231,7 @@ export async function resolveConflict(
 
   if (!userConfig || !localVault) return false;
 
-  // 1. Obtener la versión remota completa
+  // 1. Fetch full remote version
   const getRes = await customFetch(`${baseUrl}/api/vault`, {
     method: 'GET',
     headers: { 'X-User-Id': userConfig.user_id },
@@ -250,18 +250,18 @@ export async function resolveConflict(
 
   const remoteVault = remoteJson.data;
 
-  // 2. Descifrar ambas versiones en RAM
+  // 2. Decrypt both versions in RAM
   const localItems = await decryptVault(localVault.encrypted_blob, localVault.iv, masterKey);
   const remoteItems = await decryptVault(remoteVault.encrypted_blob, remoteVault.iv, masterKey);
 
-  // 3. Conciliar ítems según updated_at
+  // 3. Reconcile items according to updated_at timestamps
   const mergedItems = reconcileVaultItems(localItems, remoteItems);
 
-  // 4. Cifrar con la nueva versión consecutiva (remote.version + 1)
+  // 4. Encrypt with consecutive version number (remote.version + 1)
   const nextVersion = remoteVault.version + 1;
   const encryptedResult = await encryptVault(mergedItems, masterKey, nextVersion);
 
-  // 5. Guardar localmente
+  // 5. Save locally
   await saveLocalVault({
     user_id: userConfig.user_id,
     encrypted_blob: encryptedResult.encryptedBlob,
@@ -271,12 +271,12 @@ export async function resolveConflict(
     sync_status: 'dirty',
   });
 
-  // 6. Reintentar push con la versión unificada
+  // 6. Retry push with unified consecutive version
   return await pushLocalVault(baseUrl, masterKey, customFetch);
 }
 
 /**
- * Inicializa los escuchadores de conectividad del navegador.
+ * Initializes browser network connectivity listeners.
  */
 export function initNetworkSyncListeners(
   onOnlineCallback?: () => void,

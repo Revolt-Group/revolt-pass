@@ -1,13 +1,13 @@
 /**
- * Módulo de Respaldo y Migración Criptográfica (Backup & Restore)
+ * Cryptographic Backup and Migration Module (Backup & Restore)
  *
- * Provee exportación de bóveda en dos variantes:
- * 1. Respaldo Cifrado (Recomendado): Cifrado simétrico AES-256-GCM con la Master Key actual.
- *    Totalmente seguro para almacenar en la nube, USB o disco local.
- * 2. Respaldo en Texto Plano: Exportación JSON legible con confirmación de riesgo para migración
- *    a otros gestores o copias de seguridad en frío en entornos aislados (air-gapped).
+ * Provides vault export in two variants:
+ * 1. Encrypted Backup (Recommended): Symmetric AES-256-GCM encryption with current Master Key.
+ *    Fully safe for storage in cloud, USB, or local disk.
+ * 2. Plaintext Backup: Human-readable JSON export with risk confirmation for migration
+ *    to other managers or cold storage in air-gapped environments.
  *
- * Provee importación con validación exhaustiva de esquemas y reconciliación (merge o replace).
+ * Provides import with comprehensive schema validation and reconciliation (merge or replace).
  */
 
 import type { VaultItem } from '../../types/vault';
@@ -31,7 +31,7 @@ export interface PlaintextBackupPayload {
 }
 
 /**
- * Exporta la bóveda en un paquete cifrado con AES-GCM-256.
+ * Exports vault in an AES-GCM-256 encrypted package.
  */
 export async function exportEncryptedBackup(
   items: VaultItem[],
@@ -55,7 +55,7 @@ export async function exportEncryptedBackup(
 }
 
 /**
- * Exporta la bóveda en formato JSON en texto plano.
+ * Exports vault in plaintext JSON format.
  */
 export function exportPlaintextBackup(items: VaultItem[], version = 1): string {
   const payload: PlaintextBackupPayload = {
@@ -69,7 +69,7 @@ export function exportPlaintextBackup(items: VaultItem[], version = 1): string {
 }
 
 /**
- * Detecta el formato de un archivo de respaldo.
+ * Detects the format of a backup file.
  */
 export function detectBackupFormat(jsonString: string): 'encrypted' | 'plaintext' | 'invalid' {
   try {
@@ -97,7 +97,7 @@ export function detectBackupFormat(jsonString: string): 'encrypted' | 'plaintext
 }
 
 /**
- * Descifra e importa un archivo de respaldo cifrado.
+ * Decrypts and imports an encrypted backup file.
  */
 export async function importEncryptedBackup(
   jsonString: string,
@@ -105,7 +105,7 @@ export async function importEncryptedBackup(
 ): Promise<VaultItem[]> {
   const parsed = JSON.parse(jsonString) as EncryptedBackupPayload;
   if (!parsed.encryptedBlob || !parsed.iv) {
-    throw new Error('Formato de respaldo cifrado inválido: faltan campos iv o encryptedBlob');
+    throw new Error('Invalid encrypted backup format: missing iv or encryptedBlob fields');
   }
 
   const decryptedItems = await decryptVault(parsed.encryptedBlob, parsed.iv, masterKey);
@@ -114,7 +114,7 @@ export async function importEncryptedBackup(
 }
 
 /**
- * Importa y valida un archivo de respaldo en texto plano.
+ * Imports and validates a plaintext backup file.
  */
 export function importPlaintextBackup(jsonString: string): VaultItem[] {
   const parsed = JSON.parse(jsonString);
@@ -127,7 +127,7 @@ export function importPlaintextBackup(jsonString: string): VaultItem[] {
   } else if (Array.isArray(parsed)) {
     itemsToValidate = parsed;
   } else {
-    throw new Error('Formato de respaldo en texto plano irreconocible');
+    throw new Error('Unrecognized plaintext backup format');
   }
 
   validateItemsSchema(itemsToValidate);
@@ -135,26 +135,26 @@ export function importPlaintextBackup(jsonString: string): VaultItem[] {
 }
 
 /**
- * Valida que la estructura contenga campos requeridos de VaultItem.
+ * Validates that data structure contains required VaultItem fields.
  */
 export function validateItemsSchema(items: unknown): asserts items is VaultItem[] {
   if (!Array.isArray(items)) {
-    throw new Error('Estructura de bóveda inválida: los ítems deben ser un array');
+    throw new Error('Invalid vault structure: items must be an array');
   }
 
   for (let i = 0; i < items.length; i++) {
     const acc = items[i];
     if (!acc || typeof acc !== 'object') {
-      throw new Error(`Cuenta #${i + 1} inválida`);
+      throw new Error(`Invalid account #${i + 1}`);
     }
     if (!acc.id || !acc.issuer || !acc.secret) {
-      throw new Error(`Cuenta #${i + 1} incompleta (requiere id, issuer, secret)`);
+      throw new Error(`Incomplete account #${i + 1} (requires id, issuer, secret)`);
     }
   }
 }
 
 /**
- * Fusiona las cuentas importadas con las existentes, actualizando duplicados si la fecha de modificación es posterior.
+ * Merges imported accounts with existing ones, updating duplicates if modification date is newer.
  */
 export function mergeVaultItems(
   existingItems: VaultItem[],
@@ -162,12 +162,12 @@ export function mergeVaultItems(
 ): VaultItem[] {
   const itemMap = new Map<string, VaultItem>();
 
-  // Cargar existentes
+  // Load existing items
   for (const item of existingItems) {
     itemMap.set(item.id, item);
   }
 
-  // Fusionar o agregar importadas
+  // Merge or insert imported items
   for (const item of importedItems) {
     if (itemMap.has(item.id)) {
       const existing = itemMap.get(item.id)!;
@@ -185,7 +185,7 @@ export function mergeVaultItems(
 }
 
 /**
- * Helper para descargar un archivo generado en el navegador.
+ * Helper to trigger file download in browser.
  */
 export function triggerFileDownload(content: string, filename: string, mimeType: string): void {
   if (typeof document === 'undefined') return;

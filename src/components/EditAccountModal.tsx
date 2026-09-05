@@ -63,7 +63,7 @@ export function EditAccountModal({
     }
   }, [item, isOpen]);
 
-  // Manejar selección de archivo de imagen
+  // Handle image file selection
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -82,7 +82,7 @@ export function EditAccountModal({
     }
   };
 
-  // Manejar pegado de imagen desde el portapapeles (Ctrl+V)
+  // Handle clipboard image paste (Ctrl+V)
   const handlePasteCapture = async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -108,7 +108,7 @@ export function EditAccountModal({
     }
   };
 
-  // Agregar uno o múltiples códigos (soporta pegado masivo separado por saltos de línea, comas o espacios)
+  // Add one or multiple codes (supports bulk pasting separated by newlines, commas, or spaces)
   const handleAddCodes = () => {
     if (!codeInput.trim()) return;
 
@@ -215,7 +215,7 @@ export function EditAccountModal({
                 onPaste={handlePasteCapture}
                 className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-zinc-950 border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-6 z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none"
               >
-                {/* Cabecera del Modal */}
+                {/* Modal Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
                   <div className="flex items-center gap-3">
                     <BrandIcon issuer={issuer || item.issuer} iconUrl={iconUrl} size={42} className="shrink-0" />
@@ -239,7 +239,7 @@ export function EditAccountModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-5 space-y-5">
-                  {/* SECCIÓN 1: PERSONALIZACIÓN DEL LOGO / FOTO */}
+                  {/* SECTION 1: LOGO / PHOTO CUSTOMIZATION */}
                   <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -269,7 +269,7 @@ export function EditAccountModal({
                         </div>
                       </div>
 
-                      {/* Botones de Acción para Logo */}
+                      {/* Action Buttons for Logo */}
                       <div className="flex items-center gap-2">
                         <input
                           ref={fileInputRef}
@@ -325,7 +325,7 @@ export function EditAccountModal({
                     )}
                   </div>
 
-                  {/* SECCIÓN 2: CÓDIGOS DE RECUPERACIÓN / BACKUP */}
+                  {/* SECTION 2: RECOVERY / BACKUP CODES */}
                   <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -348,7 +348,7 @@ export function EditAccountModal({
                       Puedes pegar varios códigos juntos separados por saltos de línea.
                     </p>
 
-                    {/* Input y Botón de Añadir Códigos */}
+                    {/* Input and Add Codes Button */}
                     <div className="flex gap-2">
                       <textarea
                         rows={2}
@@ -368,7 +368,7 @@ export function EditAccountModal({
                       </button>
                     </div>
 
-                    {/* Lista de Códigos Registrados */}
+                    {/* Registered Codes List */}
                     {recoveryCodes.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1 pt-1">
                         {recoveryCodes.map((rc, idx) => (
@@ -426,9 +426,9 @@ export function EditAccountModal({
                     )}
                   </div>
 
-                  {/* SECCIÓN 3: INFORMACIÓN DE LA CUENTA */}
+                  {/* SECTION 3: ACCOUNT INFORMATION */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Servicio / Issuer */}
+                    {/* Service / Issuer */}
                     <div>
                       <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                         <Building className="w-3.5 h-3.5 text-zinc-500" />
@@ -444,7 +444,7 @@ export function EditAccountModal({
                       />
                     </div>
 
-                    {/* Cuenta / Usuario */}
+                    {/* Account / Username */}
                     <div>
                       <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5 text-zinc-500" />
@@ -460,7 +460,7 @@ export function EditAccountModal({
                     </div>
                   </div>
 
-                  {/* Etiquetas / Tags */}
+                  {/* Tags */}
                   <div>
                     <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                       <Tag className="w-3.5 h-3.5 text-zinc-500" />
@@ -475,7 +475,7 @@ export function EditAccountModal({
                     />
                   </div>
 
-                  {/* Notas Adicionales */}
+                  {/* Additional Notes */}
                   <div>
                     <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                       <FileText className="w-3.5 h-3.5 text-zinc-500" />
@@ -490,7 +490,7 @@ export function EditAccountModal({
                     />
                   </div>
 
-                  {/* Botones de Acción Inferiores */}
+                  {/* Bottom Action Buttons */}
                   <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.06]">
                     <button
                       type="button"

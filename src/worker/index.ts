@@ -1,5 +1,5 @@
 /**
- * Punto de entrada principal para Cloudflare Worker (Worker con Assets estáticos).
+ * Main entry point for Cloudflare Worker (Worker with static Assets).
  */
 
 import { handleApiRequest } from './api.ts';
@@ -16,12 +16,12 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Interceptar rutas de la API REST (/api/*)
+    // Intercept REST API routes (/api/*)
     if (url.pathname.startsWith('/api')) {
       return handleApiRequest(request, env);
     }
 
-    // Servir assets estáticos del frontend (Vite dist) si el binding está presente
+    // Serve static frontend assets (Vite dist) if the ASSETS binding is present
     if (env.ASSETS) {
       const response = await env.ASSETS.fetch(request);
       const headers = new Headers(response.headers);

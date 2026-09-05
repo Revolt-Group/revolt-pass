@@ -38,7 +38,7 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const [tokens, setTokens] = useState<Record<string, string>>({});
 
-  // Calcular tokens en vivo para los resultados de la paleta
+  // Compute live tokens for palette search results
   useEffect(() => {
     if (!isOpen) return;
 
@@ -93,7 +93,7 @@ export function CommandPalette({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] p-4">
-          {/* Overlay desenfocado */}
+          {/* Blurred overlay */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -102,7 +102,7 @@ export function CommandPalette({
             className="fixed inset-0 bg-black/70 backdrop-blur-md"
           />
 
-          {/* Caja Flotante cmdk */}
+          {/* cmdk Floating Box */}
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -114,7 +114,7 @@ export function CommandPalette({
               className="w-full flex flex-col focus:outline-none"
               loop
             >
-              {/* Buscador Superior */}
+              {/* Top Search Input */}
               <div className="flex items-center px-4 py-3.5 border-b border-zinc-800/80 gap-3">
                 <Search className="w-5 h-5 text-zinc-400 shrink-0" />
                 <Command.Input
@@ -127,13 +127,13 @@ export function CommandPalette({
                 </kbd>
               </div>
 
-              {/* Lista de Resultados */}
+              {/* Results List */}
               <Command.List className="max-h-[60vh] overflow-y-auto p-2 text-xs space-y-1">
                 <Command.Empty className="py-8 text-center text-zinc-500">
                   No se encontraron resultados para esta búsqueda.
                 </Command.Empty>
 
-                {/* Acciones Rápidas */}
+                {/* Quick Actions */}
                 <Command.Group heading="Acciones del Sistema" className="text-zinc-500 font-semibold px-2 py-1">
                   <Command.Item
                     onSelect={() => {
@@ -192,7 +192,7 @@ export function CommandPalette({
                   </Command.Item>
                 </Command.Group>
 
-                {/* Cuentas Fijadas */}
+                {/* Pinned Accounts */}
                 {pinnedItems.length > 0 && (
                   <Command.Group heading="Cuentas Fijadas" className="text-zinc-500 font-semibold px-2 py-1 mt-2">
                     {pinnedItems.map((item) => {
@@ -227,7 +227,7 @@ export function CommandPalette({
                   </Command.Group>
                 )}
 
-                {/* Todas las Cuentas */}
+                {/* All Accounts */}
                 <Command.Group heading="Todas las Cuentas" className="text-zinc-500 font-semibold px-2 py-1 mt-2">
                   {unpinnedItems.map((item) => {
                     const code = tokens[item.id] || '------';
@@ -258,7 +258,7 @@ export function CommandPalette({
                 </Command.Group>
               </Command.List>
 
-              {/* Barra de Atajos en Pie */}
+              {/* Footer Keyboard Shortcuts Bar */}
               <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-800/80 bg-zinc-900/40 text-[11px] text-zinc-400">
                 <span>Navegar con <kbd className="px-1 py-0.5 rounded bg-zinc-800 font-mono text-[10px]">↑</kbd> <kbd className="px-1 py-0.5 rounded bg-zinc-800 font-mono text-[10px]">↓</kbd></span>
                 <span>Presiona <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 font-mono text-[10px] text-zinc-200">Enter</kbd> para copiar</span>

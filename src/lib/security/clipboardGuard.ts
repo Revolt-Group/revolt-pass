@@ -1,22 +1,22 @@
 /**
- * Módulo de Limpieza Segura de Portapapeles (Clipboard Guard)
+ * Secure Clipboard Guard Module
  *
- * Copia secretos (tokens TOTP, contraseñas, recovery codes) al portapapeles del sistema
- * y programa una purga automática exactamente a los 45 segundos.
- * Antes de limpiar, verifica mediante navigator.clipboard.readText() si el contenido
- * actual sigue siendo el secreto copiado. Si el usuario copió otro elemento en el intermedio,
- * se respeta el nuevo contenido y no se sobrescribe.
+ * Copies secrets (TOTP tokens, passwords, recovery codes) to system clipboard
+ * and schedules an automatic wipe after exactly 45 seconds.
+ * Prior to wiping, verifies via navigator.clipboard.readText() whether the current
+ * clipboard content still matches the copied secret. If the user copied another item
+ * in the meantime, the new content is preserved and not overwritten.
  */
 
 let activeClearTimer: ReturnType<typeof setTimeout> | null = null;
 let lastCopiedSecret: string | null = null;
 
 /**
- * Copia un texto al portapapeles de manera segura y agenda su purga en timeoutMs (por defecto 45s).
+ * Securely copies text to clipboard and schedules purge in timeoutMs (default: 45s).
  *
- * @param text Secreto a copiar en el portapapeles.
- * @param timeoutMs Tiempo en milisegundos antes del borrado (default: 45,000 ms).
- * @returns Promise<boolean> que resuelve a true si el copiado fue exitoso.
+ * @param text Secret to copy to clipboard.
+ * @param timeoutMs Timeout in milliseconds before clearing (default: 45,000 ms).
+ * @returns Promise<boolean> resolving to true if copy succeeded.
  */
 export async function copyToClipboardSecurely(
   text: string,
@@ -30,7 +30,7 @@ export async function copyToClipboardSecurely(
     await navigator.clipboard.writeText(text);
     lastCopiedSecret = text;
 
-    // Si había una purga previa programada, cancelarla y reprogramar para este secreto
+    // If a previous clear was scheduled, cancel and reschedule for this secret
     cancelClipboardClear();
 
     activeClearTimer = setTimeout(async () => {
@@ -39,13 +39,13 @@ export async function copyToClipboardSecurely(
 
     return true;
   } catch (err: unknown) {
-    console.warn('Error al copiar al portapapeles de forma segura:', err);
+    console.warn('Error copying to clipboard securely:', err);
     return false;
   }
 }
 
 /**
- * Realiza la purga verificando que el portapapeles aún contenga el texto copiado originalmente.
+ * Performs guarded purge verifying clipboard still contains original copied text.
  */
 async function performGuardedClear(expectedText: string): Promise<void> {
   activeClearTimer = null;
@@ -56,7 +56,7 @@ async function performGuardedClear(expectedText: string): Promise<void> {
 
   try {
     const currentClipboard = await navigator.clipboard.readText();
-    // Purgar únicamente si el contenido actual sigue siendo exactamente el secreto copiado
+    // Purge only if current clipboard content is still exactly the copied secret
     if (currentClipboard === expectedText) {
       await navigator.clipboard.writeText('');
       if (lastCopiedSecret === expectedText) {
@@ -64,13 +64,13 @@ async function performGuardedClear(expectedText: string): Promise<void> {
       }
     }
   } catch {
-    // Si los permisos de lectura fueron revocados o fallan, intentar limpiar como medida defensiva
-    // si el último secreto registrado coincide
+    // If read permissions were revoked or fail, attempt defensive clear
+    // if last copied secret matches
     if (lastCopiedSecret === expectedText && navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText('');
       } catch {
-        // Silencioso
+        // Silent fallback
       }
       lastCopiedSecret = null;
     }
@@ -78,7 +78,7 @@ async function performGuardedClear(expectedText: string): Promise<void> {
 }
 
 /**
- * Cancela cualquier purga de portapapeles que esté programada.
+ * Cancels any scheduled clipboard purge.
  */
 export function cancelClipboardClear(): void {
   if (activeClearTimer) {
@@ -88,7 +88,7 @@ export function cancelClipboardClear(): void {
 }
 
 /**
- * Comprueba si hay un temporizador de purga activo.
+ * Checks whether a clipboard purge is currently scheduled.
  */
 export function isClipboardClearScheduled(): boolean {
   return activeClearTimer !== null;

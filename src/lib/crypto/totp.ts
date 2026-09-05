@@ -1,21 +1,21 @@
 /**
- * Motor TOTP estricto según RFC 6238 y RFC 4226.
- * Implementado utilizando la Web Crypto API nativa (crypto.subtle).
+ * Strict TOTP Engine adhering to RFC 6238 and RFC 4226.
+ * Implemented using native Web Crypto API (crypto.subtle).
  */
 
 import { decodeBase32 } from './base32.ts';
 import type { TotpAlgorithm, VaultItem } from '../../types/vault.ts';
 
 export interface TotpOptions {
-  timestampSeconds?: number; // Marca de tiempo en segundos (default: Date.now() / 1000)
-  timeDriftOffsetMs?: number; // Compensación de desfase de reloj con el servidor en ms
-  period?: number; // Intervalo de rotación en segundos (default: 30)
-  digits?: 6 | 8; // Cantidad de dígitos generados (default: 6)
-  algorithm?: TotpAlgorithm; // Algoritmo hash: 'SHA1' o 'SHA256' (default: 'SHA1')
+  timestampSeconds?: number; // Timestamp in seconds (default: Date.now() / 1000)
+  timeDriftOffsetMs?: number; // Server clock drift compensation in ms
+  period?: number; // Rotation interval in seconds (default: 30)
+  digits?: 6 | 8; // Number of generated digits (default: 6)
+  algorithm?: TotpAlgorithm; // Hash algorithm: 'SHA1' or 'SHA256' (default: 'SHA1')
 }
 
 /**
- * Mapeo de identificadores de algoritmo a nombres compatibles con Web Crypto API.
+ * Maps algorithm identifiers to Web Crypto API compatible names.
  */
 function getSubtleHashName(algorithm: TotpAlgorithm): string {
   switch (algorithm) {
@@ -24,18 +24,18 @@ function getSubtleHashName(algorithm: TotpAlgorithm): string {
     case 'SHA256':
       return 'SHA-256';
     default:
-      throw new Error(`Algoritmo hash no soportado: ${algorithm}`);
+      throw new Error(`Unsupported hash algorithm: ${algorithm}`);
   }
 }
 
 /**
- * Convierte un contador entero a un ArrayBuffer de 8 bytes en orden Big-Endian.
+ * Converts an integer counter to an 8-byte ArrayBuffer in Big-Endian order.
  */
 function counterToBuffer(counter: number): ArrayBuffer {
   const buffer = new ArrayBuffer(8);
   const view = new DataView(buffer);
   
-  // Manejo de enteros de 64 bits en JavaScript sin riesgo de desbordamiento
+  // Handle 64-bit integers in JavaScript without overflow risk
   const high = Math.floor(counter / 0x100000000);
   const low = counter >>> 0;
   
@@ -45,11 +45,11 @@ function counterToBuffer(counter: number): ArrayBuffer {
 }
 
 /**
- * Genera un código de autenticación de un solo uso por tiempo (TOTP) conforme a RFC 6238.
+ * Generates a Time-based One-Time Password (TOTP) conforming to RFC 6238.
  * 
- * @param secret Secreto en formato Base32 (string) o bytes binarios (Uint8Array)
- * @param options Opciones de configuración del token
- * @returns Código numérico con ceros a la izquierda según los dígitos configurados
+ * @param secret Secret in Base32 string or binary bytes (Uint8Array)
+ * @param options Token configuration options
+ * @returns Left-padded numeric token string matching configured digits
  */
 export async function generateTotp(
   secret: string | Uint8Array,
@@ -64,16 +64,16 @@ export async function generateTotp(
   } = options;
 
   if (digits !== 6 && digits !== 8) {
-    throw new Error(`Los dígitos deben ser 6 u 8. Recibido: ${digits}`);
+    throw new Error(`Digits must be 6 or 8. Received: ${digits}`);
   }
 
-  // 1. Obtener los bytes del secreto
+  // 1. Obtain secret bytes
   const secretBytes = typeof secret === 'string' ? decodeBase32(secret) : secret;
   if (secretBytes.length === 0) {
-    throw new Error('El secreto TOTP no puede estar vacío');
+    throw new Error('TOTP secret cannot be empty');
   }
 
-  // 2. Determinar el tiempo efectivo en segundos compensado con el desfase
+  // 2. Determine effective timestamp in seconds with drift offset applied
   const baseTimeMs = timestampSeconds !== undefined
     ? timestampSeconds * 1000
     : Date.now();
@@ -81,11 +81,11 @@ export async function generateTotp(
   const effectiveTimeMs = baseTimeMs + timeDriftOffsetMs;
   const effectiveSeconds = Math.floor(effectiveTimeMs / 1000);
 
-  // 3. Calcular el paso temporal T = floor(t / period)
+  // 3. Compute time step T = floor(t / period)
   const timeStep = Math.floor(effectiveSeconds / period);
   const counterBuffer = counterToBuffer(timeStep);
 
-  // 4. Importar la clave criptográfica en Web Crypto
+  // 4. Import cryptographic key into Web Crypto
   const subtleHash = getSubtleHashName(algorithm);
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
@@ -95,11 +95,11 @@ export async function generateTotp(
     ['sign']
   );
 
-  // 5. Calcular la firma HMAC
+  // 5. Compute HMAC signature
   const signature = await crypto.subtle.sign('HMAC', cryptoKey, counterBuffer);
   const hashBytes = new Uint8Array(signature);
 
-  // 6. Truncamiento dinámico según RFC 4226 Sección 5.4
+  // 6. Dynamic truncation according to RFC 4226 Section 5.4
   const offset = hashBytes[hashBytes.length - 1] & 0x0f;
   const binary =
     ((hashBytes[offset] & 0x7f) << 24) |
@@ -107,7 +107,7 @@ export async function generateTotp(
     ((hashBytes[offset + 2] & 0xff) << 8) |
     (hashBytes[offset + 3] & 0xff);
 
-  // 7. Aplicar módulo y rellenar con ceros a la izquierda
+  // 7. Apply modulo and left-pad with zeros
   const modulo = Math.pow(10, digits);
   const token = (binary % modulo).toString().padStart(digits, '0');
 
@@ -115,7 +115,7 @@ export async function generateTotp(
 }
 
 /**
- * Devuelve los segundos restantes del ciclo actual de TOTP (de period a 0).
+ * Returns remaining seconds in the current TOTP cycle (from period down to 0).
  */
 export function getTotpRemainingSeconds(period = 30, timeDriftOffsetMs = 0): number {
   const nowMs = Date.now() + timeDriftOffsetMs;
@@ -125,8 +125,8 @@ export function getTotpRemainingSeconds(period = 30, timeDriftOffsetMs = 0): num
 }
 
 /**
- * Devuelve el progreso del ciclo actual normalizado de 0 a 1 (para indicadores circulares SVG).
- * 1 = inicio del ciclo, 0 = ciclo expirado.
+ * Returns normalized progress of current cycle from 0 to 1 (for SVG circular indicators).
+ * 1 = start of cycle, 0 = expired cycle.
  */
 export function getTotpProgress(period = 30, timeDriftOffsetMs = 0): number {
   const nowMs = Date.now() + timeDriftOffsetMs;
@@ -136,14 +136,14 @@ export function getTotpProgress(period = 30, timeDriftOffsetMs = 0): number {
 }
 
 /**
- * Parsea una URI estándar otpauth://totp/... a un objeto parcial de VaultItem.
+ * Parses a standard otpauth://totp/... URI into a partial VaultItem object.
  * 
- * Ejemplo:
+ * Example:
  * otpauth://totp/GitHub:user%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&digits=6&period=30&algorithm=SHA1
  */
 export function parseOtpAuthUri(uri: string): Partial<VaultItem> {
   if (!uri.startsWith('otpauth://totp/')) {
-    throw new Error('Formato de URI inválido: debe comenzar con "otpauth://totp/"');
+    throw new Error('Invalid URI format: must start with "otpauth://totp/"');
   }
 
   const parsedUrl = new URL(uri);
@@ -152,7 +152,7 @@ export function parseOtpAuthUri(uri: string): Partial<VaultItem> {
   let issuer = parsedUrl.searchParams.get('issuer') || '';
   let account = fullLabel;
 
-  // Si el label contiene "Issuer:Account", extraer ambos componentes
+  // If label contains "Issuer:Account", extract both components
   if (fullLabel.includes(':')) {
     const parts = fullLabel.split(':');
     const labelIssuer = parts[0].trim();
@@ -164,7 +164,7 @@ export function parseOtpAuthUri(uri: string): Partial<VaultItem> {
 
   const secret = parsedUrl.searchParams.get('secret');
   if (!secret) {
-    throw new Error('La URI de autenticación no contiene el parámetro "secret" obligatorio');
+    throw new Error('Authentication URI missing required "secret" parameter');
   }
 
   const digitsParam = parsedUrl.searchParams.get('digits');
@@ -178,8 +178,8 @@ export function parseOtpAuthUri(uri: string): Partial<VaultItem> {
 
   return {
     type: 'totp',
-    issuer: issuer || 'Desconocido',
-    account: account || 'Cuenta',
+    issuer: issuer || 'Unknown',
+    account: account || 'Account',
     secret: secret.trim(),
     digits,
     period: isNaN(period) || period <= 0 ? 30 : period,

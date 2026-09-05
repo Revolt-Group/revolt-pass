@@ -1,6 +1,6 @@
 /**
- * Enrutador de API REST Zero-Knowledge para Cloudflare Workers / Pages Functions.
- * Implementa seguridad estricta, manejo de errores homogéneo y control de concurrencia optimista.
+ * Zero-Knowledge REST API Router for Cloudflare Workers / Pages Functions.
+ * Implements strict security headers, uniform error handling, and optimistic concurrency control.
  */
 
 import type {
@@ -21,7 +21,7 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 /**
- * Genera una respuesta JSON con las cabeceras de seguridad incorporadas.
+ * Generates a JSON response with embedded security headers.
  */
 export function jsonResponse<T>(
   data: ApiResponse<T>,
@@ -41,7 +41,7 @@ export function jsonResponse<T>(
 }
 
 /**
- * Genera una respuesta de error estandarizada.
+ * Generates a standardized error response.
  */
 export function errorResponse(
   code: string,
@@ -64,10 +64,10 @@ export function errorResponse(
 }
 
 /**
- * Manejador principal de peticiones de la API REST.
+ * Main REST API request handler.
  */
 export async function handleApiRequest(request: Request, env: Env): Promise<Response> {
-  // Manejo de preflight CORS (OPTIONS)
+  // Handle CORS preflight (OPTIONS)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -80,7 +80,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   try {
     // -----------------------------------------------------------------------
-    // GET /api/time: Sincronización de reloj para Time Drift Compensation
+    // GET /api/time: Clock synchronization for Time Drift Compensation
     // -----------------------------------------------------------------------
     if (request.method === 'GET' && (path === '/api/time' || path === '/api/v1/time')) {
       return jsonResponse(
@@ -97,7 +97,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
-    // POST /api/auth/register: Registro atómico inicial de usuario y bóveda
+    // POST /api/auth/register: Atomic initial registration of user and vault
     // -----------------------------------------------------------------------
     if (request.method === 'POST' && (path === '/api/auth/register' || path === '/api/v1/auth/register')) {
       let body: RegisterRequestBody;
@@ -122,7 +122,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         return errorResponse('INVALID_USERNAME', 'El nombre de usuario debe tener al menos 3 caracteres', 400);
       }
 
-      // 1. Verificar si el usuario ya existe (NOCASE)
+      // 1. Check if user already exists (NOCASE)
       const existingUser = await env.DB.prepare(
         'SELECT id FROM users WHERE username = ? COLLATE NOCASE'
       )
@@ -137,10 +137,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         );
       }
 
-      // 2. Generar UUID de usuario canónico
+      // 2. Generate canonical user UUID
       const userId = `usr_${crypto.randomUUID()}`;
 
-      // 3. Insertar atómicamente usuario y bóveda versión 1 en Cloudflare D1
+      // 3. Atomically insert user and version 1 vault into Cloudflare D1
       await env.DB.batch([
         env.DB.prepare(
           `INSERT INTO users (id, username, kdf_salt, passkey_credential_id, created_at, updated_at) 
@@ -171,7 +171,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
-    // GET /api/auth/salt: Obtener el kdf_salt para derivación de clave en cliente
+    // GET /api/auth/salt: Retrieve kdf_salt for client-side key derivation
     // -----------------------------------------------------------------------
     if (request.method === 'GET' && (path === '/api/auth/salt' || path === '/api/v1/auth/salt')) {
       const usernameParam = url.searchParams.get('username');
@@ -203,7 +203,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
-    // GET /api/vault: Obtener el blob cifrado actual de la bóveda
+    // GET /api/vault: Retrieve current encrypted vault blob
     // -----------------------------------------------------------------------
     if (request.method === 'GET' && (path === '/api/vault' || path === '/api/v1/vault')) {
       const userId = request.headers.get('X-User-Id') || url.searchParams.get('user_id');
@@ -228,7 +228,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada para este usuario', 404);
       }
 
-      // Soporte para ETag y HTTP 304 Not Modified
+      // ETag and HTTP 304 Not Modified support
       const ifNoneMatch = request.headers.get('If-None-Match');
       const etag = `"v${vault.version}"`;
 
@@ -260,7 +260,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
-    // PUT /api/vault: Actualización de la bóveda con concurrencia optimista
+    // PUT /api/vault: Update vault with optimistic concurrency control
     // -----------------------------------------------------------------------
     if (request.method === 'PUT' && (path === '/api/vault' || path === '/api/v1/vault')) {
       const userId = request.headers.get('X-User-Id');
@@ -286,7 +286,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         );
       }
 
-      // Obtener versión actual en el servidor
+      // Fetch current server version
       const current = await env.DB.prepare('SELECT version FROM vaults WHERE user_id = ?')
         .bind(userId)
         .first<{ version: number }>();
@@ -295,8 +295,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada', 404);
       }
 
-      // CONTROL DE CONCURRENCIA OPTIMISTA ESTRICTO:
-      // La versión entrante DEBE ser exactamente current.version + 1
+      // STRICT OPTIMISTIC CONCURRENCY CONTROL:
+      // The incoming version MUST be exactly current.version + 1
       if (version !== current.version + 1) {
         return errorResponse(
           'VAULT_VERSION_CONFLICT',
@@ -309,7 +309,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         );
       }
 
-      // Actualizar la bóveda e insertar registro en auditoría
+      // Update vault and append audit log entry
       await env.DB.batch([
         env.DB.prepare(
           `UPDATE vaults 
@@ -333,7 +333,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       });
     }
 
-    // Ruta no encontrada en la API
+    // Endpoint not found
     return errorResponse('ENDPOINT_NOT_FOUND', `Ruta de API no encontrada: ${request.method} ${path}`, 404);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error interno del servidor';

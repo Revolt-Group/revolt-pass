@@ -1,9 +1,9 @@
 /**
- * Gestor de Almacenamiento Local Seguro en IndexedDB con 'idb'.
- * Implementa los tres almacenes canónicos según docs/es/02-ARCHITECTURE.md / docs/en/02-ARCHITECTURE.md:
- * - vault_encrypted: Bóveda cifrada y estado de sincronización local.
- * - user_config: Perfil de usuario, salt y envoltura WebAuthn.
- * - sync_queue: Cola transaccional de operaciones diferidas offline.
+ * Secure Local Storage Manager in IndexedDB using 'idb'.
+ * Implements the three canonical object stores per docs/es/02-ARCHITECTURE.md / docs/en/02-ARCHITECTURE.md:
+ * - vault_encrypted: Encrypted vault blob and local sync state.
+ * - user_config: User profile, KDF salt, and WebAuthn wrapping metadata.
+ * - sync_queue: Transactional queue for deferred offline operations.
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
@@ -44,23 +44,23 @@ export interface RevoltPassDBSchema extends DBSchema {
 let dbPromise: Promise<IDBPDatabase<RevoltPassDBSchema>> | null = null;
 
 /**
- * Obtiene la conexión singleton a IndexedDB, inicializando los almacenes si es necesario.
+ * Obtains singleton IndexedDB connection, initializing object stores if necessary.
  */
 export function getDb(): Promise<IDBPDatabase<RevoltPassDBSchema>> {
   if (!dbPromise) {
     dbPromise = openDB<RevoltPassDBSchema>(DB_NAME, DB_VERSION, {
       upgrade(db) {
-        // 1. Almacén de bóveda cifrada
+        // 1. Encrypted vault object store
         if (!db.objectStoreNames.contains('vault_encrypted')) {
           db.createObjectStore('vault_encrypted');
         }
 
-        // 2. Almacén de configuración de usuario y llaves envueltas
+        // 2. User profile and wrapped keys object store
         if (!db.objectStoreNames.contains('user_config')) {
           db.createObjectStore('user_config');
         }
 
-        // 3. Cola de operaciones de sincronización offline
+        // 3. Offline synchronization queue object store
         if (!db.objectStoreNames.contains('sync_queue')) {
           db.createObjectStore('sync_queue', {
             keyPath: 'id',
@@ -75,7 +75,7 @@ export function getDb(): Promise<IDBPDatabase<RevoltPassDBSchema>> {
 }
 
 /**
- * Cierra la conexión activa a IndexedDB (útil para pruebas o reinicios).
+ * Closes active IndexedDB connection (useful for tests or teardown).
  */
 export function closeDb(): void {
   if (dbPromise) {
@@ -85,11 +85,11 @@ export function closeDb(): void {
 }
 
 // =========================================================================
-// OPERACIONES SOBRE VAULT_ENCRYPTED
+// OPERATIONS ON VAULT_ENCRYPTED
 // =========================================================================
 
 /**
- * Obtiene la bóveda cifrada local ('current').
+ * Retrieves local encrypted vault record ('current').
  */
 export async function getLocalVault(): Promise<LocalVaultRecord | undefined> {
   const db = await getDb();
@@ -97,7 +97,7 @@ export async function getLocalVault(): Promise<LocalVaultRecord | undefined> {
 }
 
 /**
- * Guarda o actualiza la bóveda cifrada en almacenamiento local.
+ * Saves or updates encrypted vault in local storage.
  */
 export async function saveLocalVault(vault: LocalVaultRecord): Promise<void> {
   const db = await getDb();
@@ -105,7 +105,7 @@ export async function saveLocalVault(vault: LocalVaultRecord): Promise<void> {
 }
 
 /**
- * Actualiza únicamente el estado de sincronización de la bóveda local.
+ * Updates only the sync status of the local vault record.
  */
 export async function setSyncStatus(status: SyncStatus, errorMessage?: string): Promise<void> {
   const db = await getDb();
@@ -119,11 +119,11 @@ export async function setSyncStatus(status: SyncStatus, errorMessage?: string): 
 }
 
 // =========================================================================
-// OPERACIONES SOBRE USER_CONFIG
+// OPERATIONS ON USER_CONFIG
 // =========================================================================
 
 /**
- * Obtiene la configuración y perfil del usuario local ('profile').
+ * Retrieves local user profile configuration ('profile').
  */
 export async function getUserConfig(): Promise<LocalUserConfig | undefined> {
   const db = await getDb();
@@ -131,7 +131,7 @@ export async function getUserConfig(): Promise<LocalUserConfig | undefined> {
 }
 
 /**
- * Guarda la configuración del usuario local (salt, passkey info, etc.).
+ * Saves local user configuration (salt, passkey info, preferences).
  */
 export async function saveUserConfig(config: LocalUserConfig): Promise<void> {
   const db = await getDb();
@@ -139,11 +139,11 @@ export async function saveUserConfig(config: LocalUserConfig): Promise<void> {
 }
 
 // =========================================================================
-// OPERACIONES SOBRE SYNC_QUEUE (OFFLINE MUTATIONS)
+// OPERATIONS ON SYNC_QUEUE (OFFLINE MUTATIONS)
 // =========================================================================
 
 /**
- * Añade una operación a la cola de sincronización diferida.
+ * Enqueues an operation into the deferred synchronization queue.
  */
 export async function enqueueSyncOp(op: Omit<SyncQueueItem, 'id'>): Promise<number> {
   const db = await getDb();
@@ -152,7 +152,7 @@ export async function enqueueSyncOp(op: Omit<SyncQueueItem, 'id'>): Promise<numb
 }
 
 /**
- * Obtiene todas las operaciones pendientes en la cola de sincronización.
+ * Retrieves all pending operations in the sync queue.
  */
 export async function getSyncQueue(): Promise<SyncQueueItem[]> {
   const db = await getDb();
@@ -160,7 +160,7 @@ export async function getSyncQueue(): Promise<SyncQueueItem[]> {
 }
 
 /**
- * Elimina una operación de la cola tras haber sido sincronizada con éxito.
+ * Removes an operation from queue upon successful synchronization.
  */
 export async function removeSyncOp(id: number): Promise<void> {
   const db = await getDb();
@@ -168,11 +168,11 @@ export async function removeSyncOp(id: number): Promise<void> {
 }
 
 // =========================================================================
-// LIMPIEZA TOTAL Y SEGURIDAD
+// FULL WIPE AND PURGE
 // =========================================================================
 
 /**
- * Purga todo el contenido de los almacenes locales (cierre de sesión / borrado seguro).
+ * Purges all content from local stores (logout / secure wipe).
  */
 export async function clearLocalData(): Promise<void> {
   const db = await getDb();

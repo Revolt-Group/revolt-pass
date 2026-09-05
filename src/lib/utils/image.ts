@@ -1,11 +1,11 @@
-﻿/**
- * Redimensiona y comprime una imagen a un Data URL WebP/PNG compacto (max 96x96 px)
- * para guardarlo de forma segura y liviana en la bóveda cifrada.
+/**
+ * Resizes and compresses an image file into a compact WebP/PNG Data URL (max 96x96 px)
+ * for safe, lightweight storage inside the encrypted vault.
  */
 export function resizeImageFile(file: File, maxDim = 96): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
-      return reject(new Error('El archivo seleccionado no es una imagen válida'));
+      return reject(new Error('Selected file is not a valid image'));
     }
 
     const reader = new FileReader();
@@ -37,7 +37,7 @@ export function resizeImageFile(file: File, maxDim = 96): Promise<string> {
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Priorizar WebP para compresión de 2-4 KB
+        // Prioritize WebP for 2-4 KB compression
         const webp = canvas.toDataURL('image/webp', 0.88);
         if (webp && webp.startsWith('data:image/webp')) {
           resolve(webp);
@@ -45,10 +45,10 @@ export function resizeImageFile(file: File, maxDim = 96): Promise<string> {
           resolve(canvas.toDataURL('image/png'));
         }
       };
-      img.onerror = () => reject(new Error('No se pudo decodificar la imagen'));
+      img.onerror = () => reject(new Error('Failed to decode image'));
       img.src = e.target?.result as string;
     };
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsDataURL(file);
   });
 }

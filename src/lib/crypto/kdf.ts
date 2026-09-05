@@ -1,7 +1,7 @@
 /**
- * Módulo de derivación de claves maestras (KDF).
- * Implementa PBKDF2-HMAC-SHA256 con 600,000 iteraciones y salt de 16 bytes.
- * Orquesta la ejecución en un Web Worker en el navegador, con fallback directo.
+ * Master Key Derivation Module (KDF).
+ * Implements PBKDF2-HMAC-SHA256 with 600,000 iterations and 16-byte salt.
+ * Orchestrates Web Worker execution in the browser, with direct execution fallback.
  */
 
 import type { KdfWorkerRequest, KdfWorkerResponse } from './kdf.worker.ts';
@@ -10,7 +10,7 @@ export const DEFAULT_KDF_ITERATIONS = 600000;
 export const DEFAULT_SALT_LENGTH_BYTES = 16;
 
 /**
- * Genera un salt criptográficamente seguro de 16 bytes (128 bits).
+ * Generates a cryptographically secure 16-byte (128-bit) salt.
  */
 export function generateSalt(length = DEFAULT_SALT_LENGTH_BYTES): Uint8Array {
   const salt = new Uint8Array(length);
@@ -19,8 +19,8 @@ export function generateSalt(length = DEFAULT_SALT_LENGTH_BYTES): Uint8Array {
 }
 
 /**
- * Deriva una CryptoKey simétrica AES-GCM (256 bits) de forma directa en el hilo actual.
- * Utilizado como motor base y fallback para entornos de pruebas automatizadas (Vitest/Node).
+ * Derives a symmetric AES-GCM (256-bit) CryptoKey directly in the current thread.
+ * Used as base engine and fallback for automated test environments (Vitest/Node).
  */
 export async function deriveMasterKeyDirect(
   password: string,
@@ -31,7 +31,7 @@ export async function deriveMasterKeyDirect(
   const encoder = new TextEncoder();
   const passwordBytes = encoder.encode(password);
 
-  // 1. Importar la contraseña como clave base PBKDF2
+  // 1. Import password as raw PBKDF2 base key
   const baseKey = await crypto.subtle.importKey(
     'raw',
     passwordBytes,
@@ -40,7 +40,7 @@ export async function deriveMasterKeyDirect(
     ['deriveKey']
   );
 
-  // 2. Derivar directamente la CryptoKey para AES-GCM (256 bits)
+  // 2. Directly derive CryptoKey for AES-GCM (256-bit)
   const masterKey = await crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
@@ -58,10 +58,10 @@ export async function deriveMasterKeyDirect(
 }
 
 /**
- * Deriva una CryptoKey simétrica AES-GCM (256 bits) utilizando un Web Worker en segundo plano
- * para no degradar la respuesta visual de la interfaz de React durante las 600,000 iteraciones.
+ * Derives a symmetric AES-GCM (256-bit) CryptoKey using a background Web Worker
+ * to prevent UI freezes during the 600,000 iterations.
  * 
- * Si el entorno no soporta Web Workers (ej. Vitest / Node.js), recurre de forma segura a deriveMasterKeyDirect.
+ * If the environment lacks Web Worker support (e.g. Vitest / Node.js), safely falls back to deriveMasterKeyDirect.
  */
 export async function deriveMasterKey(
   password: string,
@@ -69,7 +69,7 @@ export async function deriveMasterKey(
   iterations = DEFAULT_KDF_ITERATIONS,
   extractable = true
 ): Promise<CryptoKey> {
-  // Verificar si estamos en un entorno con soporte completo de Web Worker en módulo
+  // Check if environment has full module Web Worker support
   const hasWorkerSupport = typeof window !== 'undefined' && typeof Worker !== 'undefined';
 
   if (!hasWorkerSupport) {
@@ -91,7 +91,7 @@ export async function deriveMasterKey(
 
         if (data.success) {
           try {
-            // Importar los bits derivados a una CryptoKey AES-GCM
+            // Import derived bits into an AES-GCM CryptoKey
             const masterKey = await crypto.subtle.importKey(
               'raw',
               data.derivedBits,
@@ -100,7 +100,7 @@ export async function deriveMasterKey(
               ['encrypt', 'decrypt']
             );
 
-            // Higiene de memoria: sobreescribir el buffer recibido con ceros
+            // Memory hygiene: zeroize received buffer in-place
             new Uint8Array(data.derivedBits).fill(0);
 
             resolve(masterKey);
@@ -117,7 +117,7 @@ export async function deriveMasterKey(
 
       worker.onerror = () => {
         worker?.terminate();
-        // Si el worker falla al instanciarse en entornos emulados, fallback a directo
+        // If worker fails to instantiate in emulated environments, fallback to direct execution
         deriveMasterKeyDirect(password, salt, iterations).then(resolve).catch(reject);
       };
 
@@ -130,7 +130,7 @@ export async function deriveMasterKey(
 
       worker.postMessage(request);
     } catch {
-      // Fallback inmediato si new Worker falla
+      // Immediate fallback if new Worker fails
       worker?.terminate();
       deriveMasterKeyDirect(password, salt, iterations).then(resolve).catch(reject);
     }

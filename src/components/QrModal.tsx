@@ -112,14 +112,14 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
 
       setScanSuccess(true);
       toast.success(`Código QR detectado: ${parsed.issuer || 'Cuenta'}`);
-      setActiveTab('manual'); // Llevar al formulario para revisión y guardado
+      setActiveTab('manual'); // Transition to form for review and save
     } catch (err) {
       toast.error('El código escaneado no es un URI de TOTP válido (otpauth://totp/...)');
     }
   }, []);
 
   // -------------------------------------------------------------------------
-  // Manejador de Cámara en Vivo con @zxing/browser
+  // Live Camera Scanner with @zxing/browser
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (!isOpen || activeTab !== 'camera') {
@@ -175,7 +175,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
   }, [isOpen, activeTab, selectedDeviceId, handleParsedUri]);
 
   // -------------------------------------------------------------------------
-  // Procesamiento de Imágenes (Dropzone / Pegado desde portapapeles)
+  // Image Processing (Dropzone / Clipboard Paste)
   // -------------------------------------------------------------------------
   const processImageFile = async (file: File) => {
     setIsProcessingImage(true);
@@ -197,7 +197,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
     }
   };
 
-  // Escuchador global para Ctrl + V de capturas de pantalla
+  // Global listener for Ctrl + V screenshot pasting
   useEffect(() => {
     if (!isOpen) return;
 
@@ -305,7 +305,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none"
               >
-                {/* Cabecera del Modal */}
+                {/* Modal Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-violet-600/10 border border-violet-500/20 text-violet-400">
@@ -330,7 +330,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                   </Dialog.Close>
                 </div>
 
-                {/* Tabs de Selección de Modo */}
+                {/* Mode Selector Tabs */}
                 <div className="mt-4 flex p-1 bg-zinc-900/80 border border-zinc-800/80 rounded-xl relative">
                   {(
                     [
@@ -365,9 +365,9 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                   })}
                 </div>
 
-                {/* Contenido de Cada Tab */}
+                {/* Tab Content */}
                 <div className="mt-5">
-                  {/* TAB 1: Cámara en vivo */}
+                  {/* TAB 1: Live Camera */}
                   {activeTab === 'camera' && (
                     <div className="flex flex-col items-center">
                       <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center">
@@ -468,7 +468,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                     </div>
                   )}
 
-                  {/* Formulario Estructurado (TAB 4 o tras escaneo exitoso) */}
+                  {/* Form / Manual Entry (TAB 4 or after successful scan) */}
                   {(activeTab === 'manual' || scanSuccess) && (
                     <form onSubmit={handleSubmit} className="space-y-4">
                       {scanSuccess && (
@@ -478,7 +478,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                         </div>
                       )}
 
-                      {/* Logo / Foto de la Cuenta */}
+                      {/* Account Logo / Avatar */}
                       <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2.5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
@@ -644,7 +644,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                         />
                       </div>
 
-                      {/* Sección de Recovery Codes */}
+                      {/* Recovery Codes Section */}
                       <div className="pt-2 border-t border-zinc-800/80">
                         <label className="text-xs font-semibold text-zinc-300 mb-2 block">
                           Códigos de Recuperación (Opcional)
@@ -694,7 +694,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                         )}
                       </div>
 
-                      {/* Botones de Acción */}
+                      {/* Action Buttons */}
                       <div className="mt-6 flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800/80">
                         <button
                           type="button"

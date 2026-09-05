@@ -1,6 +1,6 @@
 /**
- * Revolt Pass - Tipos canónicos del Dominio y Criptografía
- * Conforme a docs/es/02-ARCHITECTURE.md / docs/en/02-ARCHITECTURE.md
+ * Revolt Pass - Canonical Domain & Cryptography Types
+ * In accordance with docs/es/02-ARCHITECTURE.md / docs/en/02-ARCHITECTURE.md
  */
 
 export interface RecoveryCode {
@@ -18,15 +18,15 @@ export interface VaultItem {
   type: VaultItemType;
   issuer: string;
   account: string;
-  secret: string; // Base32 canónico
+  secret: string; // Canonical Base32
   digits: 6 | 8;
-  period: number; // Intervalo de rotación en segundos (default 30)
+  period: number; // Rotation interval in seconds (default: 30)
   algorithm: TotpAlgorithm;
   recovery_codes?: RecoveryCode[];
   notes?: string;
   pinned?: boolean;
   tags?: string[];
-  icon_url?: string; // URL externa o data URL (base64) del logo personalizado
+  icon_url?: string; // External URL or data URL (base64) for custom logo
   created_at: number;
   updated_at: number;
 }
@@ -39,8 +39,8 @@ export interface DecryptedVault {
 
 export interface EncryptedVaultPayload {
   user_id: string;
-  encrypted_blob: string; // Base64 de ciphertext + auth tag
-  iv: string; // Base64 de 12 bytes
+  encrypted_blob: string; // Base64 of ciphertext + auth tag
+  iv: string; // Base64 of 12 bytes
   version: number;
   updated_at: number;
 }

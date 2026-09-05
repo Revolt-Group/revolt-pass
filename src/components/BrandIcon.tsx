@@ -64,7 +64,7 @@ const GRADIENT_PALETTES = [
 ];
 
 /**
- * Hash FNV-1a para asignación determinista de color y gradiente.
+ * FNV-1a hash for deterministic color and gradient assignment.
  */
 function fnv1a(str: string): number {
   let hash = 0x811c9dc5;
@@ -76,7 +76,7 @@ function fnv1a(str: string): number {
 }
 
 /**
- * Extrae las iniciales del nombre del proveedor (1-2 caracteres).
+ * Extracts provider initials (1-2 characters).
  */
 function getInitials(name: string): string {
   const words = name.trim().split(/\s+/);
@@ -97,7 +97,7 @@ export function BrandIcon({ issuer, iconUrl, size = 36, className = '' }: BrandI
   const normalizedKey = cleanName.toLowerCase();
   const slug = COMMON_BRAND_SLUGS[normalizedKey] || normalizedKey.replace(/[^a-z0-9]/g, '');
 
-  // Si el usuario proporcionó un iconUrl (URL externa o data:image base64), tiene prioridad total
+  // If user provided an iconUrl (external URL or data:image base64), it takes absolute priority
   const effectiveIconUrl = iconUrl?.trim() || (slug ? `https://cdn.simpleicons.org/${slug}/white` : null);
 
   const gradientIdx = fnv1a(cleanName) % GRADIENT_PALETTES.length;

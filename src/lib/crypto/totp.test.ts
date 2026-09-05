@@ -6,9 +6,9 @@ import {
   parseOtpAuthUri,
 } from './totp.ts';
 
-describe('Motor TOTP RFC 6238', () => {
+describe('RFC 6238 TOTP Engine', () => {
   // =========================================================================
-  // Vectores Oficiales RFC 6238 Apéndice B
+  // Official RFC 6238 Appendix B Vectors
   // Seed SHA1 (20 bytes): ASCII "12345678901234567890"
   // Seed SHA256 (32 bytes): ASCII "12345678901234567890123456789012"
   // =========================================================================
@@ -34,7 +34,7 @@ describe('Motor TOTP RFC 6238', () => {
     { timeSeconds: 20000000000, expected: '77737706' },
   ];
 
-  it('debe validar exactamente todos los vectores del RFC 6238 Apéndice B con HMAC-SHA1 (8 dígitos)', async () => {
+  it('accurately validates all RFC 6238 Appendix B vectors with HMAC-SHA1 (8 digits)', async () => {
     for (const vector of rfcSha1Vectors) {
       const code = await generateTotp(sha1SeedBytes, {
         timestampSeconds: vector.timeSeconds,
@@ -46,7 +46,7 @@ describe('Motor TOTP RFC 6238', () => {
     }
   });
 
-  it('debe validar exactamente todos los vectores del RFC 6238 Apéndice B con HMAC-SHA256 (8 dígitos)', async () => {
+  it('accurately validates all RFC 6238 Appendix B vectors with HMAC-SHA256 (8 digits)', async () => {
     for (const vector of rfcSha256Vectors) {
       const code = await generateTotp(sha256SeedBytes, {
         timestampSeconds: vector.timeSeconds,
@@ -58,8 +58,8 @@ describe('Motor TOTP RFC 6238', () => {
     }
   });
 
-  it('debe generar tokens estándar de 6 dígitos con secretos en Base32', async () => {
-    // Secreto Base32 canónico: "JBSWY3DPEHPK3PXP" (ASCII: "Hello!\xde\xad\xbe\xef")
+  it('generates standard 6-digit tokens with Base32 secrets', async () => {
+    // Canonical Base32 secret: "JBSWY3DPEHPK3PXP" (ASCII: "Hello!\xde\xad\xbe\xef")
     const secret = 'JBSWY3DPEHPK3PXP';
     const code = await generateTotp(secret, {
       timestampSeconds: 1234567890,
@@ -72,17 +72,17 @@ describe('Motor TOTP RFC 6238', () => {
     expect(/^\d{6}$/.test(code)).toBe(true);
   });
 
-  it('debe aplicar la compensación de deriva temporal (Time Drift Compensation)', async () => {
+  it('applies Time Drift Compensation', async () => {
     const secret = 'JBSWY3DPEHPK3PXP';
-    // Si el reloj local está 30 segundos retrasado, offsetMs = +30000 debe dar el código del siguiente paso
+    // If local clock is 30 seconds behind, offsetMs = +30000 should return the next step code
     const codeNormal = await generateTotp(secret, {
-      timestampSeconds: 100, // paso T = floor(100 / 30) = 3
+      timestampSeconds: 100, // step T = floor(100 / 30) = 3
       digits: 6,
       period: 30,
     });
 
     const codeWithDrift = await generateTotp(secret, {
-      timestampSeconds: 70, // 70 + 30 = 100 => paso T = floor(100 / 30) = 3
+      timestampSeconds: 70, // 70 + 30 = 100 => step T = floor(100 / 30) = 3
       timeDriftOffsetMs: 30000,
       digits: 6,
       period: 30,
@@ -91,7 +91,7 @@ describe('Motor TOTP RFC 6238', () => {
     expect(codeWithDrift).toBe(codeNormal);
   });
 
-  it('debe calcular correctamente los segundos restantes y la fracción de progreso', () => {
+  it('correctly calculates remaining seconds and progress fraction', () => {
     const remaining = getTotpRemainingSeconds(30, 0);
     expect(remaining).toBeGreaterThanOrEqual(1);
     expect(remaining).toBeLessThanOrEqual(30);
@@ -101,7 +101,7 @@ describe('Motor TOTP RFC 6238', () => {
     expect(progress).toBeLessThanOrEqual(1);
   });
 
-  it('debe parsear URIs otpauth://totp/ completas y con caracteres especiales', () => {
+  it('parses complete otpauth://totp/ URIs including special characters', () => {
     const uri = 'otpauth://totp/GitHub:user%40revoltgroup.com.ar?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&digits=6&period=30&algorithm=SHA1';
     const parsed = parseOtpAuthUri(uri);
 
@@ -114,8 +114,8 @@ describe('Motor TOTP RFC 6238', () => {
     expect(parsed.algorithm).toBe('SHA1');
   });
 
-  it('debe lanzar error al intentar parsear URIs no válidas o sin secreto', () => {
-    expect(() => parseOtpAuthUri('https://example.com')).toThrowError(/Formato de URI inválido/);
-    expect(() => parseOtpAuthUri('otpauth://totp/GitHub:user?digits=6')).toThrowError(/parámetro "secret" obligatorio/);
+  it('throws error when attempting to parse invalid URIs or URIs without secret', () => {
+    expect(() => parseOtpAuthUri('https://example.com')).toThrowError(/Invalid URI format/);
+    expect(() => parseOtpAuthUri('otpauth://totp/GitHub:user?digits=6')).toThrowError(/required "secret" parameter/);
   });
 });

@@ -33,7 +33,7 @@ export function VaultList({
   const [parentListRef] = useAutoAnimate<HTMLDivElement>();
   const [pinnedListRef] = useAutoAnimate<HTMLDivElement>();
 
-  // Extraer todos los tags únicos de las cuentas registradas
+  // Extract all unique tags across registered accounts
   const allTags = useMemo(() => {
     const set = new Set<string>();
     for (const item of items) {
@@ -46,7 +46,7 @@ export function VaultList({
     return Array.from(set).sort();
   }, [items]);
 
-  // Filtrar cuentas por búsqueda y tag seleccionado
+  // Filter accounts by search query and selected tag
   const filteredItems = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return items.filter((item) => {
@@ -67,9 +67,9 @@ export function VaultList({
 
   return (
     <div className="w-full space-y-6">
-      {/* Barra de Filtros, Búsqueda y Acción Superior */}
+      {/* Filters, Search, and Top Action Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-zinc-900/40 border border-zinc-800/80 p-2.5 rounded-2xl backdrop-blur-xl">
-        {/* Input de Búsqueda */}
+        {/* Search Input */}
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -81,7 +81,7 @@ export function VaultList({
           />
         </div>
 
-        {/* Botón de Agregar Cuenta */}
+        {/* Add Account Button */}
         <button
           type="button"
           onClick={onOpenAddModal}
@@ -92,7 +92,7 @@ export function VaultList({
         </button>
       </div>
 
-      {/* Pills de Filtrado por Etiquetas (Tags) */}
+      {/* Tag Filter Pills */}
       {allTags.length > 0 && (
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs select-none">
           <span className="text-zinc-500 flex items-center gap-1 px-1.5 text-[11px]">
@@ -130,7 +130,7 @@ export function VaultList({
         </div>
       )}
 
-      {/* Empty State: Bóveda sin Cuentas */}
+      {/* Empty State: Empty Vault */}
       {items.length === 0 && (
         <div className="py-20 flex flex-col items-center justify-center text-center p-6 border border-dashed border-zinc-800 rounded-3xl bg-zinc-950/40">
           <div className="w-16 h-16 rounded-2xl bg-violet-600/10 border border-violet-500/20 flex items-center justify-center text-violet-400 mb-4 shadow-xl">
@@ -151,7 +151,7 @@ export function VaultList({
         </div>
       )}
 
-      {/* Empty State: Búsqueda sin Resultados */}
+      {/* Empty State: No Search Results */}
       {items.length > 0 && filteredItems.length === 0 && (
         <div className="py-16 flex flex-col items-center justify-center text-center p-6 border border-zinc-800/80 rounded-2xl bg-zinc-900/20">
           <ShieldOff className="w-10 h-10 text-zinc-500 mb-3" />
@@ -172,7 +172,7 @@ export function VaultList({
         </div>
       )}
 
-      {/* Sección 1: Cuentas Fijadas (Pinned) */}
+      {/* Section 1: Pinned Accounts */}
       {pinnedItems.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3 text-xs font-semibold text-violet-400 uppercase tracking-wider px-1">
@@ -197,7 +197,7 @@ export function VaultList({
         </div>
       )}
 
-      {/* Sección 2: Todas las Cuentas / Resto */}
+      {/* Section 2: All Remaining Accounts */}
       {regularItems.length > 0 && (
         <div>
           {pinnedItems.length > 0 && (

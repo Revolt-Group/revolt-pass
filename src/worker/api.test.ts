@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { handleApiRequest } from './api.ts';
-import type { Env } from './types.ts';
+import type { Env, ApiResponse } from './types.ts';
 
 /**
- * Mock robusto de Cloudflare D1 en memoria para pruebas de integración de la API.
+ * Robust in-memory Cloudflare D1 mock for API integration tests.
  */
 class MockD1Database {
   private users = new Map<string, {
@@ -85,7 +85,7 @@ class MockD1Database {
     return [];
   }
 
-  // Métodos auxiliares para alimentar la simulación
+  // Helper methods for feeding simulation state
   public addUser(user: {
     id: string;
     username: string;
@@ -190,7 +190,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     };
   });
 
-  it('GET /api/time debe devolver el timestamp del servidor con Cache-Control no-store', async () => {
+  it('GET /api/time returns server timestamp with Cache-Control no-store', async () => {
     const req = new Request('https://pass.example.com/api/time', { method: 'GET' });
     const res = await handleApiRequest(req, env);
 
@@ -205,7 +205,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(Math.abs(Date.now() - (body.data?.server_time_utc ?? 0))).toBeLessThan(1000);
   });
 
-  it('POST /api/auth/register debe registrar un usuario y crear su bóveda inicial atómicamente', async () => {
+  it('POST /api/auth/register atomically registers user and creates initial vault', async () => {
     const payload = {
       username: 'revolt_admin',
       kdf_salt: '4a7b3c2d1e0f9a8b7c6d5e4f3a2b1c0d',
@@ -227,15 +227,15 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(json.data?.user_id).toMatch(/^usr_/);
     expect(json.data?.version).toBe(1);
 
-    // Verificar que la bóveda existe en la base de datos
+    // Verify vault exists in simulated database
     const savedVault = mockDb.getVault(json.data!.user_id);
     expect(savedVault).toBeDefined();
     expect(savedVault?.version).toBe(1);
     expect(savedVault?.encrypted_blob).toBe(payload.encrypted_blob);
   });
 
-  it('POST /api/auth/register debe rechazar usuarios duplicados con HTTP 409 Conflict', async () => {
-    // Registrar usuario previamente
+  it('POST /api/auth/register rejects duplicate username with HTTP 409 Conflict', async () => {
+    // Pre-register existing user
     mockDb.addUser({
       id: 'usr_existente',
       username: 'revolt_admin',
@@ -263,7 +263,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(json.error?.code).toBe('USERNAME_ALREADY_EXISTS');
   });
 
-  it('GET /api/auth/salt debe devolver el salt del usuario solicitado', async () => {
+  it('GET /api/auth/salt returns salt for requested user', async () => {
     mockDb.addUser({
       id: 'usr_test_1',
       username: 'operador',
@@ -284,7 +284,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(json.data?.has_passkey).toBe(true);
   });
 
-  it('GET /api/auth/salt debe devolver 404 si el usuario no existe', async () => {
+  it('GET /api/auth/salt returns 404 if user does not exist', async () => {
     const req = new Request('https://pass.example.com/api/auth/salt?username=no_existe', {
       method: 'GET',
     });
@@ -293,15 +293,15 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(res.status).toBe(404);
   });
 
-  it('GET /api/vault debe requerir X-User-Id y soportar ETag (HTTP 304 Not Modified)', async () => {
-    // 1. Sin cabecera de autenticación -> 401
+  it('GET /api/vault requires X-User-Id and supports ETag (HTTP 304 Not Modified)', async () => {
+    // 1. Without authentication header -> 401
     const reqUnauthorized = new Request('https://pass.example.com/api/vault', {
       method: 'GET',
     });
     const resUnauthorized = await handleApiRequest(reqUnauthorized, env);
     expect(resUnauthorized.status).toBe(401);
 
-    // 2. Con usuario registrado y bóveda
+    // 2. With registered user and vault
     const userId = 'usr_valido_99';
     mockDb.addUser({ id: userId, username: 'user99', kdf_salt: 'salt' });
     mockDb.addVault({
@@ -323,7 +323,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(json.data?.version).toBe(1);
     expect(json.data?.encrypted_blob).toBe('blob_v1');
 
-    // 3. Petición condicional con If-None-Match idéntico -> 304 Not Modified
+    // 3. Conditional request with identical If-None-Match -> 304 Not Modified
     const reqNotModified = new Request('https://pass.example.com/api/vault', {
       method: 'GET',
       headers: {
@@ -335,17 +335,17 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(resNotModified.status).toBe(304);
   });
 
-  it('PUT /api/vault debe aplicar control de concurrencia optimista y devolver 409 si la versión no es consecutiva', async () => {
+  it('PUT /api/vault enforces optimistic concurrency control and returns 409 if version is not consecutive', async () => {
     const userId = 'usr_sync_test';
     mockDb.addUser({ id: userId, username: 'syncer', kdf_salt: 'salt' });
     mockDb.addVault({
       user_id: userId,
       encrypted_blob: 'blob_inicial',
       iv: 'iv_inicial',
-      version: 2, // Versión actual en servidor = 2
+      version: 2, // Current version on server = 2
     });
 
-    // Intento 1: Enviar versión 4 (salteando la 3) -> Conflicto 409
+    // Attempt 1: Send version 4 (skipping 3) -> 409 Conflict
     const reqConflict = new Request('https://pass.example.com/api/vault', {
       method: 'PUT',
       headers: {
@@ -367,7 +367,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect((jsonConflict.error?.details as any)?.server_version).toBe(2);
     expect((jsonConflict.error?.details as any)?.client_version).toBe(4);
 
-    // Intento 2: Enviar versión 3 (exactamente servidor.version + 1) -> Exitoso 200
+    // Attempt 2: Send version 3 (exactly server.version + 1) -> 200 OK
     const reqValid = new Request('https://pass.example.com/api/vault', {
       method: 'PUT',
       headers: {
@@ -388,12 +388,12 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(jsonValid.success).toBe(true);
     expect(jsonValid.data?.version).toBe(3);
 
-    // Verificar actualización en la base de datos
+    // Verify database update
     const updatedVault = mockDb.getVault(userId);
     expect(updatedVault?.version).toBe(3);
     expect(updatedVault?.encrypted_blob).toBe('blob_v3_valido');
 
-    // Intento 3: Reintentar enviar versión 3 -> Conflicto 409 porque ahora el servidor está en 3
+    // Attempt 3: Retry sending version 3 -> 409 Conflict because server is now at version 3
     const reqRetry = new Request('https://pass.example.com/api/vault', {
       method: 'PUT',
       headers: {
@@ -414,7 +414,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect((jsonRetry.error?.details as any)?.client_version).toBe(3);
   });
 
-  it('OPTIONS debe responder con 204 y cabeceras CORS en preflight', async () => {
+  it('OPTIONS responds with 204 and CORS preflight headers', async () => {
     const req = new Request('https://pass.example.com/api/vault', {
       method: 'OPTIONS',
     });

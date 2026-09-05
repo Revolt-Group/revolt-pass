@@ -8,13 +8,13 @@ import {
 import { deriveMasterKeyDirect, generateSalt } from './kdf.ts';
 import type { VaultItem } from '../../types/vault.ts';
 
-describe('Cifrado y Descifrado de Bóveda (AES-GCM-256 Zero-Knowledge)', () => {
+describe('Vault Encryption and Decryption (AES-GCM-256 Zero-Knowledge)', () => {
   let masterKey: CryptoKey;
   let sampleItems: VaultItem[];
 
   beforeEach(async () => {
     const salt = generateSalt(16);
-    masterKey = await deriveMasterKeyDirect('MiContraseñaMaestraSuperSegura123!#', salt, 5000);
+    masterKey = await deriveMasterKeyDirect('MySuperSecureMasterPassword123!#', salt, 5000);
 
     sampleItems = [
       {
@@ -30,7 +30,7 @@ describe('Cifrado y Descifrado de Bóveda (AES-GCM-256 Zero-Knowledge)', () => {
           { code: 'REC-1234-5678', used: false },
           { code: 'REC-8765-4321', used: true },
         ],
-        notes: 'Clave de infraestructura crítica',
+        notes: 'Critical infrastructure key',
         pinned: true,
         tags: ['infra', 'cloud'],
         created_at: 1772719200000,
@@ -51,7 +51,7 @@ describe('Cifrado y Descifrado de Bóveda (AES-GCM-256 Zero-Knowledge)', () => {
     ];
   });
 
-  it('debe cifrar y descifrar la bóveda de forma idéntica (Roundtrip Test)', async () => {
+  it('encrypts and decrypts vault identically (Roundtrip Test)', async () => {
     const result = await encryptVault(sampleItems, masterKey, 1);
 
     expect(result.encryptedBlob).toBeDefined();
@@ -70,46 +70,46 @@ describe('Cifrado y Descifrado de Bóveda (AES-GCM-256 Zero-Knowledge)', () => {
     expect(decrypted[1].algorithm).toBe('SHA256');
   });
 
-  it('debe generar IVs aleatorios distintos en cada cifrado consecutivo (Inmunidad a reutilización de IV)', async () => {
+  it('generates distinct random IVs on each consecutive encryption (IV reuse immunity)', async () => {
     const enc1 = await encryptVault(sampleItems, masterKey, 1);
     const enc2 = await encryptVault(sampleItems, masterKey, 1);
 
     expect(enc1.iv).not.toBe(enc2.iv);
     expect(enc1.encryptedBlob).not.toBe(enc2.encryptedBlob);
 
-    // Ambos deben poder descifrarse correctamente
+    // Both must decrypt correctly
     const dec1 = await decryptVault(enc1.encryptedBlob, enc1.iv, masterKey);
     const dec2 = await decryptVault(enc2.encryptedBlob, enc2.iv, masterKey);
 
     expect(dec1).toEqual(dec2);
   });
 
-  it('debe fallar deterministamente con error criptográfico si se altera 1 solo bit en el ciphertext (Tampering Test)', async () => {
+  it('deterministically fails with cryptographic error if even 1 bit is altered in ciphertext (Tampering Test)', async () => {
     const enc = await encryptVault(sampleItems, masterKey, 1);
 
-    // Alterar exactamente 1 bit en el blob cifrado (Auth Tag o Ciphertext)
+    // Alter exactly 1 bit in encrypted blob (Auth Tag or Ciphertext)
     const rawBytes = base64ToBytes(enc.encryptedBlob);
-    rawBytes[5] ^= 0x01; // Invertir un bit
+    rawBytes[5] ^= 0x01; // Flip a single bit
     const tamperedBlob = bytesToBase64(rawBytes);
 
-    // AES-GCM DEBE fallar al verificar la etiqueta de autenticación de 128 bits
+    // AES-GCM MUST fail to verify 128-bit authentication tag
     await expect(decryptVault(tamperedBlob, enc.iv, masterKey)).rejects.toThrow();
   });
 
-  it('debe fallar si se altera el vector de inicialización (IV)', async () => {
+  it('fails if initialization vector (IV) is altered', async () => {
     const enc = await encryptVault(sampleItems, masterKey, 1);
 
     const ivBytes = base64ToBytes(enc.iv);
-    ivBytes[0] ^= 0x01; // Invertir un bit del IV
+    ivBytes[0] ^= 0x01; // Flip a bit of IV
     const tamperedIv = bytesToBase64(ivBytes);
 
     await expect(decryptVault(enc.encryptedBlob, tamperedIv, masterKey)).rejects.toThrow();
   });
 
-  it('debe fallar si se intenta descifrar con una clave incorrecta', async () => {
+  it('fails if attempting to decrypt with incorrect key', async () => {
     const enc = await encryptVault(sampleItems, masterKey, 1);
 
-    const wrongKey = await deriveMasterKeyDirect('ContraseñaCompletamenteIncorrecta', generateSalt(16), 5000);
+    const wrongKey = await deriveMasterKeyDirect('CompletelyWrongPasswordHere', generateSalt(16), 5000);
 
     await expect(decryptVault(enc.encryptedBlob, enc.iv, wrongKey)).rejects.toThrow();
   });
