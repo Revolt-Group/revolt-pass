@@ -113,7 +113,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
       setScanSuccess(true);
       toast.success(`Código QR detectado: ${parsed.issuer || 'Cuenta'}`);
       setActiveTab('manual'); // Transition to form for review and save
-    } catch (err) {
+    } catch {
       toast.error('El código escaneado no es un URI de TOTP válido (otpauth://totp/...)');
     }
   }, []);
@@ -278,7 +278,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
       await onSaveAccount(newItem);
       toast.success(`Cuenta "${newItem.issuer}" guardada exitosamente`);
       onClose();
-    } catch (err) {
+    } catch {
       toast.error('Error al persistir la cuenta en la bóveda');
     }
   };
@@ -299,17 +299,17 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
 
             <Dialog.Content asChild>
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                initial={{ opacity: 0, scale: 0.96, y: 12 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none"
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-[#0f1013] border border-white/[0.08] hairline-top rounded-xl p-6 shadow-[0_24px_68px_rgba(0,0,0,0.8)] z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none custom-scrollbar"
               >
                 {/* Modal Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-violet-600/10 border border-violet-500/20 text-violet-400">
-                      <QrCode className="w-5 h-5" />
+                <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top text-white">
+                      <QrCode className="w-4 h-4 text-white" />
                     </div>
                     <div>
                       <Dialog.Title className="text-base font-semibold tracking-tight text-white">
@@ -323,15 +323,15 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                   <Dialog.Close asChild>
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+                      className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </Dialog.Close>
                 </div>
 
                 {/* Mode Selector Tabs */}
-                <div className="mt-4 flex p-1 bg-zinc-900/80 border border-zinc-800/80 rounded-xl relative">
+                <div className="mt-4 flex p-1 bg-[#08090a] border border-white/[0.06] rounded-lg relative">
                   {(
                     [
                       { id: 'camera', label: 'Cámara', icon: Camera },
@@ -347,14 +347,14 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                         key={tab.id}
                         type="button"
                         onClick={() => setActiveTab(tab.id)}
-                        className={`relative flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors z-10 ${
-                          isSelected ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+                        className={`relative flex-1 py-1.5 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors z-10 ${
+                          isSelected ? 'text-white font-medium' : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
                         {isSelected && (
                           <motion.div
                             layoutId="qr-tab-active"
-                            className="absolute inset-0 bg-violet-600/20 border border-violet-500/30 rounded-lg -z-10 shadow-sm"
+                            className="absolute inset-0 bg-[#16181d] border border-white/[0.08] rounded-md -z-10 shadow-sm"
                             transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                           />
                         )}
@@ -560,7 +560,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                             placeholder="ej. GitHub, AWS, Google"
                             value={issuer}
                             onChange={(e) => setIssuer(e.target.value)}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors"
+                            className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                           />
                         </div>
 
@@ -574,7 +574,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                             placeholder="ej. usuario@correo.com"
                             value={account}
                             onChange={(e) => setAccount(e.target.value)}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors"
+                            className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                           />
                         </div>
                       </div>
@@ -589,7 +589,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                           placeholder="ej. JBSWY3DPEHPK3PXP"
                           value={secret}
                           onChange={(e) => setSecret(e.target.value)}
-                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-violet-500 transition-colors uppercase"
+                          className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs font-mono text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors uppercase"
                         />
                       </div>
 
@@ -599,7 +599,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                           <select
                             value={digits}
                             onChange={(e) => setDigits(Number(e.target.value) as 6 | 8)}
-                            className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200"
+                            className="w-full px-2.5 py-1.5 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-zinc-200"
                           >
                             <option value={6}>6 Dígitos</option>
                             <option value={8}>8 Dígitos</option>
@@ -611,7 +611,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                           <select
                             value={period}
                             onChange={(e) => setPeriod(Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200"
+                            className="w-full px-2.5 py-1.5 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-zinc-200"
                           >
                             <option value={30}>30 segundos</option>
                             <option value={60}>60 segundos</option>
@@ -623,7 +623,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                           <select
                             value={algorithm}
                             onChange={(e) => setAlgorithm(e.target.value as TotpAlgorithm)}
-                            className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200"
+                            className="w-full px-2.5 py-1.5 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-zinc-200"
                           >
                             <option value="SHA1">SHA-1</option>
                             <option value="SHA256">SHA-256</option>
@@ -640,12 +640,12 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                           placeholder="ej. Infra, Trabajo, Cloud"
                           value={tagsInput}
                           onChange={(e) => setTagsInput(e.target.value)}
-                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-violet-500 transition-colors"
+                          className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                         />
                       </div>
 
                       {/* Recovery Codes Section */}
-                      <div className="pt-2 border-t border-zinc-800/80">
+                      <div className="pt-2 border-t border-white/[0.08]">
                         <label className="text-xs font-semibold text-zinc-300 mb-2 block">
                           Códigos de Recuperación (Opcional)
                         </label>
@@ -661,12 +661,12 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                                 handleAddRecoveryCode();
                               }
                             }}
-                            className="flex-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-mono text-zinc-200"
+                            className="flex-1 px-3 py-1.5 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs font-mono text-zinc-200 placeholder:text-zinc-600"
                           />
                           <button
                             type="button"
                             onClick={handleAddRecoveryCode}
-                            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-medium flex items-center gap-1 transition-colors"
+                            className="px-3 py-1.5 bg-[#16181d] hover:bg-[#1c1f24] text-zinc-200 border border-white/[0.08] rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             Añadir
@@ -674,11 +674,11 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                         </div>
 
                         {recoveryCodes.length > 0 && (
-                          <div className="space-y-1.5 max-h-32 overflow-y-auto p-1 bg-zinc-900/40 rounded-xl border border-zinc-800/60">
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto p-1 bg-[#08090a] rounded-lg border border-white/[0.08]">
                             {recoveryCodes.map((rc, idx) => (
                               <div
                                 key={idx}
-                                className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-zinc-900 text-xs font-mono text-zinc-300"
+                                className="flex items-center justify-between px-2.5 py-1 rounded-md bg-[#16181d] text-xs font-mono text-zinc-300 border border-white/[0.04]"
                               >
                                 <span>{rc.code}</span>
                                 <button
@@ -695,17 +695,17 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="mt-6 flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800/80">
+                      <div className="mt-6 flex items-center justify-end gap-2.5 pt-4 border-t border-white/[0.08]">
                         <button
                           type="button"
                           onClick={onClose}
-                          className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-900 transition-colors"
+                          className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
                         >
                           Cancelar
                         </button>
                         <button
                           type="submit"
-                          className="px-5 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-600/20 transition-all active:scale-95"
+                          className="px-4 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-zinc-200 text-black shadow-sm transition-all active:scale-[0.99]"
                         >
                           Guardar Cuenta en Bóveda
                         </button>

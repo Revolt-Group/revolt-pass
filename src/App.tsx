@@ -787,21 +787,11 @@ export function App() {
   // -------------------------------------------------------------------------
   if (screen === 'loading') {
     return (
-      <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 relative overflow-hidden">
-        {/* Technical grid with radial mask */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-            maskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
-            WebkitMaskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
-          }}
-        />
-        <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-4 text-zinc-100 animate-pulse">
-          <Shield className="w-6 h-6 text-zinc-100" />
+      <div className="min-h-screen bg-[#08090a] flex flex-col items-center justify-center p-6 text-zinc-100">
+        <div className="h-10 w-10 rounded-lg bg-[#101214] border border-white/[0.1] hairline-top flex items-center justify-center mb-4 text-zinc-300">
+          <Shield className="w-5 h-5 animate-pulse text-white" />
         </div>
-        <p className="text-xs text-zinc-400 font-mono tracking-wider">
+        <p className="text-[11px] text-zinc-500 font-mono tracking-wider uppercase">
           Inicializando entorno seguro...
         </p>
       </div>
@@ -816,76 +806,56 @@ export function App() {
       regPassword.length > 0 && regConfirmPassword.length > 0 && regPassword === regConfirmPassword;
 
     return (
-      <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-white/20 selection:text-white relative overflow-hidden">
+      <div className="min-h-screen bg-[#08090a] flex flex-col items-center justify-center p-4 sm:p-6 text-zinc-100 selection:bg-white/20 selection:text-white">
         <Toaster position="bottom-right" richColors theme="dark" />
 
-        {/* 1. Technical grid with radial mask */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-            maskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
-            WebkitMaskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
-          }}
-        />
-
-        {/* 2. Subtle top spotlight */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-indigo-500/10 via-violet-500/5 to-transparent blur-3xl pointer-events-none" />
-
-        {/* 3. The Vault card container */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="relative w-full max-w-md bg-zinc-900/60 backdrop-blur-2xl border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-8 overflow-hidden z-10"
+          initial={{ opacity: 0, scale: 0.98, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-md bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_50px_rgba(0,0,0,0.8)] rounded-xl p-6 sm:p-7 overflow-hidden z-10"
         >
-          {/* Top hairline highlight */}
-          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-
           <div className="flex flex-col items-center text-center">
-            {/* Back to vault button if local profile exists */}
+            {/* Back button if local profile exists */}
             {userConfig && (
-              <div className="w-full flex justify-start mb-2">
+              <div className="w-full flex justify-start mb-3">
                 <button
-                  type="button"
-                  onClick={() => setScreen('locked')}
-                  className="text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1.5 transition-colors py-1 px-2 rounded-lg hover:bg-white/[0.04]"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Volver a mi bóveda ({userConfig.username})</span>
-                </button>
-              </div>
+                   type="button"
+                   onClick={() => setScreen('locked')}
+                   className="text-xs text-zinc-400 hover:text-white inline-flex items-center gap-1.5 transition-colors py-1 px-2 rounded-md hover:bg-white/[0.05]"
+                 >
+                   <ArrowLeft className="w-3.5 h-3.5" />
+                   <span>Volver a mi bóveda ({userConfig.username})</span>
+                 </button>
+               </div>
             )}
 
-            {/* Machined emblem */}
-            <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-3 text-zinc-100">
-              <Shield className="w-6 h-6 text-zinc-100" />
+            {/* Brand Logo */}
+            <div className="h-10 w-10 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top flex items-center justify-center mb-3 text-white">
+              <Shield className="w-5 h-5 text-white" />
             </div>
 
-            {/* Top micro-badge */}
-            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 rounded-full mb-2">
-              ZERO-KNOWLEDGE VAULT • CLIENT-SIDE ONLY
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-zinc-400 bg-white/[0.03] border border-white/[0.06] px-2.5 py-0.5 rounded-md mb-2">
+              ZERO-KNOWLEDGE SECURITY
             </div>
 
-            {/* Title & Subtitle */}
-            <h1 className="text-2xl font-bold tracking-tight text-white font-sans mb-1.5">
+            <h1 className="text-xl font-semibold tracking-tight text-white mb-1">
               Revolt Pass
             </h1>
-            <p className="text-sm text-zinc-400 leading-relaxed max-w-sm mx-auto mb-5">
+            <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto mb-5">
               {authMode === 'login'
-                ? 'Ingresa tu usuario y Contraseña Maestra para descargar y descifrar tu bóveda en este dispositivo.'
-                : 'Configura tu bóveda personal Zero-Knowledge. Tu Contraseña Maestra nunca saldrá de este dispositivo.'}
+                ? 'Sincroniza y descifra tu bóveda localmente en este dispositivo.'
+                : 'Bóveda personal cifrada con AES-256-GCM y PBKDF2 600.000 rondas.'}
             </p>
 
-            {/* Mode Selector: Log In vs Create Vault */}
-            <div className="w-full grid grid-cols-2 p-1 bg-zinc-950/80 border border-white/[0.08] rounded-xl mb-5">
+            {/* Mode Selector */}
+            <div className="w-full grid grid-cols-2 p-1 bg-[#08090a] border border-white/[0.06] rounded-lg mb-5 text-xs">
               <button
                 type="button"
                 onClick={() => setAuthMode('login')}
-                className={`py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${
+                className={`py-1.5 font-medium rounded-md flex items-center justify-center gap-2 transition-all ${
                   authMode === 'login'
-                    ? 'bg-zinc-800 text-white shadow-sm border border-white/10'
+                    ? 'bg-[#1c1f24] text-white shadow-sm border border-white/[0.08]'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -895,9 +865,9 @@ export function App() {
               <button
                 type="button"
                 onClick={() => setAuthMode('register')}
-                className={`py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all ${
+                className={`py-1.5 font-medium rounded-md flex items-center justify-center gap-2 transition-all ${
                   authMode === 'register'
-                    ? 'bg-zinc-800 text-white shadow-sm border border-white/10'
+                    ? 'bg-[#1c1f24] text-white shadow-sm border border-white/[0.08]'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -906,17 +876,16 @@ export function App() {
               </button>
             </div>
 
-            {/* FORM 1: LOG IN (LINK EXISTING ACCOUNT) */}
+            {/* FORM 1: LOG IN */}
             {authMode === 'login' && (
-              <form onSubmit={handleLoginExisting} className="w-full space-y-4 text-left">
-                {/* Username Field */}
+              <form onSubmit={handleLoginExisting} className="w-full space-y-3.5 text-left text-xs">
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
+                  <label className="font-medium text-zinc-300 mb-1.5 block">
                     Nombre de Usuario
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                      <User className="w-4 h-4" />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                      <User className="w-3.5 h-3.5" />
                     </div>
                     <input
                       type="text"
@@ -924,19 +893,18 @@ export function App() {
                       placeholder="ej. rojas, admin, personal"
                       value={loginUsername}
                       onChange={(e) => setLoginUsername(e.target.value)}
-                      className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                      className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-3 text-xs focus:border-white/30 focus:outline-none transition-colors"
                     />
                   </div>
                 </div>
 
-                {/* Master Password Field */}
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
-                    Contraseña Maestra (Master Password)
+                  <label className="font-medium text-zinc-300 mb-1.5 block">
+                    Contraseña Maestra
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                      <KeyRound className="w-4 h-4" />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                      <KeyRound className="w-3.5 h-3.5" />
                     </div>
                     <input
                       type={showLoginPassword ? 'text' : 'password'}
@@ -944,39 +912,38 @@ export function App() {
                       placeholder="Tu contraseña maestra"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 pr-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                      className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-9 text-xs focus:border-white/30 focus:outline-none transition-colors"
                     />
                     <button
                       type="button"
                       onClick={() => setShowLoginPassword((prev) => !prev)}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
                     >
-                      {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showLoginPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
-                {/* CTA Log In Button */}
                 <button
                   type="submit"
                   disabled={isAuthenticating}
-                  className="w-full mt-3 bg-white text-zinc-950 font-semibold hover:bg-zinc-200 active:scale-[0.99] transition-all rounded-lg py-2.5 px-4 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 bg-white text-black font-medium hover:bg-zinc-200 active:scale-[0.99] transition-all rounded-lg py-2.5 px-4 text-xs shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isAuthenticating ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
-                      <span>Sincronizando y Descifrando...</span>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
+                      <span>Sincronizando y descifrando...</span>
                     </>
                   ) : (
                     <>
-                      <Unlock className="w-4 h-4 text-zinc-950" />
+                      <Unlock className="w-3.5 h-3.5 text-black" />
                       <span>Descargar y Desbloquear Bóveda</span>
                     </>
                   )}
                 </button>
 
                 <div className="text-center pt-2">
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-[11px] text-zinc-500">
                     ¿No tienes una cuenta aún?{' '}
                     <button
                       type="button"
@@ -990,17 +957,16 @@ export function App() {
               </form>
             )}
 
-            {/* FORM 2: NEW VAULT REGISTRATION */}
+            {/* FORM 2: REGISTER */}
             {authMode === 'register' && (
-              <form onSubmit={handleRegister} className="w-full space-y-4 text-left">
-                {/* Username Field */}
+              <form onSubmit={handleRegister} className="w-full space-y-3.5 text-left text-xs">
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
+                  <label className="font-medium text-zinc-300 mb-1.5 block">
                     Nombre de Usuario
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                      <User className="w-4 h-4" />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                      <User className="w-3.5 h-3.5" />
                     </div>
                     <input
                       type="text"
@@ -1008,19 +974,18 @@ export function App() {
                       placeholder="ej. rojas, admin, personal"
                       value={regUsername}
                       onChange={(e) => setRegUsername(e.target.value)}
-                      className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                      className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-3 text-xs focus:border-white/30 focus:outline-none transition-colors"
                     />
                   </div>
                 </div>
 
-                {/* Master Password Field */}
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
+                  <label className="font-medium text-zinc-300 mb-1.5 block">
                     Contraseña Maestra (Master Password)
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                      <KeyRound className="w-4 h-4" />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                      <KeyRound className="w-3.5 h-3.5" />
                     </div>
                     <input
                       type={showRegPassword ? 'text' : 'password'}
@@ -1028,25 +993,24 @@ export function App() {
                       placeholder="Mínimo 8 caracteres de alta entropía"
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
-                      className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 pr-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                      className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-9 text-xs focus:border-white/30 focus:outline-none transition-colors"
                     />
                     <button
                       type="button"
                       onClick={() => setShowRegPassword((prev) => !prev)}
                       className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
                     >
-                      {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
 
-                  {/* Real-time 4-block entropy meter */}
                   {regPassword.length > 0 && (
                     <div className="space-y-1.5 pt-2">
                       <div className="flex items-center justify-between text-[11px] font-mono">
-                        <span className="text-zinc-500">Fuerza de la clave</span>
+                        <span className="text-zinc-500">Fuerza</span>
                         <span className={passwordEntropy.color}>{passwordEntropy.label}</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-1.5 h-1">
+                      <div className="grid grid-cols-4 gap-1 h-1">
                         {[1, 2, 3, 4].map((seg) => (
                           <div
                             key={seg}
@@ -1058,8 +1022,8 @@ export function App() {
                                   ? 'bg-amber-500'
                                   : passwordEntropy.level === 3
                                   ? 'bg-emerald-500'
-                                  : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-                                : 'bg-zinc-800'
+                                  : 'bg-emerald-400'
+                                : 'bg-white/[0.06]'
                             }`}
                           />
                         ))}
@@ -1068,14 +1032,13 @@ export function App() {
                   )}
                 </div>
 
-                {/* Confirm Master Password Field */}
                 <div>
-                  <label className="text-xs font-medium text-zinc-300 mb-1.5 block">
+                  <label className="font-medium text-zinc-300 mb-1.5 block">
                     Confirmar Contraseña Maestra
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                      <Lock className="w-4 h-4" />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                      <Lock className="w-3.5 h-3.5" />
                     </div>
                     <input
                       type={showRegConfirmPassword ? 'text' : 'password'}
@@ -1083,11 +1046,11 @@ export function App() {
                       placeholder="Repite tu contraseña maestra"
                       value={regConfirmPassword}
                       onChange={(e) => setRegConfirmPassword(e.target.value)}
-                      className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 pr-16 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                      className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-14 text-xs focus:border-white/30 focus:outline-none transition-colors"
                     />
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-1.5">
+                    <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1.5">
                       {isConfirmMatch && (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       )}
                       <button
                         type="button"
@@ -1095,36 +1058,35 @@ export function App() {
                         className="text-zinc-500 hover:text-zinc-300 transition-colors"
                       >
                         {showRegConfirmPassword ? (
-                          <EyeOff className="w-4 h-4" />
+                          <EyeOff className="w-3.5 h-3.5" />
                         ) : (
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5" />
                         )}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* CTA Register Button */}
                 <button
                   type="submit"
                   disabled={isAuthenticating}
-                  className="w-full mt-3 bg-white text-zinc-950 font-semibold hover:bg-zinc-200 active:scale-[0.99] transition-all rounded-lg py-2.5 px-4 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 bg-white text-black font-medium hover:bg-zinc-200 active:scale-[0.99] transition-all rounded-lg py-2.5 px-4 text-xs shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isAuthenticating ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
                       <span>Derivando Claves (PBKDF2 600k)...</span>
                     </>
                   ) : (
                     <>
-                      <Lock className="w-4 h-4 text-zinc-950" />
+                      <Lock className="w-3.5 h-3.5 text-black" />
                       <span>Crear Bóveda Segura</span>
                     </>
                   )}
                 </button>
 
                 <div className="text-center pt-2">
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-[11px] text-zinc-500">
                     ¿Ya tienes una bóveda creada?{' '}
                     <button
                       type="button"
@@ -1138,14 +1100,14 @@ export function App() {
               </form>
             )}
 
-            {/* Trust Badges in Card Footer */}
-            <div className="w-full mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-zinc-400">
+            {/* Footer Trust Badges */}
+            <div className="w-full mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-zinc-500">
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 AES-GCM-256
               </span>
-              <span>PBKDF2 600K ROUNDS</span>
-              <span>WEBAUTHN READY</span>
+              <span>PBKDF2 600K</span>
+              <span>CLIENT-SIDE ONLY</span>
             </div>
           </div>
         </motion.div>
@@ -1160,75 +1122,56 @@ export function App() {
     const hasFastUnlock = !!userConfig?.wrapped_master_key;
 
     return (
-      <div className="min-h-screen bg-[#090a0f] flex flex-col items-center justify-center p-6 text-zinc-100 selection:bg-white/20 selection:text-white relative overflow-hidden">
+      <div className="min-h-screen bg-[#08090a] flex flex-col items-center justify-center p-4 sm:p-6 text-zinc-100 selection:bg-white/20 selection:text-white">
         <Toaster position="bottom-right" richColors theme="dark" />
 
-        {/* Technical grid with radial mask */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-            maskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
-            WebkitMaskImage: 'radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%)',
-          }}
-        />
-
-        {/* Top spotlight */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-indigo-500/10 via-violet-500/5 to-transparent blur-3xl pointer-events-none" />
-
-        {/* Unlock card container */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="relative w-full max-w-sm bg-zinc-900/60 backdrop-blur-2xl border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-8 overflow-hidden z-10"
+          initial={{ opacity: 0, scale: 0.98, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-sm bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_50px_rgba(0,0,0,0.8)] rounded-xl p-6 sm:p-7 overflow-hidden z-10"
         >
-          {/* Hairline highlight */}
-          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-
           <div className="flex flex-col items-center text-center">
-            {/* Machined emblem */}
-            <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center mb-3 text-zinc-100">
-              <Lock className="w-6 h-6 text-zinc-100" />
+            {/* Brand Logo */}
+            <div className="h-10 w-10 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top flex items-center justify-center mb-3 text-white">
+              <Lock className="w-5 h-5 text-white" />
             </div>
 
-            {/* Micro-badge */}
-            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-0.5 rounded-full mb-2">
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-zinc-400 bg-white/[0.03] border border-white/[0.06] px-2.5 py-0.5 rounded-md mb-2">
               SESSION LOCKED • RAM PURGED
             </div>
 
-            <h1 className="text-xl font-bold text-white mb-1">Revolt Pass</h1>
-            <p className="text-xs text-zinc-400 mb-6 font-mono">
-              Usuario: <strong className="text-zinc-200">{userConfig?.username}</strong>
+            <h1 className="text-xl font-semibold text-white mb-0.5">Revolt Pass</h1>
+            <p className="text-xs text-zinc-400 mb-5 font-mono">
+              Usuario: <strong className="text-white">{userConfig?.username}</strong>
             </p>
 
             {/* Option 1: Fast Unlock with Windows Hello / PIN */}
             {hasFastUnlock && (
-              <div className="w-full mb-5">
+              <div className="w-full mb-4">
                 <button
                   type="button"
                   onClick={handleUnlockWithPasskey}
                   disabled={isAuthenticating}
-                  className="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700/80 text-white font-semibold text-xs border border-white/10 shadow-sm flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] disabled:opacity-50"
+                  className="w-full py-2.5 px-4 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] text-white font-medium text-xs border border-white/[0.08] shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50"
                 >
                   <Fingerprint className="w-4 h-4 text-zinc-300" />
                   <span>Desbloquear con Windows Hello / PIN</span>
                 </button>
 
-                <div className="flex items-center my-4 text-xs text-zinc-600">
+                <div className="flex items-center my-3.5 text-xs text-zinc-600">
                   <div className="flex-1 h-px bg-white/[0.06]" />
-                  <span className="px-3 font-mono text-[11px] text-zinc-500">o contraseña maestra</span>
+                  <span className="px-2.5 font-mono text-[10px] text-zinc-500 uppercase">o contraseña maestra</span>
                   <div className="flex-1 h-px bg-white/[0.06]" />
                 </div>
               </div>
             )}
 
             {/* Option 2: Unlock with Master Password */}
-            <form onSubmit={handleUnlockWithPassword} className="w-full space-y-3">
+            <form onSubmit={handleUnlockWithPassword} className="w-full space-y-3 text-xs">
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
-                  <KeyRound className="w-4 h-4" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                  <KeyRound className="w-3.5 h-3.5" />
                 </div>
                 <input
                   type={showUnlockPassword ? 'text' : 'password'}
@@ -1236,37 +1179,37 @@ export function App() {
                   placeholder="Contraseña Maestra..."
                   value={unlockPassword}
                   onChange={(e) => setUnlockPassword(e.target.value)}
-                  className="w-full bg-zinc-950/60 border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg text-sm px-3.5 py-2.5 pl-10 pr-10 focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all"
+                  className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-9 text-xs focus:border-white/30 focus:outline-none transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowUnlockPassword((prev) => !prev)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
-                  {showUnlockPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showUnlockPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
 
               <button
                 type="submit"
                 disabled={isAuthenticating}
-                className="w-full py-2.5 px-4 bg-white hover:bg-zinc-200 text-zinc-950 font-semibold rounded-lg text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.2)] disabled:opacity-50"
+                className="w-full py-2.5 px-4 bg-white hover:bg-zinc-200 text-black font-medium rounded-lg text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-sm disabled:opacity-50"
               >
                 {isAuthenticating ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
                     <span>Verificando...</span>
                   </>
                 ) : (
                   <>
-                    <Unlock className="w-4 h-4 text-zinc-950" />
+                    <Unlock className="w-3.5 h-3.5 text-black" />
                     <span>Desbloquear Bóveda</span>
                   </>
                 )}
               </button>
             </form>
 
-            {/* Option to switch account or link another user */}
+            {/* Switch Account */}
             <div className="w-full mt-4 text-center">
               <button
                 type="button"
@@ -1274,17 +1217,17 @@ export function App() {
                   setAuthMode('login');
                   setScreen('register');
                 }}
-                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors underline-offset-4 hover:underline inline-flex items-center gap-1.5"
+                className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors underline-offset-4 hover:underline inline-flex items-center gap-1.5"
               >
-                <User className="w-3.5 h-3.5" />
+                <User className="w-3 h-3" />
                 <span>Iniciar sesión con otra cuenta</span>
               </button>
             </div>
 
-            {/* Footer Trust Badges */}
-            <div className="w-full mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono text-zinc-400">
+            {/* Footer */}
+            <div className="w-full mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-zinc-500">
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 AES-GCM-256
               </span>
               <span>ZERO-KNOWLEDGE</span>
@@ -1299,37 +1242,34 @@ export function App() {
   // RENDER: MAIN SCREEN (UNLOCKED VAULT)
   // -------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col selection:bg-white/20 selection:text-white relative">
+    <div className="min-h-screen bg-[#08090a] text-zinc-100 flex flex-col selection:bg-white/20 selection:text-white relative">
       <Toaster position="bottom-right" richColors theme="dark" />
 
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 w-full border-b border-white/[0.06] bg-zinc-950/80 backdrop-blur-xl px-4 md:px-8 py-3.5">
+      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#08090a]/90 backdrop-blur-md px-4 md:px-6 py-2.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           {/* Logo and Branding */}
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center text-zinc-100">
-              <Shield className="w-5 h-5 text-zinc-100" />
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top flex items-center justify-center text-white shrink-0">
+              <Shield className="w-4 h-4 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm md:text-base text-white tracking-tight">
+                <span className="font-semibold text-sm text-white tracking-tight">
                   Revolt Pass
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-white/[0.08] text-zinc-400">
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-zinc-400">
                   v1.1
                 </span>
               </div>
-              <p className="text-[10px] text-zinc-500 hidden sm:block">
-                {typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'Revolt Pass'} · Zero-Knowledge
-              </p>
             </div>
           </div>
 
           {/* Top Actions and Sync Status */}
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-2">
             {/* Sync Status Pill */}
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono border ${
                 syncStatus === 'synced'
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : syncStatus === 'syncing' || syncStatus === 'dirty'
@@ -1339,15 +1279,15 @@ export function App() {
               title={`Estado de sincronización: ${syncStatus}`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${
+                className={`w-1.5 h-1.5 rounded-full ${
                   syncStatus === 'synced'
-                    ? 'bg-emerald-500'
+                    ? 'bg-emerald-400'
                     : syncStatus === 'syncing' || syncStatus === 'dirty'
-                    ? 'bg-amber-500 animate-ping'
-                    : 'bg-rose-500'
+                    ? 'bg-amber-400 animate-ping'
+                    : 'bg-rose-400'
                 }`}
               />
-              <span className="hidden md:inline capitalize text-[11px] font-sans">
+              <span className="hidden md:inline capitalize font-sans">
                 {syncStatus === 'synced'
                   ? 'Sincronizado'
                   : syncStatus === 'syncing'
@@ -1362,11 +1302,11 @@ export function App() {
             <button
               type="button"
               onClick={() => setIsCmdPaletteOpen(true)}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors flex items-center gap-1.5 text-xs"
+              className="h-8 px-2.5 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] transition-colors flex items-center gap-1.5 text-xs"
               title="Buscar (Ctrl + K)"
             >
-              <Search className="w-4 h-4" />
-              <kbd className="hidden lg:inline text-[10px] font-mono px-1 py-0.5 bg-zinc-800 rounded text-zinc-400">
+              <Search className="w-3.5 h-3.5" />
+              <kbd className="hidden lg:inline text-[10px] font-mono px-1 py-0.2 bg-white/[0.06] rounded text-zinc-400">
                 Ctrl K
               </kbd>
             </button>
@@ -1375,30 +1315,30 @@ export function App() {
             <button
               type="button"
               onClick={() => setIsGeneratorOpen(true)}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors"
+              className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
               title="Generador de Contraseñas"
             >
-              <KeyRound className="w-4 h-4" />
+              <KeyRound className="w-3.5 h-3.5" />
             </button>
 
             {/* Backup & Migration Button */}
             <button
               type="button"
               onClick={() => setIsBackupOpen(true)}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors"
+              className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
               title="Respaldo & Migración (Copia Cifrada / Texto Plano)"
             >
-              <FolderArchive className="w-4 h-4" />
+              <FolderArchive className="w-3.5 h-3.5" />
             </button>
 
             {/* Security & Sessions Panel Button */}
             <button
               type="button"
               onClick={() => setIsSecurityOpen(true)}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white bg-zinc-900 border border-white/[0.08] hover:border-zinc-700 transition-colors"
+              className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
               title="Panel de Seguridad, Sesiones y Passkeys"
             >
-              <Shield className="w-4 h-4 text-violet-400" />
+              <Shield className="w-3.5 h-3.5 text-zinc-300" />
             </button>
 
             {/* PWA Installation Button */}
@@ -1406,10 +1346,10 @@ export function App() {
               <button
                 type="button"
                 onClick={handleInstallApp}
-                className="px-2.5 py-1.5 rounded-xl bg-indigo-600/15 border border-indigo-500/30 hover:bg-indigo-600/25 text-indigo-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
                 title="Instalar Revolt Pass en tu sistema operativo (PWA)"
               >
-                <Download className="w-3.5 h-3.5 text-indigo-400" />
+                <Download className="w-3.5 h-3.5 text-zinc-300" />
                 <span className="hidden sm:inline">Instalar App</span>
               </button>
             )}
@@ -1419,10 +1359,10 @@ export function App() {
               <button
                 type="button"
                 onClick={handleSetupPasskey}
-                className="px-3 py-1.5 rounded-xl bg-zinc-800 border border-white/10 hover:bg-zinc-750 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                className="h-8 px-2.5 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
                 title="Habilitar PIN de Windows Hello o Biometría"
               >
-                <Fingerprint className="w-4 h-4 text-zinc-300" />
+                <Fingerprint className="w-3.5 h-3.5 text-zinc-300" />
                 <span className="hidden sm:inline">Vincular PIN</span>
               </button>
             )}
@@ -1431,10 +1371,10 @@ export function App() {
             <button
               type="button"
               onClick={handleLockVault}
-              className="p-2 rounded-xl text-zinc-400 hover:text-rose-300 bg-zinc-900 border border-white/[0.08] hover:border-rose-900/50 hover:bg-rose-950/30 transition-colors"
+              className="h-8 w-8 rounded-lg text-zinc-400 hover:text-rose-400 bg-[#16181d] border border-white/[0.08] hover:border-rose-500/30 hover:bg-rose-500/10 flex items-center justify-center transition-colors"
               title="Bloquear Bóveda (Purgar memoria RAM)"
             >
-              <Lock className="w-4 h-4" />
+              <Lock className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -1453,7 +1393,7 @@ export function App() {
       </main>
 
       {/* Minimalist Footer */}
-      <footer className="w-full py-4 text-center border-t border-white/[0.04] text-zinc-500 text-[11px] font-mono">
+      <footer className="w-full py-4 text-center border-t border-white/[0.06] text-zinc-500 text-[11px] font-mono">
         Revolt Pass · Zero-Knowledge AES-GCM 256 · Cloudflare Edge & D1
       </footer>
 

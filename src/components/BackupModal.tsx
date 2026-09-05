@@ -167,18 +167,15 @@ export function BackupModal({
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg bg-[#090a0f] border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-6 text-zinc-100 overflow-hidden focus:outline-none">
-          {/* Hairline highlight */}
-          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_68px_rgba(0,0,0,0.8)] rounded-xl p-6 text-zinc-100 overflow-hidden focus:outline-none">
           {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-white/[0.06] mb-5">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-zinc-900 border border-white/10 shadow-inner flex items-center justify-center text-zinc-100">
-                <Shield className="w-5 h-5 text-zinc-100" />
+          <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] mb-5">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top flex items-center justify-center text-white">
+                <Shield className="w-4 h-4 text-white" />
               </div>
               <div>
-                <Dialog.Title className="text-base font-bold text-white tracking-tight">
+                <Dialog.Title className="text-base font-semibold text-white tracking-tight">
                   Respaldo & Migración de Bóveda
                 </Dialog.Title>
                 <Dialog.Description className="text-xs text-zinc-400">
@@ -190,7 +187,7 @@ export function BackupModal({
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors"
+                className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -198,13 +195,13 @@ export function BackupModal({
           </div>
 
           {/* Tabs Selector */}
-          <div className="flex bg-zinc-950/60 border border-white/[0.08] p-1 rounded-xl mb-5 text-xs">
+          <div className="flex bg-[#08090a] border border-white/[0.06] p-1 rounded-lg mb-5 text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('export')}
-              className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'export'
-                  ? 'bg-zinc-800 text-white shadow-sm'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -214,9 +211,9 @@ export function BackupModal({
             <button
               type="button"
               onClick={() => setActiveTab('import')}
-              className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'import'
-                  ? 'bg-zinc-800 text-white shadow-sm'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -229,10 +226,10 @@ export function BackupModal({
           {activeTab === 'export' && (
             <div className="space-y-4 text-xs">
               {/* Option 1: Encrypted Backup (Recommended) */}
-              <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.08] space-y-3">
+              <div className="p-4 rounded-lg bg-[#16181d]/50 border border-white/[0.06] space-y-3">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
-                    <FileLock2 className="w-5 h-5" />
+                  <div className="p-2 rounded-md bg-[#08090a] border border-emerald-500/20 text-emerald-400 shrink-0">
+                    <FileLock2 className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -243,7 +240,7 @@ export function BackupModal({
                     </div>
                     <p className="text-zinc-400 mt-1 leading-relaxed">
                       Genera un archivo <code>.json</code> cifrado con tu Contraseña Maestra actual.
-                      Seguro para almacenar en Google Drive, Dropbox, pendrives o almacenamiento local.
+                      Seguro para almacenar en la nube o discos locales.
                     </p>
                   </div>
                 </div>
@@ -252,16 +249,16 @@ export function BackupModal({
                   type="button"
                   onClick={handleExportEncrypted}
                   disabled={isExporting}
-                  className="w-full py-2.5 px-4 rounded-lg bg-white text-zinc-950 font-semibold text-xs hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 shadow-[0_1px_2px_rgba(0,0,0,0.4)] disabled:opacity-50"
+                  className="w-full py-2 px-4 rounded-lg bg-white text-black font-medium text-xs hover:bg-zinc-200 transition-all active:scale-[0.99] flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
                 >
                   {isExporting ? (
                     <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
                       <span>Cifrando Bóveda...</span>
                     </>
                   ) : (
                     <>
-                      <Download className="w-3.5 h-3.5" />
+                      <Download className="w-3.5 h-3.5 text-black" />
                       <span>Descargar Copia Cifrada ({items.length} cuentas)</span>
                     </>
                   )}
@@ -269,35 +266,35 @@ export function BackupModal({
               </div>
 
               {/* Option 2: Plaintext Backup (Sensitive) */}
-              <div className="p-4 rounded-xl bg-zinc-950/60 border border-amber-500/20 space-y-3">
+              <div className="p-4 rounded-lg bg-[#16181d]/50 border border-amber-500/20 space-y-3">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
-                    <FileWarning className="w-5 h-5" />
+                  <div className="p-2 rounded-md bg-[#08090a] border border-amber-500/20 text-amber-400 shrink-0">
+                    <FileWarning className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
                     <span className="font-semibold text-amber-200">Exportación en Texto Plano (JSON)</span>
                     <p className="text-zinc-400 mt-1 leading-relaxed">
                       Contiene todos los secretos y semillas TOTP en texto claro. Úsalo únicamente para
-                      migrar a otro software o para respaldos en papel/entornos desconectados.
+                      migrar a otros gestores en un entorno completamente privado.
                     </p>
                   </div>
                 </div>
 
-                <label className="flex items-center gap-2 text-zinc-300 cursor-pointer select-none">
+                <label className="flex items-center gap-2 text-zinc-300 select-none cursor-pointer">
                   <input
                     type="checkbox"
                     checked={plaintextConfirmed}
                     onChange={(e) => setPlaintextConfirmed(e.target.checked)}
-                    className="rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500/30"
+                    className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0"
                   />
-                  <span>Comprendo los riesgos de seguridad y deseo continuar</span>
+                  <span>Comprendo el riesgo de exportar credenciales sin cifrado</span>
                 </label>
 
                 <button
                   type="button"
                   onClick={handleExportPlaintext}
                   disabled={!plaintextConfirmed}
-                  className="w-full py-2 px-4 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs transition-all flex items-center justify-center gap-2 border border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full py-2 px-4 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] text-zinc-200 font-medium text-xs transition-all flex items-center justify-center gap-2 border border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Descargar en Texto Plano</span>
@@ -323,24 +320,24 @@ export function BackupModal({
               {/* File Dropzone / Selector */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="p-6 rounded-xl border border-dashed border-white/20 hover:border-violet-500/60 bg-zinc-950/60 flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:bg-zinc-900/40 group"
+                className="p-6 rounded-lg border border-dashed border-white/[0.15] hover:border-white/40 bg-[#08090a] flex flex-col items-center justify-center text-center cursor-pointer transition-colors group"
               >
-                <FolderOpen className="w-8 h-8 text-zinc-500 group-hover:text-violet-400 mb-2 transition-colors" />
-                <p className="font-semibold text-zinc-200">
+                <FolderOpen className="w-7 h-7 text-zinc-500 group-hover:text-white mb-2 transition-colors" />
+                <p className="font-medium text-zinc-200">
                   Haz clic para seleccionar o arrastra un archivo .json
                 </p>
-                <p className="text-zinc-500 mt-1">
+                <p className="text-zinc-500 mt-1 font-mono text-[11px]">
                   Soporta respaldos cifrados (.json) o texto plano (.json) de Revolt Pass
                 </p>
               </div>
 
               {/* Status & Options if file loaded */}
               {stagedItems && (
-                <div className="p-4 rounded-xl bg-zinc-900/70 border border-white/[0.08] space-y-3">
+                <div className="p-4 rounded-lg bg-[#16181d]/50 border border-white/[0.08] space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-emerald-400">
                       <CheckCircle2 className="w-4 h-4" />
-                      <span className="font-semibold">Archivo Válido</span>
+                      <span className="font-medium">Archivo Válido</span>
                     </div>
                     <span className="font-mono text-zinc-400">
                       {stagedItems.length} cuentas listas
@@ -356,11 +353,10 @@ export function BackupModal({
                         value="merge"
                         checked={importMode === 'merge'}
                         onChange={() => setImportMode('merge')}
-                        className="text-violet-500 focus:ring-violet-500/30"
+                        className="text-white focus:ring-0"
                       />
                       <span>
-                        <strong>Fusionar:</strong> Conservar cuentas actuales y agregar o actualizar
-                        las del archivo
+                        <strong>Fusionar:</strong> Conservar cuentas actuales y agregar las del archivo
                       </span>
                     </label>
 
@@ -371,11 +367,10 @@ export function BackupModal({
                         value="replace"
                         checked={importMode === 'replace'}
                         onChange={() => setImportMode('replace')}
-                        className="text-rose-500 focus:ring-rose-500/30"
+                        className="text-rose-400 focus:ring-0"
                       />
                       <span className="text-rose-300">
-                        <strong>Reemplazar:</strong> Sobrescribir toda la bóveda con el contenido de este
-                        archivo
+                        <strong>Reemplazar:</strong> Sobrescribir toda la bóveda con este archivo
                       </span>
                     </label>
                   </div>
@@ -384,16 +379,16 @@ export function BackupModal({
                     type="button"
                     onClick={handleConfirmImport}
                     disabled={isProcessingImport}
-                    className="w-full mt-2 py-2.5 px-4 rounded-lg bg-white text-zinc-950 font-semibold text-xs hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full mt-2 py-2 px-4 rounded-lg bg-white text-black font-medium text-xs hover:bg-zinc-200 transition-all active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {isProcessingImport ? (
                       <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
                         <span>Restaurando Bóveda...</span>
                       </>
                     ) : (
                       <>
-                        <Upload className="w-3.5 h-3.5" />
+                        <Upload className="w-3.5 h-3.5 text-black" />
                         <span>Confirmar Restauración</span>
                       </>
                     )}

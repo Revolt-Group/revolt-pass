@@ -211,14 +211,14 @@ export function EditAccountModal({
                 initial={{ opacity: 0, scale: 0.96, y: 12 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 12 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
                 onPaste={handlePasteCapture}
-                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-zinc-950 border border-white/[0.08] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-6 z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none"
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_68px_rgba(0,0,0,0.8)] rounded-xl p-6 z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none custom-scrollbar"
               >
                 {/* Modal Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+                <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
                   <div className="flex items-center gap-3">
-                    <BrandIcon issuer={issuer || item.issuer} iconUrl={iconUrl} size={42} className="shrink-0" />
+                    <BrandIcon issuer={issuer || item.issuer} iconUrl={iconUrl} size={38} className="shrink-0" />
                     <div>
                       <Dialog.Title className="text-base font-semibold tracking-tight text-white flex items-center gap-2">
                         <span>Editar Cuenta & Personalización</span>
@@ -231,16 +231,16 @@ export function EditAccountModal({
                   <Dialog.Close asChild>
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+                      className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </Dialog.Close>
                 </div>
 
-                <form onSubmit={handleSubmit} className="mt-5 space-y-5">
+                <form onSubmit={handleSubmit} className="mt-5 space-y-4">
                   {/* SECTION 1: LOGO / PHOTO CUSTOMIZATION */}
-                  <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-3">
+                  <div className="p-4 rounded-lg bg-[#16181d]/50 border border-white/[0.06] space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div className="relative group/avatar">
@@ -326,14 +326,14 @@ export function EditAccountModal({
                   </div>
 
                   {/* SECTION 2: RECOVERY / BACKUP CODES */}
-                  <div className="p-4 rounded-xl bg-zinc-900/60 border border-white/[0.06] space-y-3">
+                  <div className="p-4 rounded-lg bg-[#16181d]/50 border border-white/[0.06] space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-white">
                           Códigos de Respaldo (Backup Codes)
                         </span>
                         {recoveryCodes.length > 0 && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
                             {availableCount} disponibles · {usedCount} usados
                           </span>
                         )}
@@ -344,7 +344,7 @@ export function EditAccountModal({
                     </div>
 
                     <p className="text-xs text-zinc-400 leading-relaxed">
-                      Pega aquí los códigos de recuperación que te entregó el servicio (ej. Hytale, Google, Ubisoft).
+                      Pega aquí los códigos de recuperación que te entregó el servicio.
                       Puedes pegar varios códigos juntos separados por saltos de línea.
                     </p>
 
@@ -355,29 +355,29 @@ export function EditAccountModal({
                         placeholder="Pega uno o múltiples códigos aquí (uno por línea)..."
                         value={codeInput}
                         onChange={(e) => setCodeInput(e.target.value)}
-                        className="flex-1 bg-zinc-950/80 border border-white/[0.08] rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/50 resize-none transition-colors"
+                        className="flex-1 bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 resize-none transition-colors"
                       />
                       <button
                         type="button"
                         onClick={handleAddCodes}
                         disabled={!codeInput.trim()}
-                        className="px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-40 shrink-0"
+                        className="px-3.5 bg-[#16181d] hover:bg-[#1c1f24] text-zinc-200 border border-white/[0.08] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.99] disabled:opacity-40 shrink-0"
                       >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-3.5 h-3.5" />
                         <span>Añadir</span>
                       </button>
                     </div>
 
                     {/* Registered Codes List */}
                     {recoveryCodes.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1 pt-1 custom-scrollbar">
                         {recoveryCodes.map((rc, idx) => (
                           <div
                             key={idx}
                             className={`flex items-center justify-between p-2 rounded-lg text-xs font-mono transition-colors border ${
                               rc.used
-                                ? 'bg-zinc-950/40 border-white/[0.04] text-zinc-600 line-through'
-                                : 'bg-zinc-950 border-white/[0.08] text-zinc-200'
+                                ? 'bg-transparent border-white/[0.04] text-zinc-600 line-through'
+                                : 'bg-[#08090a] border-white/[0.08] text-zinc-200'
                             }`}
                           >
                             <span className="truncate mr-2 select-all font-semibold tracking-wide">
@@ -403,7 +403,7 @@ export function EditAccountModal({
                                 checked={rc.used}
                                 onChange={() => handleToggleCodeUsed(idx)}
                                 title={rc.used ? 'Marcar como disponible' : 'Marcar como usado'}
-                                className="rounded bg-zinc-800 border-zinc-700 text-amber-500 focus:ring-0 cursor-pointer"
+                                className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                               />
                               <button
                                 type="button"
@@ -418,16 +418,16 @@ export function EditAccountModal({
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-4 border border-dashed border-white/[0.08] rounded-lg">
+                      <div className="text-center py-3 border border-dashed border-white/[0.08] rounded-lg">
                         <p className="text-xs text-zinc-500">
-                          No hay códigos de recuperación guardados para esta cuenta todavía.
+                          No hay códigos de recuperación guardados todavía.
                         </p>
                       </div>
                     )}
                   </div>
 
                   {/* SECTION 3: ACCOUNT INFORMATION */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {/* Service / Issuer */}
                     <div>
                       <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
@@ -439,8 +439,8 @@ export function EditAccountModal({
                         required
                         value={issuer}
                         onChange={(e) => setIssuer(e.target.value)}
-                        placeholder="ej. Hytale, Google, Ubisoft"
-                        className="w-full bg-zinc-950/80 border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                        placeholder="ej. GitHub, Google, AWS"
+                        className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                       />
                     </div>
 
@@ -454,8 +454,8 @@ export function EditAccountModal({
                         type="text"
                         value={account}
                         onChange={(e) => setAccount(e.target.value)}
-                        placeholder="ej. rojas@ejemplo.com"
-                        className="w-full bg-zinc-950/80 border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                        placeholder="ej. usuario@ejemplo.com"
+                        className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                       />
                     </div>
                   </div>
@@ -471,7 +471,7 @@ export function EditAccountModal({
                       value={tagsInput}
                       onChange={(e) => setTagsInput(e.target.value)}
                       placeholder="ej. gaming, personal, trabajo"
-                      className="w-full bg-zinc-950/80 border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                      className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                     />
                   </div>
 
@@ -486,25 +486,25 @@ export function EditAccountModal({
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="Notas de seguridad, pistas o información relevante..."
-                      className="w-full bg-zinc-950/80 border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 resize-none transition-colors"
+                      className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 resize-none transition-colors"
                     />
                   </div>
 
                   {/* Bottom Action Buttons */}
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.06]">
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.08]">
                     <button
                       type="button"
                       onClick={onClose}
-                      className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition-colors"
+                      className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-5 py-2 bg-white text-zinc-950 font-semibold hover:bg-zinc-200 active:scale-[0.99] rounded-lg text-xs shadow-sm flex items-center gap-2 transition-all disabled:opacity-50"
+                      className="px-4 py-1.5 bg-white text-black font-medium hover:bg-zinc-200 active:scale-[0.99] rounded-lg text-xs shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50"
                     >
-                      <CheckCircle2 className="w-4 h-4 text-zinc-950" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-black" />
                       <span>{isSaving ? 'Guardando...' : 'Guardar Cambios'}</span>
                     </button>
                   </div>

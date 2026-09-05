@@ -52,29 +52,6 @@ const COMMON_BRAND_SLUGS: Record<string, string> = {
   twitch: 'twitch',
 };
 
-const GRADIENT_PALETTES = [
-  'from-violet-600 to-indigo-600',
-  'from-blue-600 to-cyan-600',
-  'from-emerald-600 to-teal-600',
-  'from-rose-600 to-pink-600',
-  'from-amber-600 to-orange-600',
-  'from-fuchsia-600 to-purple-600',
-  'from-cyan-600 to-blue-600',
-  'from-indigo-600 to-violet-600',
-];
-
-/**
- * FNV-1a hash for deterministic color and gradient assignment.
- */
-function fnv1a(str: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
 /**
  * Extracts provider initials (1-2 characters).
  */
@@ -99,19 +76,16 @@ export function BrandIcon({ issuer, iconUrl, size = 36, className = '' }: BrandI
 
   // If user provided an iconUrl (external URL or data:image base64), it takes absolute priority
   const effectiveIconUrl = iconUrl?.trim() || (slug ? `https://cdn.simpleicons.org/${slug}/white` : null);
-
-  const gradientIdx = fnv1a(cleanName) % GRADIENT_PALETTES.length;
-  const gradientClass = GRADIENT_PALETTES[gradientIdx];
   const initials = getInitials(cleanName);
 
   if (!effectiveIconUrl || hasError) {
     return (
       <div
-        className={`flex items-center justify-center font-bold text-white shadow-md select-none rounded-xl bg-gradient-to-br ${gradientClass} ${className}`}
+        className={`flex items-center justify-center font-mono font-medium text-zinc-200 select-none rounded-lg bg-[#16181d] border border-white/[0.08] hairline-top shrink-0 ${className}`}
         style={{
           width: `${size}px`,
           height: `${size}px`,
-          fontSize: `${Math.max(11, Math.floor(size * 0.38))}px`,
+          fontSize: `${Math.max(10, Math.floor(size * 0.36))}px`,
         }}
         title={cleanName}
         aria-label={cleanName}
@@ -123,7 +97,7 @@ export function BrandIcon({ issuer, iconUrl, size = 36, className = '' }: BrandI
 
   return (
     <div
-      className={`relative flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800/80 p-1.5 shadow-inner overflow-hidden ${className}`}
+      className={`relative flex items-center justify-center rounded-lg bg-[#16181d] border border-white/[0.08] p-1.5 overflow-hidden hairline-top shrink-0 ${className}`}
       style={{
         width: `${size}px`,
         height: `${size}px`,
@@ -133,7 +107,7 @@ export function BrandIcon({ issuer, iconUrl, size = 36, className = '' }: BrandI
         src={effectiveIconUrl}
         alt={cleanName}
         loading="lazy"
-        className="w-full h-full object-contain rounded-lg filter drop-shadow transition-transform duration-200 hover:scale-110"
+        className="w-full h-full object-contain rounded filter contrast-125"
         onError={() => setHasError(true)}
       />
     </div>

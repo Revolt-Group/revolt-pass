@@ -108,42 +108,42 @@ export function CommandPalette({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -10 }}
             transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-            className="relative w-full max-w-xl bg-zinc-950/95 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden z-10 text-zinc-100"
+            className="relative w-full max-w-xl bg-[#0f1013] border border-white/[0.08] hairline-top rounded-xl shadow-[0_24px_68px_rgba(0,0,0,0.8)] overflow-hidden z-10 text-zinc-100"
           >
             <Command
               className="w-full flex flex-col focus:outline-none"
               loop
             >
               {/* Top Search Input */}
-              <div className="flex items-center px-4 py-3.5 border-b border-zinc-800/80 gap-3">
-                <Search className="w-5 h-5 text-zinc-400 shrink-0" />
+              <div className="flex items-center px-4 py-3 border-b border-white/[0.08] gap-3 bg-[#08090a]">
+                <Search className="w-4 h-4 text-zinc-400 shrink-0" />
                 <Command.Input
                   autoFocus
                   placeholder="Buscar cuenta por nombre, correo o etiqueta..."
-                  className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none"
+                  className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
                 />
-                <kbd className="hidden sm:inline-flex items-center px-2 py-0.5 text-[10px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800 rounded">
-                  ESC para cerrar
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-[#16181d] border border-white/[0.08] rounded">
+                  ESC
                 </kbd>
               </div>
 
               {/* Results List */}
-              <Command.List className="max-h-[60vh] overflow-y-auto p-2 text-xs space-y-1">
+              <Command.List className="max-h-[55vh] overflow-y-auto p-2 text-xs space-y-1 custom-scrollbar">
                 <Command.Empty className="py-8 text-center text-zinc-500">
                   No se encontraron resultados para esta búsqueda.
                 </Command.Empty>
 
                 {/* Quick Actions */}
-                <Command.Group heading="Acciones del Sistema" className="text-zinc-500 font-semibold px-2 py-1">
+                <Command.Group heading="Acciones del Sistema" className="text-zinc-500 font-semibold px-2 py-1 text-[11px] font-mono uppercase">
                   <Command.Item
                     onSelect={() => {
                       onClose();
                       onOpenAddAccount();
                     }}
-                    className="flex items-center justify-between px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-violet-600/20 aria-selected:bg-violet-600/20 aria-selected:text-white cursor-pointer transition-colors"
+                    className="flex items-center justify-between px-2.5 py-2 rounded-lg text-zinc-300 hover:text-white hover:bg-white/[0.06] aria-selected:bg-white/[0.06] aria-selected:text-white cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-2.5">
-                      <PlusCircle className="w-4 h-4 text-violet-400" />
+                      <PlusCircle className="w-4 h-4 text-white" />
                       <span className="font-medium text-xs">Vincular Nueva Cuenta 2FA</span>
                     </div>
                     <span className="text-[10px] text-zinc-500 font-mono">QR / Manual</span>
@@ -154,10 +154,10 @@ export function CommandPalette({
                       onClose();
                       onOpenGenerator();
                     }}
-                    className="flex items-center justify-between px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-violet-600/20 aria-selected:bg-violet-600/20 aria-selected:text-white cursor-pointer transition-colors"
+                    className="flex items-center justify-between px-2.5 py-2 rounded-lg text-zinc-300 hover:text-white hover:bg-white/[0.06] aria-selected:bg-white/[0.06] aria-selected:text-white cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-2.5">
-                      <KeyRound className="w-4 h-4 text-emerald-400" />
+                      <KeyRound className="w-4 h-4 text-white" />
                       <span className="font-medium text-xs">Generador de Contraseñas</span>
                     </div>
                     <span className="text-[10px] text-zinc-500 font-mono">CSPRNG</span>
@@ -168,10 +168,10 @@ export function CommandPalette({
                       onClose();
                       onTriggerSync();
                     }}
-                    className="flex items-center justify-between px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-violet-600/20 aria-selected:bg-violet-600/20 aria-selected:text-white cursor-pointer transition-colors"
+                    className="flex items-center justify-between px-2.5 py-2 rounded-lg text-zinc-300 hover:text-white hover:bg-white/[0.06] aria-selected:bg-white/[0.06] aria-selected:text-white cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-2.5">
-                      <RefreshCw className="w-4 h-4 text-cyan-400" />
+                      <RefreshCw className="w-4 h-4 text-white" />
                       <span className="font-medium text-xs">Sincronizar Bóveda con Cloudflare D1</span>
                     </div>
                     <span className="text-[10px] text-zinc-500 font-mono">Push & Pull</span>
@@ -182,7 +182,7 @@ export function CommandPalette({
                       onClose();
                       onLockVault();
                     }}
-                    className="flex items-center justify-between px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-rose-950/40 aria-selected:bg-rose-950/40 aria-selected:text-rose-300 cursor-pointer transition-colors"
+                    className="flex items-center justify-between px-2.5 py-2 rounded-lg text-zinc-300 hover:text-rose-400 hover:bg-rose-500/10 aria-selected:bg-rose-500/10 aria-selected:text-rose-400 cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-2.5">
                       <Lock className="w-4 h-4 text-rose-400" />
@@ -194,7 +194,7 @@ export function CommandPalette({
 
                 {/* Pinned Accounts */}
                 {pinnedItems.length > 0 && (
-                  <Command.Group heading="Cuentas Fijadas" className="text-zinc-500 font-semibold px-2 py-1 mt-2">
+                  <Command.Group heading="Cuentas Prioritarias" className="text-zinc-500 font-semibold px-2 py-1 mt-2 text-[11px] font-mono uppercase">
                     {pinnedItems.map((item) => {
                       const code = tokens[item.id] || '------';
                       return (
@@ -202,24 +202,24 @@ export function CommandPalette({
                           key={item.id}
                           value={`${item.issuer} ${item.account} ${item.tags?.join(' ') || ''}`}
                           onSelect={() => handleCopyAndClose(item)}
-                          className="flex items-center justify-between px-3 py-2.5 rounded-xl text-zinc-200 hover:text-white hover:bg-zinc-800/70 aria-selected:bg-zinc-850 aria-selected:text-white cursor-pointer transition-colors"
+                          className="flex items-center justify-between px-2.5 py-2 rounded-lg text-zinc-200 hover:text-white hover:bg-white/[0.06] aria-selected:bg-white/[0.06] aria-selected:text-white cursor-pointer transition-colors"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0">
                             <BrandIcon issuer={item.issuer} iconUrl={item.icon_url} size={28} className="shrink-0" />
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-xs text-white truncate">
+                                <span className="font-medium text-xs text-white truncate">
                                   {item.issuer}
                                 </span>
-                                <Pin className="w-3 h-3 text-violet-400 shrink-0 rotate-45" />
+                                <Pin className="w-3 h-3 text-zinc-400 shrink-0 rotate-45" />
                               </div>
                               <p className="text-[11px] text-zinc-400 truncate">{item.account}</p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 font-mono text-sm font-bold text-violet-400 tracking-wider">
+                          <div className="flex items-center gap-2 font-mono text-xs md:text-sm font-semibold text-white tracking-wider">
                             <span>{code}</span>
-                            <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                            <Copy className="w-3 h-3 text-zinc-500" />
                           </div>
                         </Command.Item>
                       );
@@ -228,7 +228,7 @@ export function CommandPalette({
                 )}
 
                 {/* All Accounts */}
-                <Command.Group heading="Todas las Cuentas" className="text-zinc-500 font-semibold px-2 py-1 mt-2">
+                <Command.Group heading="Todas las Cuentas" className="text-zinc-500 font-semibold px-2 py-1 mt-2 text-[11px] font-mono uppercase">
                   {unpinnedItems.map((item) => {
                     const code = tokens[item.id] || '------';
                     return (
@@ -236,21 +236,21 @@ export function CommandPalette({
                         key={item.id}
                         value={`${item.issuer} ${item.account} ${item.tags?.join(' ') || ''}`}
                         onSelect={() => handleCopyAndClose(item)}
-                        className="flex items-center justify-between px-3 py-2.5 rounded-xl text-zinc-200 hover:text-white hover:bg-zinc-800/70 aria-selected:bg-zinc-850 aria-selected:text-white cursor-pointer transition-colors"
+                        className="flex items-center justify-between px-2.5 py-2 rounded-lg text-zinc-200 hover:text-white hover:bg-white/[0.06] aria-selected:bg-white/[0.06] aria-selected:text-white cursor-pointer transition-colors"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <BrandIcon issuer={item.issuer} iconUrl={item.icon_url} size={28} className="shrink-0" />
                           <div className="min-w-0">
-                            <span className="font-semibold text-xs text-white truncate block">
+                            <span className="font-medium text-xs text-white truncate block">
                               {item.issuer}
                             </span>
                             <p className="text-[11px] text-zinc-400 truncate">{item.account}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 font-mono text-sm font-bold text-zinc-300 tracking-wider">
+                        <div className="flex items-center gap-2 font-mono text-xs md:text-sm font-semibold text-zinc-200 tracking-wider">
                           <span>{code}</span>
-                          <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                          <Copy className="w-3 h-3 text-zinc-500" />
                         </div>
                       </Command.Item>
                     );
@@ -259,9 +259,9 @@ export function CommandPalette({
               </Command.List>
 
               {/* Footer Keyboard Shortcuts Bar */}
-              <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-800/80 bg-zinc-900/40 text-[11px] text-zinc-400">
-                <span>Navegar con <kbd className="px-1 py-0.5 rounded bg-zinc-800 font-mono text-[10px]">↑</kbd> <kbd className="px-1 py-0.5 rounded bg-zinc-800 font-mono text-[10px]">↓</kbd></span>
-                <span>Presiona <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 font-mono text-[10px] text-zinc-200">Enter</kbd> para copiar</span>
+              <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.08] bg-[#08090a] text-[11px] text-zinc-500 font-mono">
+                <span>Navegar <kbd className="px-1 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-zinc-300">↑</kbd> <kbd className="px-1 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-zinc-300">↓</kbd></span>
+                <span>Copiar <kbd className="px-1.5 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-white">Enter</kbd></span>
               </div>
             </Command>
           </motion.div>

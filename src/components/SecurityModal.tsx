@@ -337,13 +337,13 @@ export function SecurityModal({
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 animate-in fade-in-0 duration-200" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-zinc-950/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_24px_68px_rgba(0,0,0,0.8)] rounded-2xl p-6 text-zinc-100 z-50 animate-in fade-in-0 zoom-in-95 duration-200 focus:outline-none max-h-[90vh] flex flex-col">
+        <Dialog.Overlay className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 animate-in fade-in-0 duration-200" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_68px_rgba(0,0,0,0.8)] rounded-xl p-6 text-zinc-100 z-50 animate-in fade-in-0 zoom-in-95 duration-200 focus:outline-none max-h-[90vh] flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400">
-                <Shield className="w-5 h-5" />
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top text-white">
+                <Shield className="w-4 h-4" />
               </div>
               <div>
                 <Dialog.Title className="text-base font-semibold text-white tracking-tight">
@@ -357,7 +357,7 @@ export function SecurityModal({
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all"
+                className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all"
                 aria-label="Cerrar panel"
               >
                 <X className="w-4 h-4" />
@@ -366,13 +366,13 @@ export function SecurityModal({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex bg-zinc-900/60 border border-white/[0.08] p-1 rounded-xl my-4 text-xs shrink-0">
+          <div className="flex bg-[#08090a] border border-white/[0.06] p-1 rounded-lg my-4 text-xs shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab('sessions')}
-              className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'sessions'
-                  ? 'bg-zinc-800 text-white shadow-sm'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -382,9 +382,9 @@ export function SecurityModal({
             <button
               type="button"
               onClick={() => setActiveTab('passkeys')}
-              className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'passkeys'
-                  ? 'bg-zinc-800 text-white shadow-sm'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -394,9 +394,9 @@ export function SecurityModal({
             <button
               type="button"
               onClick={() => setActiveTab('audit')}
-              className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'audit'
-                  ? 'bg-zinc-800 text-white shadow-sm'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -422,7 +422,7 @@ export function SecurityModal({
                       type="button"
                       onClick={handleRevokeOtherSessions}
                       disabled={isRevokingOthers}
-                      className="py-1.5 px-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-[11px] hover:bg-red-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                      className="py-1.5 px-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 font-medium text-[11px] hover:bg-rose-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <LogOut className="w-3 h-3" />
                       <span>{isRevokingOthers ? 'Revocando...' : 'Cerrar todas las demás'}</span>
@@ -432,22 +432,22 @@ export function SecurityModal({
 
                 {isLoadingSessions ? (
                   <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
-                    <RefreshCw className="w-5 h-5 animate-spin text-zinc-300" />
+                    <RefreshCw className="w-4 h-4 animate-spin text-zinc-300" />
                     <span>Consultando sesiones activas...</span>
                   </div>
                 ) : sessions.length === 0 ? (
-                  <div className="py-8 text-center bg-zinc-900/30 rounded-xl border border-white/[0.04] text-zinc-400">
+                  <div className="py-8 text-center bg-[#08090a] rounded-lg border border-white/[0.04] text-zinc-400">
                     No se encontraron sesiones registradas en el servidor.
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {sessions.map((session) => (
                       <div
                         key={session.id}
-                        className="p-3.5 rounded-xl bg-zinc-900/50 border border-white/[0.06] flex items-center justify-between gap-4 hover:border-white/[0.1] transition-all"
+                        className="p-3 rounded-lg bg-[#16181d]/50 border border-white/[0.06] flex items-center justify-between gap-4 hover:border-white/[0.12] transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.06] shrink-0">
+                          <div className="p-2 rounded-md bg-[#08090a] border border-white/[0.06] shrink-0">
                             {getDeviceIcon(session.device_name)}
                           </div>
                           <div className="min-w-0">
@@ -461,7 +461,7 @@ export function SecurityModal({
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5 font-mono">
                               {session.ip_country && (
                                 <span className="flex items-center gap-1">
                                   <Globe className="w-3 h-3 text-zinc-500" />
@@ -469,7 +469,7 @@ export function SecurityModal({
                                   <span>·</span>
                                 </span>
                               )}
-                              <span>Última actividad: {formatTimestamp(session.last_active_at)}</span>
+                              <span>Activo: {formatTimestamp(session.last_active_at)}</span>
                             </div>
                           </div>
                         </div>
@@ -478,10 +478,10 @@ export function SecurityModal({
                           <button
                             type="button"
                             onClick={() => handleRevokeSession(session.id)}
-                            className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
+                            className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0"
                             title="Cerrar sesión de este dispositivo"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
@@ -505,50 +505,50 @@ export function SecurityModal({
                     type="button"
                     onClick={handleEnrollPasskey}
                     disabled={isEnrollingPasskey}
-                    className="py-1.5 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium text-[11px] hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                    className="py-1.5 px-3 rounded-lg bg-white hover:bg-zinc-200 text-black font-medium text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-[0.99] disabled:opacity-50"
                   >
-                    <Plus className="w-3 h-3" />
-                    <span>{isEnrollingPasskey ? 'Vinculando...' : 'Vincular nueva Passkey'}</span>
+                    <Plus className="w-3.5 h-3.5 text-black" />
+                    <span>{isEnrollingPasskey ? 'Vinculando...' : 'Vincular Passkey'}</span>
                   </button>
                 </div>
 
                 {isLoadingPasskeys ? (
                   <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
-                    <RefreshCw className="w-5 h-5 animate-spin text-zinc-300" />
+                    <RefreshCw className="w-4 h-4 animate-spin text-zinc-300" />
                     <span>Cargando passkeys registradas...</span>
                   </div>
                 ) : passkeys.length === 0 ? (
-                  <div className="py-8 text-center bg-zinc-900/30 rounded-xl border border-white/[0.04] text-zinc-400 space-y-2">
+                  <div className="py-8 text-center bg-[#08090a] rounded-lg border border-white/[0.04] text-zinc-400 space-y-2">
                     <p>No tienes passkeys registradas en el servidor.</p>
                     <p className="text-[11px] text-zinc-500">
                       Vincular Windows Hello o biometría te permite desbloquear sin ingresar la contraseña maestra manualmente.
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {passkeys.map((pk) => {
                       const isLocalCredential = userConfig?.webauthn_credential_id === pk.id;
                       return (
                         <div
                           key={pk.id}
-                          className="p-3.5 rounded-xl bg-zinc-900/50 border border-white/[0.06] flex items-center justify-between gap-4 hover:border-white/[0.1] transition-all"
+                          className="p-3 rounded-lg bg-[#16181d]/50 border border-white/[0.06] flex items-center justify-between gap-4 hover:border-white/[0.12] transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="p-2 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 shrink-0">
-                              <Key className="w-4 h-4" />
+                            <div className="p-2 rounded-md bg-[#08090a] border border-white/[0.06] text-white shrink-0">
+                              <Key className="w-3.5 h-3.5 text-zinc-300" />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-white truncate">{pk.name}</span>
                                 {isLocalCredential && (
-                                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20 shrink-0">
+                                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.06] text-zinc-300 border border-white/[0.1] shrink-0">
                                     Este equipo
                                   </span>
                                 )}
                               </div>
-                              <div className="text-[11px] text-zinc-400 mt-0.5">
+                              <div className="text-[11px] text-zinc-400 mt-0.5 font-mono">
                                 {pk.device_name && <span>{pk.device_name} · </span>}
-                                <span>Vinculado el: {formatTimestamp(pk.created_at)}</span>
+                                <span>Vinculado: {formatTimestamp(pk.created_at)}</span>
                               </div>
                             </div>
                           </div>
@@ -556,10 +556,10 @@ export function SecurityModal({
                           <button
                             type="button"
                             onClick={() => handleRevokePasskey(pk.id)}
-                            className="py-1 px-2.5 rounded-lg text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-[11px] transition-all flex items-center gap-1 shrink-0"
+                            className="py-1 px-2.5 rounded-md text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-[11px] transition-all flex items-center gap-1 shrink-0"
                             title="Revocar passkey de este dispositivo"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3" />
                             <span>Eliminar</span>
                           </button>
                         </div>
@@ -582,18 +582,18 @@ export function SecurityModal({
 
                 {isLoadingAudit ? (
                   <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
-                    <RefreshCw className="w-5 h-5 animate-spin text-zinc-300" />
+                    <RefreshCw className="w-4 h-4 animate-spin text-zinc-300" />
                     <span>Cargando historial de seguridad...</span>
                   </div>
                 ) : auditLogs.length === 0 ? (
-                  <div className="py-8 text-center bg-zinc-900/30 rounded-xl border border-white/[0.04] text-zinc-400">
+                  <div className="py-8 text-center bg-[#08090a] rounded-lg border border-white/[0.04] text-zinc-400">
                     No hay registros de auditoría disponibles aún.
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {auditLogs.map((log) => {
                       let badge = (
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">
+                        <span className="px-1.5 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/[0.06] font-mono text-[10px]">
                           {log.event_type}
                         </span>
                       );
@@ -605,13 +605,13 @@ export function SecurityModal({
                         );
                       } else if (log.event_type === 'SESSION_REVOKED' || log.event_type === 'PASSKEY_REVOKED') {
                         badge = (
-                          <span className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 font-mono text-[10px]">
                             {log.event_type}
                           </span>
                         );
                       } else if (log.event_type === 'PASSKEY_ADDED') {
                         badge = (
-                          <span className="px-1.5 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-400 font-mono text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded bg-white/[0.08] border border-white/20 text-white font-mono text-[10px]">
                             {log.event_type}
                           </span>
                         );
@@ -620,12 +620,12 @@ export function SecurityModal({
                       return (
                         <div
                           key={log.id}
-                          className="p-3 rounded-xl bg-zinc-900/40 border border-white/[0.04] flex items-center justify-between text-[11px]"
+                          className="p-2.5 rounded-lg bg-[#16181d]/50 border border-white/[0.06] flex items-center justify-between text-[11px]"
                         >
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               {badge}
-                              <span className="text-zinc-300">{log.device_name || 'Desconocido'}</span>
+                              <span className="text-zinc-200">{log.device_name || 'Desconocido'}</span>
                               {log.ip_country && (
                                 <span className="text-zinc-500">({log.ip_country})</span>
                               )}
@@ -636,7 +636,7 @@ export function SecurityModal({
                               </p>
                             )}
                           </div>
-                          <div className="text-zinc-500 text-right shrink-0">
+                          <div className="text-zinc-500 font-mono text-right shrink-0">
                             {formatTimestamp(log.created_at)}
                           </div>
                         </div>
@@ -649,15 +649,15 @@ export function SecurityModal({
           </div>
 
           {/* Footer */}
-          <div className="pt-4 mt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-zinc-500">
+          <div className="pt-3 mt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-zinc-500">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Arquitectura de Conocimiento Cero (Zero-Knowledge) activa</span>
+              <span>Zero-Knowledge Architecture</span>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="py-1.5 px-4 rounded-lg bg-zinc-800 text-zinc-200 font-medium hover:bg-zinc-700 hover:text-white transition-all"
+              className="py-1.5 px-3.5 rounded-lg bg-[#16181d] text-zinc-200 border border-white/[0.08] font-medium hover:bg-[#1c1f24] hover:text-white transition-all text-xs"
             >
               Cerrar
             </button>

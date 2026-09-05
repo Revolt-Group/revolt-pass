@@ -123,16 +123,16 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
 
             <Dialog.Content asChild>
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                initial={{ opacity: 0, scale: 0.96, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-zinc-950 border border-zinc-800/90 rounded-2xl p-6 shadow-2xl z-50 text-zinc-100 focus:outline-none"
+                exit={{ opacity: 0, scale: 0.96, y: 10 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-[#0f1013] border border-white/[0.08] hairline-top rounded-xl p-6 shadow-[0_24px_68px_rgba(0,0,0,0.8)] z-50 text-zinc-100 focus:outline-none"
               >
-                <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
+                <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-violet-600/10 border border-violet-500/20 text-violet-400">
-                      <KeyRound className="w-5 h-5" />
+                    <div className="p-2 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top text-white">
+                      <KeyRound className="w-4 h-4 text-white" />
                     </div>
                     <div>
                       <Dialog.Title className="text-base font-semibold tracking-tight text-white">
@@ -146,22 +146,22 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                   <Dialog.Close asChild>
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors"
+                      className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </Dialog.Close>
                 </div>
 
                 {/* Generated password display */}
                 <div className="mt-5 relative">
-                  <div className="flex items-center justify-between p-3.5 bg-zinc-900/90 border border-zinc-800 rounded-xl font-mono text-sm md:text-base break-all select-all text-zinc-100 shadow-inner">
+                  <div className="flex items-center justify-between p-3.5 bg-[#08090a] border border-white/[0.08] rounded-lg font-mono text-sm md:text-base break-all select-all text-white">
                     <span className="tracking-wider pr-10">{password}</span>
                     <div className="flex items-center gap-1.5 ml-2 absolute right-2">
                       <button
                         type="button"
                         onClick={handleRegenerate}
-                        className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                        className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-[#16181d] transition-colors"
                         title="Regenerar contraseña"
                       >
                         <motion.div animate={{ rotate: isRotating ? 360 : 0 }}>
@@ -171,10 +171,10 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                       <button
                         type="button"
                         onClick={handleCopy}
-                        className={`p-2 rounded-lg transition-colors ${
+                        className={`p-1.5 rounded-md transition-colors ${
                           isCopied
                             ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                            : 'text-zinc-400 hover:text-white hover:bg-[#16181d]'
                         }`}
                         title="Copiar al portapapeles"
                       >
@@ -198,7 +198,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                         {entropyBits} bits de entropía
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
                       <motion.div
                         className={`h-full ${strengthColor.split(' ')[0]}`}
                         initial={{ width: 0 }}
@@ -210,13 +210,13 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                 </div>
 
                 {/* Controls and Settings */}
-                <div className="mt-6 space-y-4 text-sm">
+                <div className="mt-5 space-y-3.5 text-sm">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-xs font-medium text-zinc-300">
                         Longitud de la contraseña
                       </label>
-                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-zinc-800 text-violet-300 font-bold">
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#16181d] border border-white/[0.08] text-white font-medium">
                         {length} caracteres
                       </span>
                     </div>
@@ -226,58 +226,58 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                       max="64"
                       value={length}
                       onChange={(e) => setLength(Number(e.target.value))}
-                      className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                      className="w-full h-1.5 bg-[#16181d] rounded-lg appearance-none cursor-pointer accent-white"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 pt-2">
-                    <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 cursor-pointer hover:bg-zinc-900 transition-colors">
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/50 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
                       <input
                         type="checkbox"
                         checked={includeUpper}
                         onChange={(e) => setIncludeUpper(e.target.checked)}
-                        className="rounded bg-zinc-800 border-zinc-700 text-violet-600 focus:ring-0 cursor-pointer"
+                        className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
                       <span className="text-xs text-zinc-300 font-medium">Mayúsculas (A-Z)</span>
                     </label>
 
-                    <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 cursor-pointer hover:bg-zinc-900 transition-colors">
+                    <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/50 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
                       <input
                         type="checkbox"
                         checked={includeLower}
                         onChange={(e) => setIncludeLower(e.target.checked)}
-                        className="rounded bg-zinc-800 border-zinc-700 text-violet-600 focus:ring-0 cursor-pointer"
+                        className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
                       <span className="text-xs text-zinc-300 font-medium">Minúsculas (a-z)</span>
                     </label>
 
-                    <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 cursor-pointer hover:bg-zinc-900 transition-colors">
+                    <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/50 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
                       <input
                         type="checkbox"
                         checked={includeNumbers}
                         onChange={(e) => setIncludeNumbers(e.target.checked)}
-                        className="rounded bg-zinc-800 border-zinc-700 text-violet-600 focus:ring-0 cursor-pointer"
+                        className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
                       <span className="text-xs text-zinc-300 font-medium">Números (0-9)</span>
                     </label>
 
-                    <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 cursor-pointer hover:bg-zinc-900 transition-colors">
+                    <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/50 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
                       <input
                         type="checkbox"
                         checked={includeSymbols}
                         onChange={(e) => setIncludeSymbols(e.target.checked)}
-                        className="rounded bg-zinc-800 border-zinc-700 text-violet-600 focus:ring-0 cursor-pointer"
+                        className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
                       <span className="text-xs text-zinc-300 font-medium">Símbolos (!@#$%)</span>
                     </label>
                   </div>
 
-                  <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-zinc-900/40 border border-zinc-800/60 cursor-pointer hover:bg-zinc-900 transition-colors">
+                  <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/30 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
                     <input
                       type="checkbox"
                       checked={avoidAmbiguous}
                       onChange={(e) => setAvoidAmbiguous(e.target.checked)}
-                      className="rounded bg-zinc-800 border-zinc-700 text-violet-600 focus:ring-0 cursor-pointer"
+                      className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                     />
                     <span className="text-xs text-zinc-400">
                       Evitar caracteres ambiguos (<code className="text-zinc-300 font-mono">1, l, I, 0, O</code>)
@@ -285,20 +285,20 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                   </label>
                 </div>
 
-                <div className="mt-6 flex items-center justify-end gap-2.5 pt-4 border-t border-zinc-800/80">
+                <div className="mt-5 flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-900 transition-colors"
+                    className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
                   >
                     Cerrar
                   </button>
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="px-5 py-2 text-xs font-semibold rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-600/20 flex items-center gap-2 transition-all active:scale-95"
+                    className="px-4 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-zinc-200 text-black shadow-sm flex items-center gap-1.5 transition-all active:scale-[0.99]"
                   >
-                    {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {isCopied ? <Check className="w-3.5 h-3.5 text-black" /> : <Copy className="w-3.5 h-3.5 text-black" />}
                     {isCopied ? '¡Copiado!' : 'Copiar Contraseña'}
                   </button>
                 </div>
