@@ -1,59 +1,121 @@
+<p align="right">
+  <strong>Español</strong> | <a href="./README.en.md">English</a>
+</p>
+
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](./LICENSE)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
+[![Tests: 60/60](https://img.shields.io/badge/Tests-60%2F60_Passing-brightgreen.svg)](#)
 
-> Progressive Web App (PWA) de grado empresarial con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de claves de recuperación (*recovery codes*) y desbloqueo biométrico nativo (Windows Hello con PIN / Touch ID / Face ID).
-
-**Dominio Productivo:** [https://pass.revoltgroup.com.ar](https://pass.revoltgroup.com.ar)
+> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), soporte de logos personalizados con compresión local y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
 
 ---
 
-## 🏛️ Suite de Documentación de Ingeniería / Engineering Documentation
+## 🌟 Características Principales
 
-La especificación técnica canónica se encuentra disponible en Español e Inglés dentro del directorio [`/docs`](./docs):
+* **Cifrado Zero-Knowledge en Cliente:** Cifrado simétrico autenticado **AES-GCM de 256 bits** con vector de inicialización (`IV`) fresco por guardado y derivación de clave maestra mediante **Argon2id / PBKDF2 (600,000 rondas)** en un Web Worker dedicado.
+* **Infraestructura Serverless Edge (\$0 Costo Operativo):** Sincronización bidireccional ultrarrápida impulsada por **Cloudflare Workers** y la base de datos distribuida **Cloudflare D1 (SQLite Serverless)**, operando 100% dentro de la capa gratuita de Cloudflare.
+* **100% Offline-First:** Toda la bóveda se almacena localmente cifrada en **IndexedDB** (`idb`). Podés ver, generar códigos TOTP y gestionar respaldos completamente sin internet. Al recuperar conectividad, el motor de sincronización concilia automáticamente cambios diferidos (*Last-Write-Wins* a nivel de ítem).
+* **Compensación de Deriva Temporal Atómica (Time Drift):** Sincronización continua de reloj contra la hora atómica UTC de Cloudflare, eliminando rechazos de tokens por desajustes en el reloj del dispositivo.
+* **Desbloqueo Rápido con Passkeys / Hardware (WebAuthn Level 3):** Soporte nativo para **Windows Hello (PIN o biometría)** en PC de escritorio/laptops, y **Touch ID / Face ID / Huella** en iOS y Android mediante envoltura local de clave de hardware.
+* **Gestión de Códigos de Recuperación:** Soporte para pegado masivo de códigos de respaldo (ej. 8 o 10 códigos a la vez), control de estado (usado / disponible), copiado seguro y borrado automático del portapapeles a los 45 segundos.
+* **Personalización de Logos y Fotos de Cuenta:** Subida de imagen local, enlace directo HTTPS o pegado desde portapapeles (`Ctrl + V`), con compresión automática en cliente vía Canvas a WebP de 96x96 px (~2 KB) cifrado en la bóveda.
+* **PWA Instalable:** Service Worker con Workbox para caché agresivo de activos estáticos, compatible como app nativa de escritorio en Windows/macOS y app móvil en Android/iOS.
+
+---
+
+## 🚀 Despliegue Rápido y Auto-Alojamiento (Self-Hosting)
+
+Desplegar tu propia instancia privada y soberana de Revolt Pass en Cloudflare toma menos de 3 minutos:
+
+### 1. Clonar el repositorio e instalar dependencias
+```bash
+git clone https://github.com/Revolt-Group/revolt-pass.git
+cd revolt-pass
+pnpm install
+```
+
+### 2. Iniciar sesión en Cloudflare CLI
+```bash
+pnpm wrangler login
+```
+
+### 3. Crear la base de datos Cloudflare D1
+```bash
+pnpm wrangler d1 create revolt-pass-db
+```
+El comando devolverá un `database_id` único (UUID).
+
+### 4. Configurar `wrangler.toml`
+Copia la plantilla de configuración:
+```bash
+cp wrangler.toml.example wrangler.toml
+```
+Edita `wrangler.toml` y pega tu `database_id` en la sección correspondiente:
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "revolt-pass-db"
+database_id = "<PEGA_AQUI_TU_DATABASE_ID>"
+```
+
+### 5. Aplicar las migraciones de base de datos
+```bash
+pnpm wrangler d1 execute revolt-pass-db --file=schema.sql --remote
+```
+
+### 6. Compilar y Desplegar
+```bash
+pnpm build
+pnpm wrangler deploy
+```
+¡Listo! Cloudflare te otorgará una URL activa (ej. `https://revolt-pass.<tu-usuario>.workers.dev`) o podrás vincular tu propio dominio personalizado en la configuración del Worker.
+
+---
+
+## 🏛️ Suite de Documentación de Ingeniería
+
+La especificación técnica exhaustiva y canónica se encuentra disponible en Español e Inglés:
 
 | Documento (Español) | Document (English) | Descripción / Description |
 | :--- | :--- | :--- |
-| **[01-PRD.md](./docs/01-PRD.md)** | **[01-PRD.md](./docs/en/01-PRD.md)** | Requerimientos de producto, alcance y KPIs / Product Requirements & KPIs |
-| **[02-ARCHITECTURE.md](./docs/02-ARCHITECTURE.md)** | **[02-ARCHITECTURE.md](./docs/en/02-ARCHITECTURE.md)** | Arquitectura C4, flujos de datos y esquema D1 / System Architecture & D1 Schema |
-| **[03-SECURITY-AND-THREAT-MODEL.md](./docs/03-SECURITY-AND-THREAT-MODEL.md)** | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/en/03-SECURITY-AND-THREAT-MODEL.md)** | Criptografía, modelo STRIDE e higiene / Cryptography & Threat Model |
-| **[04-ADRS.md](./docs/04-ADRS.md)** | **[04-ADRS.md](./docs/en/04-ADRS.md)** | Registros de decisiones arquitectónicas / Architecture Decision Records |
-| **[05-ROADMAP.md](./docs/05-ROADMAP.md)** | **[05-ROADMAP.md](./docs/en/05-ROADMAP.md)** | Plan de fases secuenciales y DoD / Sequential Execution Roadmap & DoD |
-
----
-
-## 🚀 Pila Tecnológica
-
-- **Gestor de Paquetes:** `pnpm` (exclusivo).
-- **Frontend:** React 19 + TypeScript (Strict Mode) + Vite 8.
-- **Estilos:** Tailwind CSS v4 + Lucide React.
-- **Criptografía:** Web Crypto API nativa (`window.crypto.subtle`) + WebAuthn FIDO2 Level 3 (Windows Hello con PIN / Biometría).
-- **Almacenamiento Local:** IndexedDB mediante `idb` + Workbox PWA (`vite-plugin-pwa`) para disponibilidad 100% offline.
-- **Backend Edge:** Cloudflare Workers (Edge Runtime) + Cloudflare D1 (SQLite Serverless).
+| **[01-PRD.md](./docs/es/01-PRD.md)** | **[01-PRD.md](./docs/en/01-PRD.md)** | Requerimientos de producto, alcance y KPIs de ingeniería |
+| **[02-ARCHITECTURE.md](./docs/es/02-ARCHITECTURE.md)** | **[02-ARCHITECTURE.md](./docs/en/02-ARCHITECTURE.md)** | Arquitectura C4, flujos integrales de datos y esquema D1 |
+| **[03-SECURITY-AND-THREAT-MODEL.md](./docs/es/03-SECURITY-AND-THREAT-MODEL.md)** | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/en/03-SECURITY-AND-THREAT-MODEL.md)** | Criptografía, modelo STRIDE e higiene de memoria/portapapeles |
+| **[04-ADRS.md](./docs/es/04-ADRS.md)** | **[04-ADRS.md](./docs/en/04-ADRS.md)** | Registros de decisiones arquitectónicas (ADR-001 a ADR-006) |
+| **[05-ROADMAP.md](./docs/es/05-ROADMAP.md)** | **[05-ROADMAP.md](./docs/en/05-ROADMAP.md)** | Plan de fases secuenciales y criterios Definition of Done |
 
 ---
 
 ## 🛠️ Comandos de Desarrollo
 
 ```bash
-# Instalar dependencias
-pnpm install
-
-# Iniciar servidor de desarrollo frontend
+# Iniciar servidor de desarrollo frontend (Vite)
 pnpm dev
 
-# Compilar TypeScript y empaquetar para producción
+# Ejecutar la suite completa de pruebas unitarias y de integración (Vitest)
+pnpm test
+
+# Compilación y verificación estricta de tipos TypeScript
 pnpm build
 
-# Ejecutar linter
-pnpm lint
-
-# Simulación y despliegue con Wrangler
+# Ejecutar el Worker y la base de datos D1 en entorno local
 pnpm wrangler dev
-pnpm wrangler d1 migrations apply DB --local
 ```
+
+---
+
+## 🤝 Contribuciones
+
+Agradecemos las contribuciones de la comunidad. Por favor, consulta nuestra **[Guía de Contribución](./CONTRIBUTING.es.md)** (*or [English Contributing Guide](./CONTRIBUTING.md)*) antes de enviar un Pull Request o reportar incidentes de seguridad.
+
+---
+
+## 📄 Licencia
+
+Este proyecto se distribuye bajo la licencia **MIT**. Consulta el archivo [`LICENSE`](./LICENSE) para más detalles.

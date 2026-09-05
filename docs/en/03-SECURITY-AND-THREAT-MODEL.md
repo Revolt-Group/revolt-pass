@@ -7,7 +7,7 @@
 | **Version** | `1.0.0-PROD` |
 | **Status** | Approved / Cryptographic Grade Security Specification |
 | **Frameworks & Standards** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
-| **Production Domain** | `https://pass.revoltgroup.com.ar` |
+| **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
 
 ---
 
@@ -158,10 +158,10 @@ In garbage-collected browser environments, guaranteed memory wiping poses unique
 3. Upon lock event, the state variable `activeSessionState.masterKey` is set to `null` and dereferencing is invoked on vault items to allow immediate V8 garbage collection.
 
 ### 3.2 Content Security Policy (CSP) on Cloudflare
-The Worker and response headers emitted by Cloudflare for the subdomain `https://pass.revoltgroup.com.ar` apply the following canonical directive:
+The Worker and response headers emitted by Cloudflare for the subdomain `https://<your-domain-or-subdomain>.workers.dev` apply the following canonical directive:
 
 ```http
-Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.simpleicons.org; connect-src 'self' https://pass.revoltgroup.com.ar; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.simpleicons.org; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY

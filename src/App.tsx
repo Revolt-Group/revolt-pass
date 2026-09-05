@@ -1237,7 +1237,7 @@ export function App() {
                 </span>
               </div>
               <p className="text-[10px] text-zinc-500 hidden sm:block">
-                pass.revoltgroup.com.ar · Zero-Knowledge
+                {typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'Revolt Pass'} · Zero-Knowledge
               </p>
             </div>
           </div>

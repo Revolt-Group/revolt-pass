@@ -1,6 +1,6 @@
 /**
  * Revolt Pass - Tipos canónicos del Dominio y Criptografía
- * Conforme a docs/02-ARCHITECTURE.md
+ * Conforme a docs/es/02-ARCHITECTURE.md / docs/en/02-ARCHITECTURE.md
  */
 
 export interface RecoveryCode {

@@ -32,7 +32,7 @@ Revolt Pass must be available and provide an experience indistinguishable from a
 ### Key Decision Drivers
 1. **Iteration Velocity and Single Codebase:** Maintain a shared codebase (TypeScript + React) across all target platforms.
 2. **System Resource Consumption:** Avoid the massive RAM overhead typical of full Chromium-based wrappers (Electron typically consumes 150 MB - 300 MB of RAM at idle).
-3. **Sovereign Distribution and Instant Deployment:** Ability to deploy emergency security fixes to the `https://pass.revoltgroup.com.ar` subdomain within seconds, without waiting for Apple App Store or Google Play Store approval processes.
+3. **Sovereign Distribution and Instant Deployment:** Ability to deploy emergency security fixes to the `https://<your-domain-or-subdomain>.workers.dev` subdomain within seconds, without waiting for Apple App Store or Google Play Store approval processes.
 4. **Access to Cryptographic Hardware:** Availability of Web Crypto API and WebAuthn (FIDO2) within the modern web standards across all major browsers.
 
 ### Evaluated Alternatives
@@ -60,7 +60,7 @@ Revolt Pass must be available and provide an experience indistinguishable from a
 * **Disadvantages:**
   * Mobile support still maturing with higher cross-compilation complexity.
   * Requires Rust toolchain installed in CI/CD environments.
-  * Higher friction for direct web deployments to `pass.revoltgroup.com.ar`.
+  * Higher friction for direct web deployments to `<your-domain.com>`.
 
 ### Decision
 Adopt **Progressive Web App (PWA)** using `@vite-pwa/vite-plugin-pwa` and Workbox. Allows transparent installation on Windows as a standalone windowed app with full **Windows Hello** support, and on mobile via "Add to Home Screen".
@@ -88,7 +88,7 @@ The system requires a reliable, globally distributed synchronization backend wit
   * Distributed serverless SQLite engine running natively on Cloudflare's edge network.
   * Generous free tier: 100,000 requests/day on Workers, 5,000,000 reads/day and 100,000 writes/day on D1.
   * 0 ms cold start latency powered by V8 Isolates.
-  * `pass.revoltgroup.com.ar` already resides on Cloudflare DNS servers, simplifying routing.
+  * `<your-domain.com>` already resides on Cloudflare DNS servers, simplifying routing.
   * Simple relational SQL schema with full ACID transactions.
 * **Disadvantages:**
   * 5 GB maximum database size on free tier (completely irrelevant, as the entire vault is under 1 MB).
@@ -136,7 +136,7 @@ Historically, many web applications relied on pure JavaScript libraries such as 
   * Zero kilobytes added to application distribution bundle.
   * Keys marked `extractable: false` reside isolated in protected browser memory.
 * **Disadvantages:**
-  * Requires secure context (`https://` or `localhost`), guaranteed by design on `pass.revoltgroup.com.ar`.
+  * Requires secure context (`https://` or `localhost`), guaranteed by design on `<your-domain.com>`.
   * Asynchronous Promise-based API requiring structured code design.
 
 #### 2. CryptoJS (`crypto-js`)

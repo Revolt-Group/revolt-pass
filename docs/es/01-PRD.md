@@ -7,10 +7,10 @@
 | **Versión** | `1.0.0-PROD` |
 | **Estado** | Aprobado / Especificación Canónica |
 | **Organización** | Revolt Group |
-| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
+| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Repositorio Git** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Primaria** | `main` |
-| **Clasificación de Seguridad** | Confidencial - Consumo Interno |
+| **Licencia / Distribución** | Código Abierto (Open Source - MIT) |
 
 ---
 

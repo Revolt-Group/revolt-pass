@@ -1,6 +1,6 @@
 /**
- * Módulo de Persistencia Local Segura con IndexedDB (idb wrapper).
- * Implementa los tres almacenes canónicos según docs/02-ARCHITECTURE.md:
+ * Gestor de Almacenamiento Local Seguro en IndexedDB con 'idb'.
+ * Implementa los tres almacenes canónicos según docs/es/02-ARCHITECTURE.md / docs/en/02-ARCHITECTURE.md:
  * - vault_encrypted: Bóveda cifrada y estado de sincronización local.
  * - user_config: Perfil de usuario, salt y envoltura WebAuthn.
  * - sync_queue: Cola transaccional de operaciones diferidas offline.

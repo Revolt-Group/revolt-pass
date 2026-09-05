@@ -7,7 +7,7 @@
 | **Versión** | `1.0.0-PROD` |
 | **Estado** | Aprobado / Especificación de Seguridad de Grado Criptográfico |
 | **Marco de Referencia** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
-| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
+| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 
 ---
 
@@ -158,10 +158,10 @@ En entornos de navegador con recolección de basura (*Garbage Collection*), la s
 3. Al dispararse el evento de bloqueo (*lock*), la variable de estado `activeSessionState.masterKey` se asigna a `null` y se invoca la dereferencia de los elementos de la bóveda para permitir su recolección inmediata por el motor V8.
 
 ### 3.2 Content Security Policy (CSP) en Cloudflare
-El Worker y las cabeceras emitidas por Cloudflare para el subdominio `https://pass.revoltgroup.com.ar` aplican la siguiente directiva canónica:
+El Worker y las cabeceras emitidas por Cloudflare para el subdominio `https://<tu-dominio-o-subdominio>.workers.dev` aplican la siguiente directiva canónica:
 
 ```http
-Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.simpleicons.org; connect-src 'self' https://pass.revoltgroup.com.ar; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.simpleicons.org; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY

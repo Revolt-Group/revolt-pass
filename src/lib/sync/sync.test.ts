@@ -68,7 +68,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       globalThis.fetch = mockFetch;
 
       try {
-        const calculatedOffset = await syncTimeWithServer('https://pass.revoltgroup.com.ar');
+        const calculatedOffset = await syncTimeWithServer('https://pass.example.com');
         // El offset debe rondar los ~15,000 ms
         expect(Math.abs(calculatedOffset - 15000)).toBeLessThan(500);
         expect(getTimeDriftOffsetMs()).toBe(calculatedOffset);
@@ -94,7 +94,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       globalThis.fetch = mockFetch;
 
       try {
-        const calculatedOffset = await syncTimeWithServer('https://pass.revoltgroup.com.ar');
+        const calculatedOffset = await syncTimeWithServer('https://pass.example.com');
         expect(calculatedOffset).toBe(0);
         expect(getTimeDriftOffsetMs()).toBe(0);
       } finally {
@@ -120,7 +120,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       globalThis.fetch = mockFetch;
 
       try {
-        const calculatedOffset = await syncTimeWithServer('https://pass.revoltgroup.com.ar');
+        const calculatedOffset = await syncTimeWithServer('https://pass.example.com');
         expect(calculatedOffset).toBe(0);
         expect(getTimeDriftOffsetMs()).toBe(0);
       } finally {
@@ -136,7 +136,7 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
       globalThis.fetch = mockFetch;
 
       try {
-        const calculatedOffset = await syncTimeWithServer('https://pass.revoltgroup.com.ar');
+        const calculatedOffset = await syncTimeWithServer('https://pass.example.com');
         expect(calculatedOffset).toBe(0);
         expect(getTimeDriftOffsetMs()).toBe(0);
       } finally {

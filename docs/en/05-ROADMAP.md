@@ -8,7 +8,7 @@
 | **Status** | Approved / Sequential Execution Plan |
 | **Remote Repository** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Primary Branch** | `main` |
-| **Target URL** | `https://pass.revoltgroup.com.ar` |
+| **Target URL** | `https://<your-domain-or-subdomain>.workers.dev` |
 
 ---
 
@@ -82,7 +82,7 @@ gantt
   3. Endpoint `GET /api/time`: Emitting server UTC timestamp with `Cache-Control: no-store` headers.
   4. Authentication endpoints: `POST /api/auth/register`, `GET /api/auth/salt`.
   5. Vault endpoints: `GET /api/vault` and `PUT /api/vault` with optimistic concurrency control (`version`).
-  6. Strict security headers middleware (CSP, HSTS, X-Frame-Options, CORS for `pass.revoltgroup.com.ar`).
+  6. Strict security headers middleware (CSP, HSTS, X-Frame-Options, CORS for `<your-domain.com>`).
 * **Definition of Done (DoD) - Phase 3:**
   - [x] D1 database initialized with `users`, `vaults`, and `sync_logs` tables.
   - [x] `GET /api/time` returns server timestamp with latency under 50ms.
@@ -156,15 +156,15 @@ gantt
 ---
 
 ### PHASE 8: Security Audit, QA & Production Deployment
-* **Objective:** Perform exhaustive verification, dependency checking, and production deployment onto `pass.revoltgroup.com.ar`.
+* **Objective:** Perform exhaustive verification, dependency checking, and production deployment onto `<your-domain.com>`.
 * **Key Activities:**
   1. Dependency security audit (`pnpm audit`).
   2. Bundle size verification and dead-code elimination (*tree shaking*).
   3. API and D1 database deployment via `wrangler deploy` and `wrangler d1 migrations apply`.
-  4. Frontend deployment on Cloudflare Pages / Workers Sites linked to `pass.revoltgroup.com.ar`.
+  4. Frontend deployment on Cloudflare Pages / Workers Sites linked to `<your-domain.com>`.
   5. DNS record verification, SSL certificates, and security headers in production.
 * **Definition of Done (DoD) - Phase 8:**
-  - [x] Production fully operational and responding at `https://pass.revoltgroup.com.ar`.
+  - [x] Production fully operational and responding at `https://<your-domain-or-subdomain>.workers.dev`.
   - [x] "A+" rating on SSL Labs / SecurityHeaders security tests.
   - [x] Complete user registration and vault synchronization tested on live Cloudflare D1.
   - [x] Zero financial budget consumption (100% contained within Cloudflare's free tier).

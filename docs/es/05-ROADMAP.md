@@ -8,7 +8,7 @@
 | **Estado** | Aprobado / Plan de Ejecución Secuencial |
 | **Repositorio Remoto** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Principal** | `main` |
-| **Target URL** | `https://pass.revoltgroup.com.ar` |
+| **Target URL** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 
 ---
 
@@ -82,7 +82,7 @@ gantt
   3. Endpoint `GET /api/time`: Emisión del timestamp UTC del servidor con cabeceras `Cache-Control: no-store`.
   4. Endpoints de autenticación: `POST /api/auth/register`, `GET /api/auth/salt`.
   5. Endpoints de bóveda: `GET /api/vault` y `PUT /api/vault` con control de concurrencia optimista (`version`).
-  6. Middleware de cabeceras de seguridad estrictas (CSP, HSTS, X-Frame-Options, CORS para `pass.revoltgroup.com.ar`).
+  6. Middleware de cabeceras de seguridad estrictas (CSP, HSTS, X-Frame-Options, CORS para `<tu-dominio.com>`).
 * **Definition of Done (DoD) - Fase 3:**
   - [ ] Base de datos D1 inicializada con tablas `users`, `vaults` y `sync_logs`.
   - [ ] `GET /api/time` devuelve el timestamp del servidor con latencia inferior a 50ms.
@@ -156,15 +156,15 @@ gantt
 ---
 
 ### FASE 8: Auditoría de Seguridad, QA & Despliegue en Producción
-* **Objetivo:** Someter el sistema a verificación exhaustiva, comprobación de dependencias y despliegue sobre `pass.revoltgroup.com.ar`.
+* **Objetivo:** Someter el sistema a verificación exhaustiva, comprobación de dependencias y despliegue sobre `<tu-dominio.com>`.
 * **Actividades Principales:**
   1. Auditoría de seguridad de dependencias (`pnpm audit`).
   2. Verificación de bundle size y eliminación de código muerto (*tree shaking*).
   3. Despliegue de la API y base de datos D1 mediante `wrangler deploy` y `wrangler d1 migrations apply`.
-  4. Despliegue del frontend en Cloudflare Pages / Workers Sites enlazado al subdominio `pass.revoltgroup.com.ar`.
+  4. Despliegue del frontend en Cloudflare Pages / Workers Sites enlazado al subdominio `<tu-dominio.com>`.
   5. Verificación de registros DNS, certificados SSL y directivas de cabeceras de seguridad en producción.
 * **Definition of Done (DoD) - Fase 8:**
-  - [ ] Producción operativa y respondiendo sobre `https://pass.revoltgroup.com.ar`.
+  - [ ] Producción operativa y respondiendo sobre `https://<tu-dominio-o-subdominio>.workers.dev`.
   - [ ] Calificación "A+" en pruebas de cabeceras de seguridad SSL Labs / SecurityHeaders.
   - [ ] Registro completo del primer usuario y sincronización de bóveda comprobada en Cloudflare D1 real.
   - [ ] Cero consumo de presupuesto financiero (100% contenido en el free tier de Cloudflare).

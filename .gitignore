@@ -13,6 +13,8 @@ build/
 .wrangler/
 .dev.vars
 wrangler.jsonc.backup
+wrangler.toml
+!wrangler.toml.example
 
 # Environment variables & secrets (CRITICAL FOR ZERO-KNOWLEDGE)
 .env

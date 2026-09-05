@@ -6,7 +6,7 @@
 | **Identificador de Documento** | `RP-ARCH-002` |
 | **Versión** | `1.0.0-PROD` |
 | **Estado** | Aprobado / Especificación de Arquitectura |
-| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
+| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Pila Tecnológica** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
 
 ---
@@ -75,7 +75,7 @@ flowchart TB
 ## 2. Flujo Integral de Datos y Ciclos de Vida
 
 ### 2.1 Flujo de Registro e Inicialización de Bóveda
-1. El usuario accede a `https://pass.revoltgroup.com.ar` e introduce un nombre de usuario y una Contraseña Maestra (*Master Password*).
+1. El usuario accede a `https://<tu-dominio-o-subdominio>.workers.dev` e introduce un nombre de usuario y una Contraseña Maestra (*Master Password*).
 2. El cliente genera un `kdf_salt` criptográfico de 16 bytes usando `crypto.getRandomValues`.
 3. El cliente despacha al Web Worker la derivación de la `MasterKey` mediante `PBKDF2-SHA256` (600,000 iteraciones).
 4. El cliente inicializa una lista vacía de `VaultItem[]`, la serializa a JSON y genera un `IV` aleatorio de 12 bytes.

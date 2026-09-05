@@ -191,7 +191,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
   });
 
   it('GET /api/time debe devolver el timestamp del servidor con Cache-Control no-store', async () => {
-    const req = new Request('https://pass.revoltgroup.com.ar/api/time', { method: 'GET' });
+    const req = new Request('https://pass.example.com/api/time', { method: 'GET' });
     const res = await handleApiRequest(req, env);
 
     expect(res.status).toBe(200);
@@ -213,7 +213,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
       iv: 'MDEyMzQ1Njc4OTAx',
     };
 
-    const req = new Request('https://pass.revoltgroup.com.ar/api/auth/register', {
+    const req = new Request('https://pass.example.com/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -249,7 +249,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
       iv: 'iv...',
     };
 
-    const req = new Request('https://pass.revoltgroup.com.ar/api/auth/register', {
+    const req = new Request('https://pass.example.com/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -271,7 +271,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
       passkey_credential_id: 'cred_abc_123',
     });
 
-    const req = new Request('https://pass.revoltgroup.com.ar/api/auth/salt?username=operador', {
+    const req = new Request('https://pass.example.com/api/auth/salt?username=operador', {
       method: 'GET',
     });
 
@@ -285,7 +285,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
   });
 
   it('GET /api/auth/salt debe devolver 404 si el usuario no existe', async () => {
-    const req = new Request('https://pass.revoltgroup.com.ar/api/auth/salt?username=no_existe', {
+    const req = new Request('https://pass.example.com/api/auth/salt?username=no_existe', {
       method: 'GET',
     });
 
@@ -295,7 +295,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
 
   it('GET /api/vault debe requerir X-User-Id y soportar ETag (HTTP 304 Not Modified)', async () => {
     // 1. Sin cabecera de autenticación -> 401
-    const reqUnauthorized = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+    const reqUnauthorized = new Request('https://pass.example.com/api/vault', {
       method: 'GET',
     });
     const resUnauthorized = await handleApiRequest(reqUnauthorized, env);
@@ -311,7 +311,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
       version: 1,
     });
 
-    const reqOk = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+    const reqOk = new Request('https://pass.example.com/api/vault', {
       method: 'GET',
       headers: { 'X-User-Id': userId },
     });
@@ -324,7 +324,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(json.data?.encrypted_blob).toBe('blob_v1');
 
     // 3. Petición condicional con If-None-Match idéntico -> 304 Not Modified
-    const reqNotModified = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+    const reqNotModified = new Request('https://pass.example.com/api/vault', {
       method: 'GET',
       headers: {
         'X-User-Id': userId,
@@ -346,7 +346,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     });
 
     // Intento 1: Enviar versión 4 (salteando la 3) -> Conflicto 409
-    const reqConflict = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+    const reqConflict = new Request('https://pass.example.com/api/vault', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -368,7 +368,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect((jsonConflict.error?.details as any)?.client_version).toBe(4);
 
     // Intento 2: Enviar versión 3 (exactamente servidor.version + 1) -> Exitoso 200
-    const reqValid = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+    const reqValid = new Request('https://pass.example.com/api/vault', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -394,7 +394,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     expect(updatedVault?.encrypted_blob).toBe('blob_v3_valido');
 
     // Intento 3: Reintentar enviar versión 3 -> Conflicto 409 porque ahora el servidor está en 3
-    const reqRetry = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+    const reqRetry = new Request('https://pass.example.com/api/vault', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -415,7 +415,7 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
   });
 
   it('OPTIONS debe responder con 204 y cabeceras CORS en preflight', async () => {
-    const req = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+    const req = new Request('https://pass.example.com/api/vault', {
       method: 'OPTIONS',
     });
 

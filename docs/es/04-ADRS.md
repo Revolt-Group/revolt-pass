@@ -32,7 +32,7 @@ Revolt Pass debe estar disponible y ofrecer una experiencia indistinguible de un
 ### Factores Clave de Decisión (Drivers)
 1. **Velocidad de Iteración y Código Único:** Mantener una base de código común (TypeScript + React) para todas las plataformas.
 2. **Consumo de Recursos del Sistema:** Evitar el impacto masivo de memoria RAM característico de empaquetadores basados en Chromium completo (Electron suele consumir 150 MB - 300 MB de RAM en reposo).
-3. **Distribución Soberana y Despliegue Inmediato:** Posibilidad de desplegar correcciones de seguridad de emergencia al subdominio `https://pass.revoltgroup.com.ar` en segundos, sin esperar procesos de aprobación de Apple App Store o Google Play Store.
+3. **Distribución Soberana y Despliegue Inmediato:** Posibilidad de desplegar correcciones de seguridad de emergencia al subdominio `https://<tu-dominio-o-subdominio>.workers.dev` en segundos, sin esperar procesos de aprobación de Apple App Store o Google Play Store.
 4. **Acceso a Hardware Criptográfico:** Disponibilidad de Web Crypto API y WebAuthn (FIDO2) dentro del estándar web moderno en todos los navegadores principales.
 
 ### Alternativas Evaluadas
@@ -60,7 +60,7 @@ Revolt Pass debe estar disponible y ofrecer una experiencia indistinguible de un
 * **Desventajas:**
   * Soporte móvil aún en maduración y con mayor complejidad de compilación cruzada.
   * Requiere cadena de herramientas de Rust instalada en los entornos de CI/CD.
-  * Mayor sobrecarga para despliegues web directos en `pass.revoltgroup.com.ar`.
+  * Mayor sobrecarga para despliegues web directos en `<tu-dominio.com>`.
 
 ### Decisión
 Se adopta **Progressive Web App (PWA)** utilizando `@vite-pwa/vite-plugin-pwa` y Workbox. Permite instalar la app de forma transparente en Windows como una aplicación de ventana independiente con soporte total de **Windows Hello**, y en móviles vía "Agregar a pantalla de inicio".
@@ -88,7 +88,7 @@ El sistema requiere un backend de sincronización confiable, con presencia globa
   * Motor SQLite serverless distribuido nativamente sobre la red perimetral de Cloudflare.
   * Generosa cuota gratuita: 100,000 requests/día en Workers, 5,000,000 lecturas/día y 100,000 escrituras/día en D1.
   * Latencia de frío (*cold start*) de 0 ms gracias a V8 Isolates.
-  * El dominio `pass.revoltgroup.com.ar` ya reside sobre los servidores DNS de Cloudflare, facilitando el ruteo directo.
+  * El dominio `<tu-dominio.com>` ya reside sobre los servidores DNS de Cloudflare, facilitando el ruteo directo.
   * Esquema relacional SQL simple con transacciones ACID completas.
 * **Desventajas:**
   * Tamaño máximo de base de datos de 5 GB en tier gratuito (absolutamente irrelevante para este proyecto, ya que la bóveda completa consume menos de 1 MB).
@@ -136,7 +136,7 @@ Históricamente, muchas aplicaciones web han dependido de bibliotecas de JavaScr
   * Cero kilobytes añadidos al paquete de distribución de la aplicación.
   * Llaves marcadas como `extractable: false` residen aisladas en memoria protegida del navegador.
 * **Desventajas:**
-  * Requiere contexto seguro (`https://` o `localhost`), lo cual está garantizado por diseño en `pass.revoltgroup.com.ar`.
+  * Requiere contexto seguro (`https://` o `localhost`), lo cual está garantizado por diseño en `<tu-dominio.com>`.
   * La API es asíncrona basada en `Promise`, lo que exige una estructura de código rigurosa.
 
 #### 2. CryptoJS (`crypto-js`)

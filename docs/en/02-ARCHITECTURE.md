@@ -6,7 +6,7 @@
 | **Document Identifier** | `RP-ARCH-002` |
 | **Version** | `1.0.0-PROD` |
 | **Status** | Approved / Architecture Specification |
-| **Production Domain** | `https://pass.revoltgroup.com.ar` |
+| **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
 | **Tech Stack** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
 
 ---
@@ -75,7 +75,7 @@ flowchart TB
 ## 2. End-to-End Data Flows and Lifecycles
 
 ### 2.1 Registration and Vault Initialization Flow
-1. The user accesses `https://pass.revoltgroup.com.ar` and enters a username and Master Password.
+1. The user accesses `https://<your-domain-or-subdomain>.workers.dev` and enters a username and Master Password.
 2. The client generates a 16-byte cryptographic `kdf_salt` using `crypto.getRandomValues`.
 3. The client dispatches `MasterKey` derivation to the Web Worker via `PBKDF2-SHA256` (600,000 iterations).
 4. The client initializes an empty `VaultItem[]` array, serializes it to JSON, and generates a random 12-byte `IV`.
