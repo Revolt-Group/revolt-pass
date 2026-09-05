@@ -234,7 +234,7 @@ export function App() {
                 },
                 body: JSON.stringify({
                   credential_id: config.webauthn_credential_id,
-                  name: 'Windows Hello / Dispositivo Principal',
+                  name: config.passkey_name || 'Windows Hello / Dispositivo Principal',
                 }),
               }).catch(() => {});
             }
@@ -566,6 +566,7 @@ export function App() {
           body: JSON.stringify({
             user_id: cfg.user_id,
             session_token: cfg.session_token,
+            device_name: cfg.device_name,
             passkey_id: options?.passkeyId,
           }),
         });
@@ -606,7 +607,7 @@ export function App() {
           headers,
           body: JSON.stringify({
             credential_id: cfg.webauthn_credential_id,
-            name: 'Windows Hello / Dispositivo Principal',
+            name: cfg.passkey_name || 'Windows Hello / Dispositivo Principal',
           }),
         });
       } catch {
@@ -740,12 +741,13 @@ export function App() {
         if (userConfig.session_token) {
           headers['X-Session-Token'] = userConfig.session_token;
         }
+        const passkeyName = userConfig.passkey_name || 'Windows Hello / Dispositivo Local';
         fetch('/api/passkeys', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             credential_id: reg.credentialId,
-            name: 'Windows Hello / Dispositivo Local',
+            name: passkeyName,
           }),
         }).catch(() => {});
       }
@@ -754,6 +756,7 @@ export function App() {
         ...userConfig,
         webauthn_credential_id: reg.credentialId,
         wrapped_master_key: JSON.stringify(wrappedPkg),
+        passkey_name: userConfig.passkey_name || 'Windows Hello / Dispositivo Local',
       };
 
       await saveUserConfig(updatedConfig);

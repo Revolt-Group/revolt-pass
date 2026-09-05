@@ -58,6 +58,8 @@ export interface LocalUserConfig {
   username: string;
   kdf_salt: string;
   session_token?: string;
+  device_name?: string;
+  passkey_name?: string;
   webauthn_credential_id?: string;
   wrapped_master_key?: string;
   auto_lock_minutes: number;

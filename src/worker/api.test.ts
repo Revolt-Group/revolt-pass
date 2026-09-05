@@ -387,14 +387,21 @@ class MockD1Database {
             }
           } else if (q.includes('insert into passkeys')) {
             const [id, user_id, name, device_name] = s.params as [string, string, string, string];
-            db.passkeys.set(id, {
-              id,
-              user_id,
-              name,
-              device_name,
-              created_at: Math.floor(Date.now() / 1000),
-              is_revoked: 0,
-            });
+            const existing = db.passkeys.get(id);
+            if (existing) {
+              existing.is_revoked = 0;
+              existing.last_used_at = Math.floor(Date.now() / 1000);
+              if (!existing.name) existing.name = name;
+            } else {
+              db.passkeys.set(id, {
+                id,
+                user_id,
+                name,
+                device_name,
+                created_at: Math.floor(Date.now() / 1000),
+                is_revoked: 0,
+              });
+            }
           } else if (q.includes('update passkeys set last_used_at =')) {
             const [pkId, uId] = s.params as [string, string];
             const passkey = db.passkeys.get(pkId);
@@ -1076,5 +1083,99 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     const audit = mockDb.auditLogs.find((l) => l.event_type === 'PASSKEY_RENAMED');
     expect(audit).toBeDefined();
     expect(audit?.device_name).toBe('Main Desktop');
+  });
+
+  it('preserves customized device_name when refreshing session via POST /api/auth/session without explicit device_name', async () => {
+    const userId = 'usr_preserve_device';
+    const sessionToken = 'token_preserve_dev_test';
+    const tokenH = await hashToken(sessionToken);
+    const sessionId = 'sess_preserve_1';
+
+    mockDb.sessions.set(sessionId, {
+      id: sessionId,
+      user_id: userId,
+      token_hash: tokenH,
+      device_name: 'Custom PC Name',
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      ip_country: 'AR',
+      last_active_at: Math.floor(Date.now() / 1000),
+      created_at: Math.floor(Date.now() / 1000),
+      expires_at: Math.floor(Date.now() / 1000) + 86400,
+      is_revoked: 0,
+    });
+
+    // Client reloads and touches session without sending a new device_name
+    const req = new Request('https://pass.example.com/api/auth/session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        'X-Session-Token': sessionToken,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      },
+      body: JSON.stringify({ user_id: userId, session_token: sessionToken }),
+    });
+
+    const res = await handleApiRequest(req, env);
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as ApiResponse<{ session: { device_name: string } }>;
+    expect(json.data?.session.device_name).toBe('Custom PC Name');
+
+    const inDb = mockDb.sessions.get(sessionId);
+    expect(inDb?.device_name).toBe('Custom PC Name');
+  });
+
+  it('preserves customized passkey name when re-syncing passkey via POST /api/passkeys with default name', async () => {
+    const userId = 'usr_preserve_passkey';
+    const sessionToken = 'token_preserve_pk_test';
+    const tokenH = await hashToken(sessionToken);
+    const passkeyId = 'cred_preserve_pk';
+
+    mockDb.sessions.set('sess_pres_pk', {
+      id: 'sess_pres_pk',
+      user_id: userId,
+      token_hash: tokenH,
+      device_name: 'Main Desktop',
+      user_agent: 'Chrome',
+      ip_country: 'AR',
+      last_active_at: Math.floor(Date.now() / 1000),
+      created_at: Math.floor(Date.now() / 1000),
+      expires_at: Math.floor(Date.now() / 1000) + 86400,
+      is_revoked: 0,
+    });
+
+    // Passkey was customized by user
+    mockDb.passkeys.set(passkeyId, {
+      id: passkeyId,
+      user_id: userId,
+      name: 'Mi Windows Hello Personal',
+      device_name: 'Windows · Chrome',
+      created_at: Math.floor(Date.now() / 1000),
+      is_revoked: 0,
+    });
+
+    // Client reloads and auto-sync sends POST /api/passkeys with default name
+    const req = new Request('https://pass.example.com/api/passkeys', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        'X-Session-Token': sessionToken,
+      },
+      body: JSON.stringify({
+        credential_id: passkeyId,
+        name: 'Windows Hello / Dispositivo Principal',
+      }),
+    });
+
+    const res = await handleApiRequest(req, env);
+    expect(res.status).toBe(201);
+
+    const json = (await res.json()) as ApiResponse<{ passkey: { name: string } }>;
+    expect(json.data?.passkey.name).toBe('Mi Windows Hello Personal');
+
+    const inDb = mockDb.passkeys.get(passkeyId);
+    expect(inDb?.name).toBe('Mi Windows Hello Personal');
   });
 });

@@ -129,11 +129,13 @@ export function SecurityModal({
           const localCredId = userConfig.webauthn_credential_id;
           const exists = list.some((p) => p.id === localCredId);
           if (!exists) {
+            const pkName = userConfig.passkey_name || 'Windows Hello / Este dispositivo';
+            const devName = userConfig.device_name || 'Windows · Chrome';
             const localPasskey: PasskeyInfo = {
               id: localCredId,
               user_id: userId,
-              name: 'Windows Hello / Este dispositivo',
-              device_name: 'Windows · Chrome',
+              name: pkName,
+              device_name: devName,
               created_at: Math.floor(Date.now() / 1000),
               last_used_at: Math.floor(Date.now() / 1000),
               is_revoked: 0,
@@ -150,7 +152,7 @@ export function SecurityModal({
               },
               body: JSON.stringify({
                 credential_id: localCredId,
-                name: 'Windows Hello / Este dispositivo',
+                name: pkName,
               }),
             }).catch(() => {});
           }
@@ -245,11 +247,18 @@ export function SecurityModal({
 
       if (!res.ok) throw new Error('No se pudo actualizar el nombre del dispositivo');
 
-      toast.success('Dispositivo renombrado correctamente');
+      toast.success(t('toasts.deviceRenamed'));
       setSessions((prev) =>
         prev.map((s) => (s.id === sessionId ? { ...s, device_name: trimmed } : s))
       );
       setEditingSessionId(null);
+
+      const targetSession = sessions.find((s) => s.id === sessionId);
+      if (targetSession?.is_current && userConfig) {
+        const updatedConfig: LocalUserConfig = { ...userConfig, device_name: trimmed };
+        await saveUserConfig(updatedConfig);
+        onConfigUpdated(updatedConfig);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al renombrar dispositivo';
       toast.error(msg);
@@ -348,11 +357,17 @@ export function SecurityModal({
 
       if (!res.ok) throw new Error('No se pudo actualizar el nombre de la passkey');
 
-      toast.success('Passkey renombrada correctamente');
+      toast.success(t('toasts.passkeyRenamed'));
       setPasskeys((prev) =>
         prev.map((p) => (p.id === passkeyId ? { ...p, name: trimmed } : p))
       );
       setEditingPasskeyId(null);
+
+      if (userConfig && userConfig.webauthn_credential_id === passkeyId) {
+        const updatedConfig: LocalUserConfig = { ...userConfig, passkey_name: trimmed };
+        await saveUserConfig(updatedConfig);
+        onConfigUpdated(updatedConfig);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al renombrar passkey';
       toast.error(msg);

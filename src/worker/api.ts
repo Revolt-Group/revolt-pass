@@ -406,12 +406,14 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           .first<SessionItem>();
 
         if (existingSession) {
+          const updatedDeviceName = body.device_name?.trim() || existingSession.device_name;
+
           const batchStatements = [
             env.DB.prepare(
               `UPDATE sessions 
                SET last_active_at = unixepoch(), device_name = ?, user_agent = ?, ip_country = ?
                WHERE id = ?`
-            ).bind(resolvedDeviceName, userAgent, ipCountry, existingSession.id),
+            ).bind(updatedDeviceName, userAgent, ipCountry, existingSession.id),
           ];
 
           if (body.passkey_id) {
@@ -439,7 +441,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
               session_token: providedToken,
               session: {
                 ...existingSession,
-                device_name: resolvedDeviceName,
+                device_name: updatedDeviceName,
                 user_agent: userAgent,
                 ip_country: ipCountry,
                 last_active_at: nowEpoch,
@@ -467,13 +469,14 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         if (existingDeviceSession) {
           const sessionToken = generateToken();
           const tokenHash = await hashToken(sessionToken);
+          const updatedDeviceName = body.device_name?.trim() || existingDeviceSession.device_name;
 
           const batchStatements = [
             env.DB.prepare(
               `UPDATE sessions 
                SET token_hash = ?, last_active_at = unixepoch(), expires_at = ?, device_name = ?, ip_country = ?
                WHERE id = ?`
-            ).bind(tokenHash, sessionExpiresAt, resolvedDeviceName, ipCountry, existingDeviceSession.id),
+            ).bind(tokenHash, sessionExpiresAt, updatedDeviceName, ipCountry, existingDeviceSession.id),
             env.DB.prepare(
               `UPDATE sessions SET is_revoked = 1 
                WHERE user_id = ? AND user_agent = ? AND id != ? AND is_revoked = 0`
@@ -496,7 +499,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
               session_token: sessionToken,
               session: {
                 ...existingDeviceSession,
-                device_name: resolvedDeviceName,
+                device_name: updatedDeviceName,
                 ip_country: ipCountry,
                 last_active_at: nowEpoch,
                 expires_at: sessionExpiresAt,
@@ -863,25 +866,43 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
       const resolvedDeviceName = device_name || parseDeviceName(request.headers.get('User-Agent'));
 
-      await env.DB.batch([
+      const existingRecord = await env.DB.prepare(
+        'SELECT name FROM passkeys WHERE id = ? AND user_id = ? AND is_revoked = 0'
+      )
+        .bind(credential_id, userId)
+        .first<{ name?: string }>();
+
+      const finalName = existingRecord?.name ? existingRecord.name : name.trim();
+
+      const batchStatements = [
         env.DB.prepare(
           `INSERT INTO passkeys (id, user_id, name, device_name, created_at, is_revoked)
            VALUES (?, ?, ?, ?, unixepoch(), 0)
-           ON CONFLICT(id) DO UPDATE SET is_revoked = 0, name = excluded.name, last_used_at = unixepoch()`
-        ).bind(credential_id, userId, name.trim(), resolvedDeviceName),
+           ON CONFLICT(id) DO UPDATE SET 
+             is_revoked = 0, 
+             name = CASE WHEN passkeys.name IS NOT NULL AND passkeys.name != '' THEN passkeys.name ELSE excluded.name END, 
+             last_used_at = unixepoch()`
+        ).bind(credential_id, userId, finalName, resolvedDeviceName),
         env.DB.prepare(
           'UPDATE users SET passkey_credential_id = ? WHERE id = ?'
         ).bind(credential_id, userId),
-        env.DB.prepare(
-          `INSERT INTO audit_logs (user_id, event_type, device_name, ip_country, metadata, created_at)
-           VALUES (?, 'PASSKEY_ADDED', ?, ?, ?, unixepoch())`
-        ).bind(
-          userId,
-          resolvedDeviceName,
-          getIpCountry(request) || null,
-          JSON.stringify({ passkey_id: credential_id, name: name.trim() })
-        ),
-      ]);
+      ];
+
+      if (!existingRecord) {
+        batchStatements.push(
+          env.DB.prepare(
+            `INSERT INTO audit_logs (user_id, event_type, device_name, ip_country, metadata, created_at)
+             VALUES (?, 'PASSKEY_ADDED', ?, ?, ?, unixepoch())`
+          ).bind(
+            userId,
+            resolvedDeviceName,
+            getIpCountry(request) || null,
+            JSON.stringify({ passkey_id: credential_id, name: finalName })
+          )
+        );
+      }
+
+      await env.DB.batch(batchStatements);
 
       return jsonResponse(
         {
@@ -890,7 +911,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
             passkey: {
               id: credential_id,
               user_id: userId,
-              name: name.trim(),
+              name: finalName,
               device_name: resolvedDeviceName,
               created_at: Math.floor(Date.now() / 1000),
             },
