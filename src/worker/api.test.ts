@@ -65,27 +65,51 @@ class MockD1Database {
               return null;
             }
 
-            // SELECT id FROM users WHERE id = ?
+            // SELECT id FROM users WHERE id = ? or passkey_credential_id
             if (normalizedQuery.includes('from users where id =')) {
               const userId = String(params[0]);
               const u = db.users.get(userId);
-              return (u ? { id: u.id, username: u.username } : null) as unknown as T;
+              return (u ? { id: u.id, username: u.username, passkey_credential_id: u.passkey_credential_id } : null) as unknown as T;
             }
 
             // SELECT id, user_id, is_revoked, expires_at FROM sessions WHERE token_hash = ?
             if (normalizedQuery.includes('from sessions where token_hash =')) {
               const hash = String(params[0]);
               for (const s of db.sessions.values()) {
-                if (s.token_hash === hash) {
+                if (s.token_hash === hash && s.is_revoked === 0) {
                   return {
                     id: s.id,
                     user_id: s.user_id,
-                    is_revoked: s.is_revoked,
+                    device_name: s.device_name,
+                    user_agent: s.user_agent,
+                    ip_country: s.ip_country,
+                    last_active_at: s.last_active_at,
+                    created_at: s.created_at,
                     expires_at: s.expires_at,
+                    is_revoked: s.is_revoked,
                   } as unknown as T;
                 }
               }
               return null;
+            }
+
+            // SELECT ... FROM sessions WHERE user_id = ? AND user_agent = ?
+            if (normalizedQuery.includes('from sessions where user_id =') && normalizedQuery.includes('user_agent =')) {
+              const userId = String(params[0]);
+              const uAgent = String(params[1]);
+              for (const s of db.sessions.values()) {
+                if (s.user_id === userId && s.user_agent === uAgent && s.is_revoked === 0) {
+                  return { ...s } as unknown as T;
+                }
+              }
+              return null;
+            }
+
+            // SELECT id FROM passkeys WHERE id = ? AND is_revoked = 1
+            if (normalizedQuery.includes('from passkeys where id =') && normalizedQuery.includes('is_revoked = 1')) {
+              const pkId = String(params[0]);
+              const p = db.passkeys.get(pkId);
+              return (p && p.is_revoked === 1 ? { id: p.id } : null) as unknown as T;
             }
 
             // SELECT version FROM vaults WHERE user_id = ?
@@ -162,6 +186,36 @@ class MockD1Database {
               const s = db.sessions.get(sessionId);
               if (s) {
                 s.last_active_at = Math.floor(Date.now() / 1000);
+              }
+            }
+
+            // UPDATE sessions SET is_revoked = 1 WHERE id = ?
+            if (normalizedQuery.includes('update sessions set is_revoked = 1 where id = ?')) {
+              const sessionId = String(params[0]);
+              const s = db.sessions.get(sessionId);
+              if (s) s.is_revoked = 1;
+            }
+
+            // INSERT OR IGNORE INTO passkeys
+            if (normalizedQuery.includes('insert or ignore into passkeys')) {
+              const [id, user_id, name, device_name, created_at, last_used_at] = params as [
+                string,
+                string,
+                string,
+                string,
+                number,
+                number
+              ];
+              if (!db.passkeys.has(id)) {
+                db.passkeys.set(id, {
+                  id,
+                  user_id,
+                  name,
+                  device_name,
+                  created_at,
+                  last_used_at,
+                  is_revoked: 0,
+                });
               }
             }
 
@@ -258,6 +312,32 @@ class MockD1Database {
               expires_at: expires_at || Math.floor(Date.now() / 1000) + 86400,
               is_revoked: 0,
             });
+          } else if (q.includes('update sessions set last_active_at =')) {
+            const [devName, uAgent, country, id] = s.params as [string, string, string, string];
+            const session = db.sessions.get(id);
+            if (session) {
+              session.device_name = devName;
+              session.user_agent = uAgent;
+              session.ip_country = country;
+              session.last_active_at = Math.floor(Date.now() / 1000);
+            }
+          } else if (q.includes('update sessions set token_hash =')) {
+            const [tokenHash, expAt, devName, country, id] = s.params as [string, number, string, string, string];
+            const session = db.sessions.get(id);
+            if (session) {
+              session.token_hash = tokenHash;
+              session.expires_at = expAt;
+              session.device_name = devName;
+              session.ip_country = country;
+              session.last_active_at = Math.floor(Date.now() / 1000);
+            }
+          } else if (q.includes('update sessions set is_revoked = 1 where user_id = ? and user_agent = ? and id != ?')) {
+            const [userId, uAgent, keepId] = s.params as [string, string, string];
+            for (const session of db.sessions.values()) {
+              if (session.user_id === userId && session.user_agent === uAgent && session.id !== keepId) {
+                session.is_revoked = 1;
+              }
+            }
           } else if (q.includes('update sessions set is_revoked = 1 where id = ? and user_id = ?')) {
             const [id, user_id] = s.params as [string, string];
             const session = db.sessions.get(id);
@@ -281,12 +361,22 @@ class MockD1Database {
               created_at: Math.floor(Date.now() / 1000),
               is_revoked: 0,
             });
+          } else if (q.includes('update passkeys set last_used_at =')) {
+            const [pkId, uId] = s.params as [string, string];
+            const passkey = db.passkeys.get(pkId);
+            if (passkey && passkey.user_id === uId) {
+              passkey.last_used_at = Math.floor(Date.now() / 1000);
+            }
           } else if (q.includes('update passkeys set is_revoked = 1 where id = ? and user_id = ?')) {
             const [id, user_id] = s.params as [string, string];
             const passkey = db.passkeys.get(id);
             if (passkey && passkey.user_id === user_id) {
               passkey.is_revoked = 1;
             }
+          } else if (q.includes('update users set passkey_credential_id =')) {
+            const [pkId, uId] = s.params as [string, string];
+            const u = db.users.get(uId);
+            if (u) u.passkey_credential_id = pkId;
           } else if (q.includes('insert into audit_logs')) {
             const [user_id, event_type, device_name, ip_country, metadata] = s.params as [
               string,
@@ -761,6 +851,72 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     const json = (await res.json()) as ApiResponse<{ audit_logs: AuditLogRecord[] }>;
     expect(json.data?.audit_logs.length).toBe(2);
     expect(json.data?.audit_logs[0].event_type).toBe('LOGIN'); // sorted DESC
+  });
+
+  it('reuses existing session when session token or device is supplied without creating duplicates', async () => {
+    const userId = 'usr_dedup_test';
+    mockDb.addUser({ id: userId, username: 'dedupuser', kdf_salt: 'salt_dedup' });
+
+    // 1. First login creates session
+    const req1 = new Request('https://pass.example.com/api/auth/session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/133.0.0.0',
+      },
+      body: JSON.stringify({ device_name: 'Windows · Chrome' }),
+    });
+    const res1 = await handleApiRequest(req1, env);
+    expect(res1.status).toBe(200);
+    const json1 = (await res1.json()) as ApiResponse<{ session_token: string; session: SessionItem }>;
+    const sessionToken = json1.data!.session_token;
+    const initialSessionId = json1.data!.session.id;
+    expect(mockDb.sessions.size).toBe(1);
+
+    // 2. Second unlock with the same session token reuses the existing session
+    const req2 = new Request('https://pass.example.com/api/auth/session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+        'X-Session-Token': sessionToken,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/133.0.0.0',
+      },
+      body: JSON.stringify({ user_id: userId, session_token: sessionToken }),
+    });
+    const res2 = await handleApiRequest(req2, env);
+    expect(res2.status).toBe(200);
+    const json2 = (await res2.json()) as ApiResponse<{ session_token: string; session: SessionItem }>;
+    expect(json2.data?.session_token).toBe(sessionToken);
+    expect(json2.data?.session.id).toBe(initialSessionId);
+    expect(mockDb.sessions.size).toBe(1); // No duplicate created!
+  });
+
+  it('auto-migrates primary passkey from users table into passkeys registry', async () => {
+    const userId = 'usr_legacy_passkey';
+    // User was registered in v1.0 with a passkey, but passkeys table is empty
+    mockDb.addUser({
+      id: userId,
+      username: 'legacyuser',
+      kdf_salt: 'salt_leg',
+      passkey_credential_id: 'cred_legacy_windows_hello',
+    });
+
+    expect(mockDb.passkeys.size).toBe(0);
+
+    // GET /api/passkeys should detect users.passkey_credential_id and migrate it
+    const req = new Request('https://pass.example.com/api/passkeys', {
+      method: 'GET',
+      headers: { 'X-User-Id': userId },
+    });
+    const res = await handleApiRequest(req, env);
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as ApiResponse<{ passkeys: PasskeyRecord[] }>;
+    expect(json.data?.passkeys.length).toBe(1);
+    expect(json.data?.passkeys[0].id).toBe('cred_legacy_windows_hello');
+    expect(mockDb.passkeys.has('cred_legacy_windows_hello')).toBe(true);
   });
 
   it('OPTIONS responds with 204 and CORS preflight headers', async () => {

@@ -348,12 +348,22 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
-    // POST /api/auth/session: Generate active session upon login / unlock
+    // POST /api/auth/session: Generate or refresh active session upon login / unlock
     // -----------------------------------------------------------------------
     if (request.method === 'POST' && (path === '/api/auth/session' || path === '/api/v1/auth/session')) {
-      let body: CreateSessionRequestBody & { user_id?: string; username?: string } = {};
+      let body: CreateSessionRequestBody & {
+        user_id?: string;
+        username?: string;
+        session_token?: string;
+        passkey_id?: string;
+      } = {};
       try {
-        body = (await request.json()) as CreateSessionRequestBody & { user_id?: string; username?: string };
+        body = (await request.json()) as CreateSessionRequestBody & {
+          user_id?: string;
+          username?: string;
+          session_token?: string;
+          passkey_id?: string;
+        };
       } catch {
         // Body is optional
       }
@@ -375,15 +385,133 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         return errorResponse('UNAUTHORIZED', 'Identificador de usuario requerido', 401);
       }
 
-      const sessionToken = generateToken();
-      const tokenHash = await hashToken(sessionToken);
-      const sessionId = `ses_${crypto.randomUUID()}`;
+      const providedToken = request.headers.get('X-Session-Token') || body.session_token;
       const resolvedDeviceName = body.device_name || parseDeviceName(request.headers.get('User-Agent'));
       const userAgent = request.headers.get('User-Agent') || null;
       const ipCountry = getIpCountry(request) || null;
-      const sessionExpiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // 30 days
+      const nowEpoch = Math.floor(Date.now() / 1000);
+      const sessionExpiresAt = nowEpoch + 30 * 24 * 60 * 60; // 30 days
 
-      await env.DB.batch([
+      // 1. If client provided a session token, check if it's currently active and unrevoked
+      if (providedToken) {
+        const tokenHash = await hashToken(providedToken);
+        const existingSession = await env.DB.prepare(
+          `SELECT id, user_id, device_name, user_agent, ip_country, last_active_at, created_at, expires_at, is_revoked
+           FROM sessions 
+           WHERE token_hash = ? AND user_id = ? AND is_revoked = 0 AND expires_at > unixepoch()`
+        )
+          .bind(tokenHash, targetUserId)
+          .first<SessionItem>();
+
+        if (existingSession) {
+          const batchStatements = [
+            env.DB.prepare(
+              `UPDATE sessions 
+               SET last_active_at = unixepoch(), device_name = ?, user_agent = ?, ip_country = ?
+               WHERE id = ?`
+            ).bind(resolvedDeviceName, userAgent, ipCountry, existingSession.id),
+          ];
+
+          if (body.passkey_id) {
+            batchStatements.push(
+              env.DB.prepare(
+                'UPDATE passkeys SET last_used_at = unixepoch() WHERE id = ? AND user_id = ?'
+              ).bind(body.passkey_id, targetUserId)
+            );
+          }
+
+          if (userAgent) {
+            batchStatements.push(
+              env.DB.prepare(
+                `UPDATE sessions SET is_revoked = 1 
+                 WHERE user_id = ? AND user_agent = ? AND id != ? AND is_revoked = 0`
+              ).bind(targetUserId, userAgent, existingSession.id)
+            );
+          }
+
+          await env.DB.batch(batchStatements);
+
+          return jsonResponse({
+            success: true,
+            data: {
+              session_token: providedToken,
+              session: {
+                ...existingSession,
+                device_name: resolvedDeviceName,
+                user_agent: userAgent,
+                ip_country: ipCountry,
+                last_active_at: nowEpoch,
+                is_current: true,
+              },
+            },
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      // 2. If no valid session token provided, check if there's an existing active session
+      // from the exact same user_agent to reuse instead of creating duplicate devices
+      if (userAgent) {
+        const existingDeviceSession = await env.DB.prepare(
+          `SELECT id, user_id, device_name, user_agent, ip_country, last_active_at, created_at, expires_at, is_revoked
+           FROM sessions 
+           WHERE user_id = ? AND user_agent = ? AND is_revoked = 0 AND expires_at > unixepoch()
+           ORDER BY last_active_at DESC
+           LIMIT 1`
+        )
+          .bind(targetUserId, userAgent)
+          .first<SessionItem>();
+
+        if (existingDeviceSession) {
+          const sessionToken = generateToken();
+          const tokenHash = await hashToken(sessionToken);
+
+          const batchStatements = [
+            env.DB.prepare(
+              `UPDATE sessions 
+               SET token_hash = ?, last_active_at = unixepoch(), expires_at = ?, device_name = ?, ip_country = ?
+               WHERE id = ?`
+            ).bind(tokenHash, sessionExpiresAt, resolvedDeviceName, ipCountry, existingDeviceSession.id),
+            env.DB.prepare(
+              `UPDATE sessions SET is_revoked = 1 
+               WHERE user_id = ? AND user_agent = ? AND id != ? AND is_revoked = 0`
+            ).bind(targetUserId, userAgent, existingDeviceSession.id),
+          ];
+
+          if (body.passkey_id) {
+            batchStatements.push(
+              env.DB.prepare(
+                'UPDATE passkeys SET last_used_at = unixepoch() WHERE id = ? AND user_id = ?'
+              ).bind(body.passkey_id, targetUserId)
+            );
+          }
+
+          await env.DB.batch(batchStatements);
+
+          return jsonResponse({
+            success: true,
+            data: {
+              session_token: sessionToken,
+              session: {
+                ...existingDeviceSession,
+                device_name: resolvedDeviceName,
+                ip_country: ipCountry,
+                last_active_at: nowEpoch,
+                expires_at: sessionExpiresAt,
+                is_current: true,
+              },
+            },
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      // 3. Completely new session creation
+      const sessionToken = generateToken();
+      const tokenHash = await hashToken(sessionToken);
+      const sessionId = `ses_${crypto.randomUUID()}`;
+
+      const batchStatements = [
         env.DB.prepare(
           `INSERT INTO sessions (id, user_id, token_hash, device_name, user_agent, ip_country, last_active_at, created_at, expires_at, is_revoked)
            VALUES (?, ?, ?, ?, ?, ?, unixepoch(), unixepoch(), ?, 0)`
@@ -392,7 +520,17 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           `INSERT INTO audit_logs (user_id, event_type, device_name, ip_country, metadata, created_at)
            VALUES (?, 'LOGIN', ?, ?, ?, unixepoch())`
         ).bind(targetUserId, resolvedDeviceName, ipCountry, JSON.stringify({ session_id: sessionId })),
-      ]);
+      ];
+
+      if (body.passkey_id) {
+        batchStatements.push(
+          env.DB.prepare(
+            'UPDATE passkeys SET last_used_at = unixepoch() WHERE id = ? AND user_id = ?'
+          ).bind(body.passkey_id, targetUserId)
+        );
+      }
+
+      await env.DB.batch(batchStatements);
 
       return jsonResponse({
         success: true,
@@ -404,8 +542,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
             device_name: resolvedDeviceName,
             user_agent: userAgent,
             ip_country: ipCountry,
-            last_active_at: Math.floor(Date.now() / 1000),
-            created_at: Math.floor(Date.now() / 1000),
+            last_active_at: nowEpoch,
+            created_at: nowEpoch,
             expires_at: sessionExpiresAt,
             is_revoked: 0,
             is_current: true,
@@ -416,7 +554,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
-    // GET /api/sessions: List active sessions for user
+    // GET /api/sessions: List active sessions for user (deduplicated)
     // -----------------------------------------------------------------------
     if (request.method === 'GET' && (path === '/api/sessions' || path === '/api/v1/sessions')) {
       const userId = request.headers.get('X-User-Id');
@@ -446,14 +584,38 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         if (cur) currentSessionId = cur.id;
       }
 
-      const sessions = (results || []).map((s) => ({
-        ...s,
-        is_current: s.id === currentSessionId,
-      }));
+      // Deduplicate active sessions with identical user_agent (keep current or newest)
+      const seenAgents = new Set<string>();
+      const deduplicatedSessions: SessionItem[] = [];
+      const staleDuplicateIds: string[] = [];
+
+      for (const s of results || []) {
+        const key = s.user_agent ? `${s.device_name}::${s.user_agent}` : s.id;
+        const isCurrent = s.id === currentSessionId;
+        if (isCurrent) {
+          deduplicatedSessions.push({ ...s, is_current: true });
+          seenAgents.add(key);
+        } else if (!seenAgents.has(key)) {
+          deduplicatedSessions.push({ ...s, is_current: false });
+          seenAgents.add(key);
+        } else {
+          staleDuplicateIds.push(s.id);
+        }
+      }
+
+      // Clean up stale duplicates in background
+      if (staleDuplicateIds.length > 0) {
+        for (const staleId of staleDuplicateIds) {
+          env.DB.prepare('UPDATE sessions SET is_revoked = 1 WHERE id = ?')
+            .bind(staleId)
+            .run()
+            .catch(() => {});
+        }
+      }
 
       return jsonResponse({
         success: true,
-        data: { sessions },
+        data: { sessions: deduplicatedSessions },
         timestamp: Date.now(),
       });
     }
@@ -546,15 +708,62 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         .bind(userId)
         .all<PasskeyRecord>();
 
+      const passkeysList = (results || []).slice();
+
+      // Auto-migration fallback: Check if user has a primary passkey registered in `users`
+      // table that has not yet been populated in the `passkeys` table.
+      const user = await env.DB.prepare('SELECT passkey_credential_id FROM users WHERE id = ?')
+        .bind(userId)
+        .first<{ passkey_credential_id: string | null }>();
+
+      if (user?.passkey_credential_id) {
+        const alreadyInList = passkeysList.some((p) => p.id === user.passkey_credential_id);
+        if (!alreadyInList) {
+          const revoked = await env.DB.prepare('SELECT id FROM passkeys WHERE id = ? AND is_revoked = 1')
+            .bind(user.passkey_credential_id)
+            .first();
+
+          if (!revoked) {
+            const resolvedDevice = parseDeviceName(request.headers.get('User-Agent'));
+            const nowSec = Math.floor(Date.now() / 1000);
+            const synthesized: PasskeyRecord = {
+              id: user.passkey_credential_id,
+              user_id: userId,
+              name: 'Windows Hello / Dispositivo Principal',
+              device_name: resolvedDevice,
+              created_at: nowSec,
+              last_used_at: nowSec,
+              is_revoked: 0,
+            };
+
+            await env.DB.prepare(
+              `INSERT OR IGNORE INTO passkeys (id, user_id, name, device_name, created_at, last_used_at, is_revoked)
+               VALUES (?, ?, ?, ?, ?, ?, 0)`
+            )
+              .bind(
+                synthesized.id,
+                userId,
+                synthesized.name,
+                synthesized.device_name,
+                synthesized.created_at,
+                synthesized.last_used_at
+              )
+              .run();
+
+            passkeysList.unshift(synthesized);
+          }
+        }
+      }
+
       return jsonResponse({
         success: true,
-        data: { passkeys: results || [] },
+        data: { passkeys: passkeysList },
         timestamp: Date.now(),
       });
     }
 
     // -----------------------------------------------------------------------
-    // POST /api/passkeys: Enroll new passkey for user
+    // POST /api/passkeys: Enroll new passkey for user (idempotent upsert)
     // -----------------------------------------------------------------------
     if (request.method === 'POST' && (path === '/api/passkeys' || path === '/api/v1/passkeys')) {
       const userId = request.headers.get('X-User-Id');
@@ -582,10 +791,11 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       await env.DB.batch([
         env.DB.prepare(
           `INSERT INTO passkeys (id, user_id, name, device_name, created_at, is_revoked)
-           VALUES (?, ?, ?, ?, unixepoch(), 0)`
+           VALUES (?, ?, ?, ?, unixepoch(), 0)
+           ON CONFLICT(id) DO UPDATE SET is_revoked = 0, name = excluded.name, last_used_at = unixepoch()`
         ).bind(credential_id, userId, name.trim(), resolvedDeviceName),
         env.DB.prepare(
-          'UPDATE users SET passkey_credential_id = ? WHERE id = ? AND passkey_credential_id IS NULL'
+          'UPDATE users SET passkey_credential_id = ? WHERE id = ?'
         ).bind(credential_id, userId),
         env.DB.prepare(
           `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)

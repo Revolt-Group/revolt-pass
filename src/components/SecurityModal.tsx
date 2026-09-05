@@ -109,7 +109,42 @@ export function SecurityModal({
 
       const data = (await res.json()) as ApiResponse<{ passkeys: PasskeyInfo[] }>;
       if (data.success && data.data?.passkeys) {
-        setPasskeys(data.data.passkeys);
+        let list = data.data.passkeys;
+
+        // If this device holds a local Windows Hello passkey that is not in the remote list,
+        // display it immediately and sync it with the remote server in the background.
+        if (userConfig?.webauthn_credential_id) {
+          const localCredId = userConfig.webauthn_credential_id;
+          const exists = list.some((p) => p.id === localCredId);
+          if (!exists) {
+            const localPasskey: PasskeyInfo = {
+              id: localCredId,
+              user_id: userId,
+              name: 'Windows Hello / Este dispositivo',
+              device_name: 'Windows · Chrome',
+              created_at: Math.floor(Date.now() / 1000),
+              last_used_at: Math.floor(Date.now() / 1000),
+              is_revoked: 0,
+            };
+            list = [localPasskey, ...list];
+
+            // Auto-enroll on server in background
+            fetch('/api/passkeys', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': userId,
+                ...(sessionToken ? { 'X-Session-Token': sessionToken } : {}),
+              },
+              body: JSON.stringify({
+                credential_id: localCredId,
+                name: 'Windows Hello / Este dispositivo',
+              }),
+            }).catch(() => {});
+          }
+        }
+
+        setPasskeys(list);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al cargar passkeys';
@@ -117,7 +152,7 @@ export function SecurityModal({
     } finally {
       setIsLoadingPasskeys(false);
     }
-  }, [userId, sessionToken]);
+  }, [userId, sessionToken, userConfig]);
 
   // ---------------------------------------------------------------------------
   // Data Fetching: Audit Logs
@@ -478,10 +513,11 @@ export function SecurityModal({
                           <button
                             type="button"
                             onClick={() => handleRevokeSession(session.id)}
-                            className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0"
+                            className="py-1 px-2.5 rounded-md text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-[11px] transition-all flex items-center gap-1.5 shrink-0"
                             title="Cerrar sesión de este dispositivo"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <LogOut className="w-3 h-3" />
+                            <span>Cerrar sesión</span>
                           </button>
                         )}
                       </div>

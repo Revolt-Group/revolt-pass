@@ -219,6 +219,22 @@ export function App() {
           if (isMounted) {
             setUserConfig(config);
             setScreen('locked');
+
+            // Auto-sync local passkey to remote server if present
+            if (config.webauthn_credential_id && config.user_id) {
+              fetch('/api/passkeys', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-User-Id': config.user_id,
+                  ...(config.session_token ? { 'X-Session-Token': config.session_token } : {}),
+                },
+                body: JSON.stringify({
+                  credential_id: config.webauthn_credential_id,
+                  name: 'Windows Hello / Dispositivo Principal',
+                }),
+              }).catch(() => {});
+            }
           }
         }
       } catch {
@@ -361,11 +377,30 @@ export function App() {
         throw new Error('Contraseña Maestra incorrecta');
       }
 
-      // 5. Save profile and vault into local IndexedDB
+      // 5. Establish active session token upon login
+      let sessionToken: string | undefined;
+      try {
+        const sesRes = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-User-Id': user_id },
+          body: JSON.stringify({ user_id }),
+        });
+        if (sesRes.ok) {
+          const sesData = (await sesRes.json()) as ApiResponse<{ session_token: string }>;
+          if (sesData.data?.session_token) {
+            sessionToken = sesData.data.session_token;
+          }
+        }
+      } catch {
+        // Non-blocking
+      }
+
+      // 6. Save profile and vault into local IndexedDB
       const config: LocalUserConfig = {
         user_id,
         username: cleanUsername,
         kdf_salt,
+        session_token: sessionToken,
         auto_lock_minutes: 5,
         clipboard_clear_seconds: 45,
       };
@@ -508,6 +543,77 @@ export function App() {
   };
 
   // -------------------------------------------------------------------------
+  // Session & Passkey Synchronization Helpers
+  // -------------------------------------------------------------------------
+  const syncSessionAndDevice = useCallback(
+    async (cfg: LocalUserConfig, options?: { passkeyId?: string }) => {
+      if (!cfg.user_id) return cfg;
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'X-User-Id': cfg.user_id,
+        };
+        if (cfg.session_token) {
+          headers['X-Session-Token'] = cfg.session_token;
+        }
+
+        const res = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            user_id: cfg.user_id,
+            session_token: cfg.session_token,
+            passkey_id: options?.passkeyId,
+          }),
+        });
+
+        if (res.ok) {
+          const resData = (await res.json()) as ApiResponse<{ session_token: string }>;
+          if (resData.success && resData.data?.session_token) {
+            const newToken = resData.data.session_token;
+            if (cfg.session_token !== newToken) {
+              const updated: LocalUserConfig = { ...cfg, session_token: newToken };
+              await saveUserConfig(updated);
+              setUserConfig(updated);
+              return updated;
+            }
+          }
+        }
+      } catch {
+        // Non-blocking background sync
+      }
+      return cfg;
+    },
+    []
+  );
+
+  const syncLocalPasskey = useCallback(
+    async (cfg: LocalUserConfig) => {
+      if (!cfg.user_id || !cfg.webauthn_credential_id) return;
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'X-User-Id': cfg.user_id,
+        };
+        if (cfg.session_token) {
+          headers['X-Session-Token'] = cfg.session_token;
+        }
+        await fetch('/api/passkeys', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            credential_id: cfg.webauthn_credential_id,
+            name: 'Windows Hello / Dispositivo Principal',
+          }),
+        });
+      } catch {
+        // Non-blocking background sync
+      }
+    },
+    []
+  );
+
+  // -------------------------------------------------------------------------
   // 4. Vault Unlock with Master Password
   // -------------------------------------------------------------------------
   const handleUnlockWithPassword = async (e: React.FormEvent) => {
@@ -541,22 +647,10 @@ export function App() {
 
       toast.success('Bóveda desbloqueada correctamente');
 
-      // 4. Refresh or establish active session in background
-      if (userConfig.user_id) {
-        fetch('/api/auth/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userConfig.user_id }),
-        })
-          .then((r) => r.json() as Promise<ApiResponse<{ session_token: string }>>)
-          .then(async (resData) => {
-            if (resData.success && resData.data?.session_token) {
-              const updated = { ...userConfig, session_token: resData.data.session_token };
-              await saveUserConfig(updated);
-              setUserConfig(updated);
-            }
-          })
-          .catch(() => {});
+      // 4. Refresh or touch active session in background without creating duplicates
+      syncSessionAndDevice(userConfig).catch(() => {});
+      if (userConfig.webauthn_credential_id) {
+        syncLocalPasskey(userConfig).catch(() => {});
       }
 
       // 5. Attempt remote synchronization in the background
@@ -610,23 +704,9 @@ export function App() {
 
       toast.success('Desbloqueado con Windows Hello');
 
-      // 3. Refresh or establish active session in background
-      if (userConfig.user_id) {
-        fetch('/api/auth/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userConfig.user_id }),
-        })
-          .then((r) => r.json() as Promise<ApiResponse<{ session_token: string }>>)
-          .then(async (resData) => {
-            if (resData.success && resData.data?.session_token) {
-              const updated = { ...userConfig, session_token: resData.data.session_token };
-              await saveUserConfig(updated);
-              setUserConfig(updated);
-            }
-          })
-          .catch(() => {});
-      }
+      // 3. Refresh or touch active session and record passkey usage timestamp
+      syncSessionAndDevice(userConfig, { passkeyId: userConfig.webauthn_credential_id }).catch(() => {});
+      syncLocalPasskey(userConfig).catch(() => {});
 
       pullRemoteVault().catch(() => {});
     } catch (err: unknown) {

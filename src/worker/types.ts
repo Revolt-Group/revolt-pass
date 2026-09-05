@@ -72,6 +72,8 @@ export interface AuditLogRecord {
 
 export interface CreateSessionRequestBody {
   device_name?: string;
+  session_token?: string;
+  passkey_id?: string;
 }
 
 export interface RegisterPasskeyRequestBody {
