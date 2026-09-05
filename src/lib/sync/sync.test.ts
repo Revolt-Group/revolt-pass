@@ -64,7 +64,6 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         );
       });
 
-      // Sobrescribir fetch global temporalmente
       const originalFetch = globalThis.fetch;
       globalThis.fetch = mockFetch;
 
@@ -73,6 +72,73 @@ describe('Sincronización y Reconciliación de Bóveda', () => {
         // El offset debe rondar los ~15,000 ms
         expect(Math.abs(calculatedOffset - 15000)).toBeLessThan(500);
         expect(getTimeDriftOffsetMs()).toBe(calculatedOffset);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it('debe aplicar banda muerta (offset 0) si la diferencia es menor a 1 segundo para evitar jitter', async () => {
+      const simulatedServerTime = Date.now() + 400; // Solo 400ms de diferencia (ruido de red habitual)
+
+      const mockFetch = vi.fn().mockImplementation(async () => {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: { server_time_utc: simulatedServerTime },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = mockFetch;
+
+      try {
+        const calculatedOffset = await syncTimeWithServer('https://pass.revoltgroup.com.ar');
+        expect(calculatedOffset).toBe(0);
+        expect(getTimeDriftOffsetMs()).toBe(0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it('debe descartar timestamps con anomalías (> 24h) y no corromper el reloj', async () => {
+      const simulatedServerTime = Date.now() + 48 * 60 * 60 * 1000; // 48 horas en el futuro (anomalía extrema)
+      setTimeDriftOffsetMs(0);
+
+      const mockFetch = vi.fn().mockImplementation(async () => {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: { server_time_utc: simulatedServerTime },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = mockFetch;
+
+      try {
+        const calculatedOffset = await syncTimeWithServer('https://pass.revoltgroup.com.ar');
+        expect(calculatedOffset).toBe(0);
+        expect(getTimeDriftOffsetMs()).toBe(0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it('debe manejar caídas de red o HTTP 500 sin romper la aplicación', async () => {
+      setTimeDriftOffsetMs(0);
+
+      const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = mockFetch;
+
+      try {
+        const calculatedOffset = await syncTimeWithServer('https://pass.revoltgroup.com.ar');
+        expect(calculatedOffset).toBe(0);
+        expect(getTimeDriftOffsetMs()).toBe(0);
       } finally {
         globalThis.fetch = originalFetch;
       }
