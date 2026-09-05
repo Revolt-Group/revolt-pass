@@ -20,6 +20,7 @@ import { BrandIcon } from './BrandIcon.tsx';
 import { generateTotp, getTotpRemainingSeconds, getTotpProgress } from '../lib/crypto/totp.ts';
 import { getTimeDriftOffsetMs } from '../lib/sync/timeSync.ts';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
+import { useTranslation } from '../i18n/index.ts';
 import type { VaultItem } from '../types/vault.ts';
 
 interface TotpCardProps {
@@ -39,6 +40,7 @@ export function TotpCard({
   onToggleRecoveryCode,
   onEdit,
 }: TotpCardProps) {
+  const { t } = useTranslation();
   const [token, setToken] = useState<string>('------');
   const [remaining, setRemaining] = useState<number>(30);
   const [progress, setProgress] = useState<number>(1);
@@ -90,7 +92,7 @@ export function TotpCard({
     }
 
     setIsCopied(true);
-    toast.success(`Código de ${item.issuer} copiado (se borrará en 45s)`);
+    toast.success(t('totpCard.copiedTimeout', { issuer: item.issuer }));
     setTimeout(() => setIsCopied(false), 2000);
   };
 
@@ -98,14 +100,14 @@ export function TotpCard({
   const handleCopyRecoveryCode = async (code: string, idx: number) => {
     await copyToClipboardSecurely(code, 45000);
     setCopiedCodeIdx(idx);
-    toast.success('Clave de recuperación copiada (se borrará en 45s)');
+    toast.success(t('totpCard.copyRecoverySuccess'));
     setTimeout(() => setCopiedCodeIdx(null), 1500);
   };
 
   // Copy Base32 secret
   const handleCopyBase32 = async () => {
     await copyToClipboardSecurely(item.secret, 45000);
-    toast.success('Secreto Base32 copiado (se borrará en 45s)');
+    toast.success(t('totpCard.copySecretSuccess'));
   };
 
   // Token formatting: e.g. "123 456" or "1234 5678"
@@ -154,7 +156,7 @@ export function TotpCard({
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-white/[0.06] hover:text-white cursor-pointer outline-none transition-colors"
           >
             <Edit3 className="w-3.5 h-3.5 text-zinc-400" />
-            Editar / Códigos
+            {t('totpCard.editCodes')}
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
@@ -162,7 +164,7 @@ export function TotpCard({
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-white/[0.06] hover:text-white cursor-pointer outline-none transition-colors"
           >
             <Key className="w-3.5 h-3.5 text-zinc-400" />
-            Copiar Secreto Base32
+            {t('totpCard.copyBase32')}
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator className="h-px bg-white/[0.08] my-1" />
@@ -172,7 +174,7 @@ export function TotpCard({
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 cursor-pointer outline-none transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Eliminar Cuenta
+            {t('totpCard.deleteAccount')}
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -216,7 +218,7 @@ export function TotpCard({
             type="button"
             onClick={handleCopyToken}
             className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#08090a] border border-white/[0.08] hover:border-white/20 transition-all active:scale-[0.99]"
-            title="Copiar código"
+            title={t('totpCard.clickToCopy')}
           >
             <span className="font-mono text-sm md:text-base font-semibold tracking-wider text-white">
               {formattedToken}
@@ -259,7 +261,7 @@ export function TotpCard({
                 ? 'text-white bg-white/[0.08]'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
             }`}
-            title={item.pinned ? 'Desfijar cuenta' : 'Fijar cuenta arriba'}
+            title={item.pinned ? t('totpCard.unpinAccount') : t('totpCard.pinAccount')}
           >
             <Pin className={`w-3.5 h-3.5 transition-transform ${item.pinned ? 'rotate-45' : ''}`} />
           </button>
@@ -309,7 +311,7 @@ export function TotpCard({
                   ? 'text-white bg-white/[0.08]'
                   : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
               }`}
-              title={item.pinned ? 'Desfijar cuenta' : 'Fijar cuenta arriba'}
+              title={item.pinned ? t('totpCard.unpinAccount') : t('totpCard.pinAccount')}
             >
               <Pin className={`w-3.5 h-3.5 transition-transform ${item.pinned ? 'rotate-45' : ''}`} />
             </button>
@@ -322,7 +324,7 @@ export function TotpCard({
         <div
           onClick={handleCopyToken}
           className="group/code relative flex items-center justify-between p-3 rounded-lg bg-[#08090a] border border-white/[0.08] hover:border-white/20 cursor-pointer transition-colors active:scale-[0.99] select-none"
-          title="Haz clic para copiar el código"
+          title={t('totpCard.clickToCopy')}
         >
           <div className="flex flex-col">
             <span className="font-mono text-2xl font-bold tracking-wider text-white group-hover/code:text-zinc-200 transition-colors">
@@ -396,10 +398,10 @@ export function TotpCard({
             type="button"
             onClick={() => onEdit?.(item)}
             className="text-[11px] text-zinc-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors group/btn py-0.5"
-            title="Añadir códigos de recuperación entregados por el servicio"
+            title={t('totpCard.addBackupCodes')}
           >
             <ShieldAlert className="w-3.5 h-3.5 text-amber-400/80 group-hover/btn:text-amber-300" />
-            <span>+ Agregar códigos de respaldo</span>
+            <span>{t('totpCard.addBackupCodes')}</span>
           </button>
         </div>
       )}
@@ -414,7 +416,7 @@ export function TotpCard({
           >
             <span className="flex items-center gap-1.5 font-medium">
               <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-              Claves de recuperación ({item.recovery_codes.length})
+              {t('totpCard.recoveryCodesHeader', { count: item.recovery_codes.length })}
             </span>
             <ChevronDown
               className={`w-3.5 h-3.5 transition-transform duration-200 ${
@@ -434,16 +436,16 @@ export function TotpCard({
               >
                 <div className="p-2.5 rounded-lg bg-[#08090a] border border-white/[0.08] space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-zinc-500 pb-1 border-b border-white/[0.06]">
-                    <span>Marca como usado o copia</span>
+                    <span>{t('totpCard.markUsedHint')}</span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => onEdit?.(item)}
                         className="text-amber-400 hover:text-amber-300 flex items-center gap-1 text-[11px] font-sans"
-                        title="Gestionar o agregar más códigos"
+                        title={t('totpCard.manageCodes')}
                       >
                         <Plus className="w-3 h-3" />
-                        <span>Gestionar</span>
+                        <span>{t('totpCard.manageCodes')}</span>
                       </button>
                       <button
                         type="button"
@@ -451,7 +453,7 @@ export function TotpCard({
                         className="text-zinc-400 hover:text-white flex items-center gap-1"
                       >
                         {revealCodes ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        {revealCodes ? 'Ocultar' : 'Revelar'}
+                        {revealCodes ? t('totpCard.hideCodes') : t('totpCard.revealCodes')}
                       </button>
                     </div>
                   </div>
@@ -474,7 +476,7 @@ export function TotpCard({
                           <span
                             onClick={() => !isUsed && handleCopyRecoveryCode(rc.code, idx)}
                             className="cursor-pointer tracking-wider truncate mr-2"
-                            title={isUsed ? 'Código ya utilizado' : 'Clic para copiar'}
+                            title={isUsed ? t('totpCard.usedCodeTitle') : t('totpCard.clickToCopy')}
                           >
                             {displayCode}
                           </span>
@@ -498,7 +500,7 @@ export function TotpCard({
                               type="checkbox"
                               checked={isUsed}
                               onChange={() => onToggleRecoveryCode(item.id, idx)}
-                              title={isUsed ? 'Marcar como disponible' : 'Marcar como usado'}
+                              title={isUsed ? t('totpCard.markAsAvailable') : t('totpCard.markAsUsed')}
                               className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                             />
                           </div>

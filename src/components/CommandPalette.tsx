@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Lock,
   Copy,
+  Globe,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -15,6 +16,7 @@ import { BrandIcon } from './BrandIcon.tsx';
 import { generateTotp } from '../lib/crypto/totp.ts';
 import { getTimeDriftOffsetMs } from '../lib/sync/timeSync.ts';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
+import { useTranslation } from '../i18n/index.ts';
 import type { VaultItem } from '../types/vault.ts';
 
 interface CommandPaletteProps {
@@ -36,6 +38,7 @@ export function CommandPalette({
   onTriggerSync,
   onLockVault,
 }: CommandPaletteProps) {
+  const { t, toggleLang } = useTranslation();
   const [tokens, setTokens] = useState<Record<string, string>>({});
 
   // Compute live tokens for palette search results
@@ -82,7 +85,7 @@ export function CommandPalette({
       } catch {}
     }
 
-    toast.success(`Código de ${item.issuer} copiado (se borrará en 45s)`);
+    toast.success(t('totpCard.copiedTimeout', { issuer: item.issuer }));
     onClose();
   };
 
@@ -119,7 +122,7 @@ export function CommandPalette({
                 <Search className="w-4 h-4 text-zinc-400 shrink-0" />
                 <Command.Input
                   autoFocus
-                  placeholder="Buscar cuenta por nombre, correo o etiqueta..."
+                  placeholder={t('commandPalette.placeholder')}
                   className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
                 />
                 <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-[#16181d] border border-white/[0.08] rounded">
@@ -130,11 +133,11 @@ export function CommandPalette({
               {/* Results List */}
               <Command.List className="max-h-[55vh] overflow-y-auto p-2 text-xs space-y-1 custom-scrollbar">
                 <Command.Empty className="py-8 text-center text-zinc-500">
-                  No se encontraron resultados para esta búsqueda.
+                  {t('commandPalette.noResults')}
                 </Command.Empty>
 
                 {/* Quick Actions */}
-                <Command.Group heading="Acciones del Sistema" className="text-zinc-500 font-semibold px-2 py-1 text-[11px] font-mono uppercase">
+                <Command.Group heading={t('commandPalette.systemActions')} className="text-zinc-500 font-semibold px-2 py-1 text-[11px] font-mono uppercase">
                   <Command.Item
                     onSelect={() => {
                       onClose();
@@ -144,9 +147,9 @@ export function CommandPalette({
                   >
                     <div className="flex items-center gap-2.5">
                       <PlusCircle className="w-4 h-4 text-white" />
-                      <span className="font-medium text-xs">Vincular Nueva Cuenta 2FA</span>
+                      <span className="font-medium text-xs">{t('commandPalette.addAccount')}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 font-mono">QR / Manual</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">{t('commandPalette.addAccountSubtitle')}</span>
                   </Command.Item>
 
                   <Command.Item
@@ -158,9 +161,9 @@ export function CommandPalette({
                   >
                     <div className="flex items-center gap-2.5">
                       <KeyRound className="w-4 h-4 text-white" />
-                      <span className="font-medium text-xs">Generador de Contraseñas</span>
+                      <span className="font-medium text-xs">{t('commandPalette.openGenerator')}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 font-mono">CSPRNG</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">{t('commandPalette.generatorSubtitle')}</span>
                   </Command.Item>
 
                   <Command.Item
@@ -172,9 +175,23 @@ export function CommandPalette({
                   >
                     <div className="flex items-center gap-2.5">
                       <RefreshCw className="w-4 h-4 text-white" />
-                      <span className="font-medium text-xs">Sincronizar Bóveda con Cloudflare D1</span>
+                      <span className="font-medium text-xs">{t('commandPalette.syncVault')}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 font-mono">Push & Pull</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">{t('commandPalette.syncSubtitle')}</span>
+                  </Command.Item>
+
+                  <Command.Item
+                    onSelect={() => {
+                      toggleLang();
+                      toast.success(t('toasts.langChanged'));
+                    }}
+                    className="flex items-center justify-between px-2.5 py-2 rounded-lg text-zinc-300 hover:text-white hover:bg-white/[0.06] aria-selected:bg-white/[0.06] aria-selected:text-white cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Globe className="w-4 h-4 text-emerald-400" />
+                      <span className="font-medium text-xs">{t('commandPalette.toggleLanguage')}</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono">{t('commandPalette.langSubtitle')}</span>
                   </Command.Item>
 
                   <Command.Item
@@ -186,15 +203,15 @@ export function CommandPalette({
                   >
                     <div className="flex items-center gap-2.5">
                       <Lock className="w-4 h-4 text-rose-400" />
-                      <span className="font-medium text-xs">Bloquear Bóveda Ahora</span>
+                      <span className="font-medium text-xs">{t('commandPalette.lockVault')}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 font-mono">Purgar RAM</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">{t('commandPalette.lockSubtitle')}</span>
                   </Command.Item>
                 </Command.Group>
 
                 {/* Pinned Accounts */}
                 {pinnedItems.length > 0 && (
-                  <Command.Group heading="Cuentas Prioritarias" className="text-zinc-500 font-semibold px-2 py-1 mt-2 text-[11px] font-mono uppercase">
+                  <Command.Group heading={t('nav.pinnedVaults')} className="text-zinc-500 font-semibold px-2 py-1 mt-2 text-[11px] font-mono uppercase">
                     {pinnedItems.map((item) => {
                       const code = tokens[item.id] || '------';
                       return (
@@ -228,7 +245,7 @@ export function CommandPalette({
                 )}
 
                 {/* All Accounts */}
-                <Command.Group heading="Todas las Cuentas" className="text-zinc-500 font-semibold px-2 py-1 mt-2 text-[11px] font-mono uppercase">
+                <Command.Group heading={t('nav.allVaults')} className="text-zinc-500 font-semibold px-2 py-1 mt-2 text-[11px] font-mono uppercase">
                   {unpinnedItems.map((item) => {
                     const code = tokens[item.id] || '------';
                     return (
@@ -260,8 +277,8 @@ export function CommandPalette({
 
               {/* Footer Keyboard Shortcuts Bar */}
               <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.08] bg-[#08090a] text-[11px] text-zinc-500 font-mono">
-                <span>Navegar <kbd className="px-1 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-zinc-300">↑</kbd> <kbd className="px-1 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-zinc-300">↓</kbd></span>
-                <span>Copiar <kbd className="px-1.5 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-white">Enter</kbd></span>
+                <span>{t('commandPalette.footerNavigate')} <kbd className="px-1 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-zinc-300">↑</kbd> <kbd className="px-1 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-zinc-300">↓</kbd></span>
+                <span>{t('commandPalette.footerSelect')} <kbd className="px-1.5 py-0.2 rounded bg-[#16181d] border border-white/[0.08] text-white">Enter</kbd></span>
               </div>
             </Command>
           </motion.div>

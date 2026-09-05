@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Copy, Check, RotateCw, X, KeyRound, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { useTranslation } from '../i18n/index.ts';
 
 interface PasswordGeneratorModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ const CHAR_POOLS = {
 };
 
 export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorModalProps) {
+  const { t } = useTranslation();
   const [length, setLength] = useState(20);
   const [includeUpper, setIncludeUpper] = useState(true);
   const [includeLower, setIncludeLower] = useState(true);
@@ -78,18 +80,18 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
 
   const entropyBits = poolSize > 0 ? Math.round(length * Math.log2(poolSize)) : 0;
 
-  let strengthLabel = 'Débil';
+  let strengthLabel = t('generator.strengthWeak');
   let strengthColor = 'bg-rose-500 text-rose-400 border-rose-500/20';
   let strengthPercent = Math.min(100, Math.round((entropyBits / 120) * 100));
 
   if (entropyBits >= 80) {
-    strengthLabel = 'Blindada (Militar)';
+    strengthLabel = t('generator.strengthArmored');
     strengthColor = 'bg-emerald-500 text-emerald-400 border-emerald-500/20';
   } else if (entropyBits >= 55) {
-    strengthLabel = 'Fuerte';
+    strengthLabel = t('generator.strengthStrong');
     strengthColor = 'bg-violet-500 text-violet-400 border-violet-500/20';
   } else if (entropyBits >= 40) {
-    strengthLabel = 'Moderada';
+    strengthLabel = t('generator.strengthModerate');
     strengthColor = 'bg-amber-500 text-amber-400 border-amber-500/20';
   }
 
@@ -97,7 +99,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
     if (!password) return;
     await navigator.clipboard.writeText(password);
     setIsCopied(true);
-    toast.success('Contraseña copiada al portapapeles');
+    toast.success(t('generator.copiedPassword'));
     setTimeout(() => setIsCopied(false), 2000);
   };
 
@@ -136,10 +138,10 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                     </div>
                     <div>
                       <Dialog.Title className="text-base font-semibold tracking-tight text-white">
-                        Generador Criptográfico de Contraseñas
+                        {t('generator.title')}
                       </Dialog.Title>
                       <Dialog.Description className="text-xs text-zinc-400">
-                        Entropía pura generada con CSPRNG en hardware
+                        {t('generator.subtitle')}
                       </Dialog.Description>
                     </div>
                   </div>
@@ -162,7 +164,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                         type="button"
                         onClick={handleRegenerate}
                         className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-[#16181d] transition-colors"
-                        title="Regenerar contraseña"
+                        title={t('generator.regenerate')}
                       >
                         <motion.div animate={{ rotate: isRotating ? 360 : 0 }}>
                           <RotateCw className="w-4 h-4" />
@@ -176,7 +178,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                             ? 'bg-emerald-500/20 text-emerald-400'
                             : 'text-zinc-400 hover:text-white hover:bg-[#16181d]'
                         }`}
-                        title="Copiar al portapapeles"
+                        title={t('generator.copyPassword')}
                       >
                         {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -192,10 +194,10 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                         ) : (
                           <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
                         )}
-                        Fuerza: <strong className="text-zinc-200">{strengthLabel}</strong>
+                        {t('generator.strengthTitle')}: <strong className="text-zinc-200">{strengthLabel}</strong>
                       </span>
                       <span className="text-zinc-400 font-mono text-[11px]">
-                        {entropyBits} bits de entropía
+                        {entropyBits} {t('generator.bitsOfEntropy')}
                       </span>
                     </div>
                     <div className="w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
@@ -214,10 +216,10 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-xs font-medium text-zinc-300">
-                        Longitud de la contraseña
+                        {t('generator.lengthLabel')}
                       </label>
                       <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#16181d] border border-white/[0.08] text-white font-medium">
-                        {length} caracteres
+                        {length} {t('generator.charactersSuffix')}
                       </span>
                     </div>
                     <input
@@ -238,7 +240,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                         onChange={(e) => setIncludeUpper(e.target.checked)}
                         className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
-                      <span className="text-xs text-zinc-300 font-medium">Mayúsculas (A-Z)</span>
+                      <span className="text-xs text-zinc-300 font-medium">{t('generator.uppercase')}</span>
                     </label>
 
                     <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/50 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
@@ -248,7 +250,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                         onChange={(e) => setIncludeLower(e.target.checked)}
                         className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
-                      <span className="text-xs text-zinc-300 font-medium">Minúsculas (a-z)</span>
+                      <span className="text-xs text-zinc-300 font-medium">{t('generator.lowercase')}</span>
                     </label>
 
                     <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/50 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
@@ -258,7 +260,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                         onChange={(e) => setIncludeNumbers(e.target.checked)}
                         className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
-                      <span className="text-xs text-zinc-300 font-medium">Números (0-9)</span>
+                      <span className="text-xs text-zinc-300 font-medium">{t('generator.numbers')}</span>
                     </label>
 
                     <label className="flex items-center gap-2 p-2 rounded-lg bg-[#16181d]/50 border border-white/[0.06] cursor-pointer hover:bg-[#16181d] transition-colors">
@@ -268,7 +270,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                         onChange={(e) => setIncludeSymbols(e.target.checked)}
                         className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                       />
-                      <span className="text-xs text-zinc-300 font-medium">Símbolos (!@#$%)</span>
+                      <span className="text-xs text-zinc-300 font-medium">{t('generator.symbols')}</span>
                     </label>
                   </div>
 
@@ -280,7 +282,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                       className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                     />
                     <span className="text-xs text-zinc-400">
-                      Evitar caracteres ambiguos (<code className="text-zinc-300 font-mono">1, l, I, 0, O</code>)
+                      {t('generator.avoidAmbiguous')}
                     </span>
                   </label>
                 </div>
@@ -291,7 +293,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                     onClick={onClose}
                     className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
                   >
-                    Cerrar
+                    {t('common.close')}
                   </button>
                   <button
                     type="button"
@@ -299,7 +301,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                     className="px-4 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-zinc-200 text-black shadow-sm flex items-center gap-1.5 transition-all active:scale-[0.99]"
                   >
                     {isCopied ? <Check className="w-3.5 h-3.5 text-black" /> : <Copy className="w-3.5 h-3.5 text-black" />}
-                    {isCopied ? '¡Copiado!' : 'Copiar Contraseña'}
+                    {isCopied ? t('generator.copiedPassword') : t('generator.copyPassword')}
                   </button>
                 </div>
               </motion.div>

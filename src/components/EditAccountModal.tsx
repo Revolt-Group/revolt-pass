@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { BrandIcon } from './BrandIcon.tsx';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
 import { resizeImageFile } from '../lib/utils/image.ts';
+import { useTranslation } from '../i18n/index.ts';
 import type { VaultItem, RecoveryCode } from '../types/vault.ts';
 
 interface EditAccountModalProps {
@@ -35,6 +36,7 @@ export function EditAccountModal({
   onClose,
   onSave,
 }: EditAccountModalProps) {
+  const { t } = useTranslation();
   const [issuer, setIssuer] = useState('');
   const [account, setAccount] = useState('');
   const [iconUrl, setIconUrl] = useState('');
@@ -221,10 +223,10 @@ export function EditAccountModal({
                     <BrandIcon issuer={issuer || item.issuer} iconUrl={iconUrl} size={38} className="shrink-0" />
                     <div>
                       <Dialog.Title className="text-base font-semibold tracking-tight text-white flex items-center gap-2">
-                        <span>Editar Cuenta & Personalización</span>
+                        <span>{t('itemModal.editTitle')}</span>
                       </Dialog.Title>
                       <Dialog.Description className="text-xs text-zinc-400 font-mono">
-                        {item.issuer} {item.account ? `· ${item.account}` : ''}
+                        {t('itemModal.editSubtitle')}
                       </Dialog.Description>
                     </div>
                   </div>
@@ -250,7 +252,7 @@ export function EditAccountModal({
                               type="button"
                               onClick={() => setIconUrl('')}
                               className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-zinc-800 border border-white/20 text-zinc-400 hover:text-rose-400 shadow-md transition-colors"
-                              title="Restablecer logo por defecto"
+                              title="Reset"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -259,12 +261,12 @@ export function EditAccountModal({
                         <div>
                           <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
                             <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>Logo / Foto de la Cuenta</span>
+                            <span>{t('itemModal.iconLabel')}</span>
                           </h4>
                           <p className="text-[11px] text-zinc-400">
                             {iconUrl
-                              ? 'Logo personalizado activo (cifrado localmente)'
-                              : 'Subí una imagen o pegá una URL'}
+                              ? 'Logo (AES-GCM)'
+                              : `${t('itemModal.uploadPhotoButton')} / ${t('itemModal.useUrlButton')}`}
                           </p>
                         </div>
                       </div>
@@ -285,7 +287,7 @@ export function EditAccountModal({
                           className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-white/10 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors active:scale-95"
                         >
                           <Upload className="w-3.5 h-3.5 text-zinc-400" />
-                          <span>{isUploadingImage ? 'Cargando...' : 'Subir Foto'}</span>
+                          <span>{isUploadingImage ? t('common.loading') : t('itemModal.uploadPhotoButton')}</span>
                         </button>
                         <button
                           type="button"
@@ -293,7 +295,7 @@ export function EditAccountModal({
                           className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-white/10 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
                         >
                           <Link className="w-3.5 h-3.5" />
-                          <span>{showUrlInput ? 'Ocultar URL' : 'URL Externa'}</span>
+                          <span>{t('itemModal.useUrlButton')}</span>
                         </button>
                       </div>
                     </div>
@@ -330,11 +332,11 @@ export function EditAccountModal({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-white">
-                          Códigos de Respaldo (Backup Codes)
+                          {t('itemModal.recoveryCodesTitle')}
                         </span>
                         {recoveryCodes.length > 0 && (
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                            {availableCount} disponibles · {usedCount} usados
+                            {availableCount} · {usedCount}
                           </span>
                         )}
                       </div>
@@ -344,15 +346,14 @@ export function EditAccountModal({
                     </div>
 
                     <p className="text-xs text-zinc-400 leading-relaxed">
-                      Pega aquí los códigos de recuperación que te entregó el servicio.
-                      Puedes pegar varios códigos juntos separados por saltos de línea.
+                      {t('itemModal.recoveryCodesSubtitle')}
                     </p>
 
                     {/* Input and Add Codes Button */}
                     <div className="flex gap-2">
                       <textarea
                         rows={2}
-                        placeholder="Pega uno o múltiples códigos aquí (uno por línea)..."
+                        placeholder={t('itemModal.recoveryCodePlaceholder')}
                         value={codeInput}
                         onChange={(e) => setCodeInput(e.target.value)}
                         className="flex-1 bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 resize-none transition-colors"
@@ -364,7 +365,7 @@ export function EditAccountModal({
                         className="px-3.5 bg-[#16181d] hover:bg-[#1c1f24] text-zinc-200 border border-white/[0.08] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.99] disabled:opacity-40 shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Añadir</span>
+                        <span>{t('itemModal.addCodeButton')}</span>
                       </button>
                     </div>
 
@@ -389,7 +390,7 @@ export function EditAccountModal({
                                   type="button"
                                   onClick={() => handleCopyCode(rc.code, idx)}
                                   className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors"
-                                  title="Copiar código"
+                                  title={t('common.copy')}
                                 >
                                   {copiedIndex === idx ? (
                                     <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -402,14 +403,14 @@ export function EditAccountModal({
                                 type="checkbox"
                                 checked={rc.used}
                                 onChange={() => handleToggleCodeUsed(idx)}
-                                title={rc.used ? 'Marcar como disponible' : 'Marcar como usado'}
+                                title={rc.used ? t('totpCard.markAsAvailable') : t('totpCard.markAsUsed')}
                                 className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0 cursor-pointer"
                               />
                               <button
                                 type="button"
                                 onClick={() => handleRemoveCode(idx)}
                                 className="p-1 text-zinc-500 hover:text-rose-400 transition-colors"
-                                title="Eliminar este código"
+                                title={t('common.delete')}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -420,7 +421,7 @@ export function EditAccountModal({
                     ) : (
                       <div className="text-center py-3 border border-dashed border-white/[0.08] rounded-lg">
                         <p className="text-xs text-zinc-500">
-                          No hay códigos de recuperación guardados todavía.
+                          {t('totpCard.addBackupCodes')}
                         </p>
                       </div>
                     )}
@@ -432,14 +433,14 @@ export function EditAccountModal({
                     <div>
                       <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                         <Building className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Nombre del Servicio</span>
+                        <span>{t('itemModal.issuerLabel')}</span>
                       </label>
                       <input
                         type="text"
                         required
                         value={issuer}
                         onChange={(e) => setIssuer(e.target.value)}
-                        placeholder="ej. GitHub, Google, AWS"
+                        placeholder={t('itemModal.issuerPlaceholder')}
                         className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                       />
                     </div>
@@ -448,13 +449,13 @@ export function EditAccountModal({
                     <div>
                       <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Usuario o Correo</span>
+                        <span>{t('itemModal.accountLabel')}</span>
                       </label>
                       <input
                         type="text"
                         value={account}
                         onChange={(e) => setAccount(e.target.value)}
-                        placeholder="ej. usuario@ejemplo.com"
+                        placeholder={t('itemModal.accountPlaceholder')}
                         className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                       />
                     </div>
@@ -464,13 +465,13 @@ export function EditAccountModal({
                   <div>
                     <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                       <Tag className="w-3.5 h-3.5 text-zinc-500" />
-                      <span>Etiquetas (separadas por comas)</span>
+                      <span>{t('itemModal.tagsLabel')}</span>
                     </label>
                     <input
                       type="text"
                       value={tagsInput}
                       onChange={(e) => setTagsInput(e.target.value)}
-                      placeholder="ej. gaming, personal, trabajo"
+                      placeholder={t('itemModal.tagsPlaceholder')}
                       className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
                     />
                   </div>
@@ -479,13 +480,13 @@ export function EditAccountModal({
                   <div>
                     <label className="text-xs font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
                       <FileText className="w-3.5 h-3.5 text-zinc-500" />
-                      <span>Notas Adicionales (Cifradas)</span>
+                      <span>{t('itemModal.notesLabel')}</span>
                     </label>
                     <textarea
                       rows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Notas de seguridad, pistas o información relevante..."
+                      placeholder={t('itemModal.notesPlaceholder')}
                       className="w-full bg-[#08090a] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-white/30 resize-none transition-colors"
                     />
                   </div>
@@ -497,7 +498,7 @@ export function EditAccountModal({
                       onClick={onClose}
                       className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
                     >
-                      Cancelar
+                      {t('common.cancel')}
                     </button>
                     <button
                       type="submit"
@@ -505,7 +506,7 @@ export function EditAccountModal({
                       className="px-4 py-1.5 bg-white text-black font-medium hover:bg-zinc-200 active:scale-[0.99] rounded-lg text-xs shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-black" />
-                      <span>{isSaving ? 'Guardando...' : 'Guardar Cambios'}</span>
+                      <span>{isSaving ? t('common.loading') : t('itemModal.saveChangesButton')}</span>
                     </button>
                   </div>
                 </form>

@@ -23,6 +23,7 @@ import {
   mergeVaultItems,
   triggerFileDownload,
 } from '../lib/security/backup';
+import { useTranslation } from '../i18n/index.ts';
 
 interface BackupModalProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export function BackupModal({
   kdfSalt,
   onVaultRestored,
 }: BackupModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
 
   // Export State
@@ -176,10 +178,10 @@ export function BackupModal({
               </div>
               <div>
                 <Dialog.Title className="text-base font-semibold text-white tracking-tight">
-                  Respaldo & Migración de Bóveda
+                  {t('backup.title')}
                 </Dialog.Title>
                 <Dialog.Description className="text-xs text-zinc-400">
-                  Exporta e importa tus cuentas y secretos de forma soberana
+                  {t('backup.subtitle')}
                 </Dialog.Description>
               </div>
             </div>
@@ -206,7 +208,7 @@ export function BackupModal({
               }`}
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Exportar Bóveda</span>
+              <span>{t('backup.exportTab')}</span>
             </button>
             <button
               type="button"
@@ -218,7 +220,7 @@ export function BackupModal({
               }`}
             >
               <Upload className="w-3.5 h-3.5" />
-              <span>Importar Respaldo</span>
+              <span>{t('backup.importTab')}</span>
             </button>
           </div>
 
@@ -233,14 +235,10 @@ export function BackupModal({
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white">Copia Cifrada AES-256-GCM</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        RECOMENDADO
-                      </span>
+                      <span className="font-semibold text-white">{t('backup.encryptedOptionTitle')}</span>
                     </div>
                     <p className="text-zinc-400 mt-1 leading-relaxed">
-                      Genera un archivo <code>.json</code> cifrado con tu Contraseña Maestra actual.
-                      Seguro para almacenar en la nube o discos locales.
+                      {t('backup.encryptedOptionDesc')}
                     </p>
                   </div>
                 </div>
@@ -254,12 +252,12 @@ export function BackupModal({
                   {isExporting ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
-                      <span>Cifrando Bóveda...</span>
+                      <span>{t('common.loading')}</span>
                     </>
                   ) : (
                     <>
                       <Download className="w-3.5 h-3.5 text-black" />
-                      <span>Descargar Copia Cifrada ({items.length} cuentas)</span>
+                      <span>{t('backup.exportEncryptedButton')} ({items.length})</span>
                     </>
                   )}
                 </button>
@@ -272,10 +270,9 @@ export function BackupModal({
                     <FileWarning className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
-                    <span className="font-semibold text-amber-200">Exportación en Texto Plano (JSON)</span>
+                    <span className="font-semibold text-amber-200">{t('backup.plaintextOptionTitle')}</span>
                     <p className="text-zinc-400 mt-1 leading-relaxed">
-                      Contiene todos los secretos y semillas TOTP en texto claro. Úsalo únicamente para
-                      migrar a otros gestores en un entorno completamente privado.
+                      {t('backup.plaintextOptionDesc')}
                     </p>
                   </div>
                 </div>
@@ -287,7 +284,7 @@ export function BackupModal({
                     onChange={(e) => setPlaintextConfirmed(e.target.checked)}
                     className="rounded bg-[#08090a] border-white/20 text-white focus:ring-0"
                   />
-                  <span>Comprendo el riesgo de exportar credenciales sin cifrado</span>
+                  <span>{t('backup.confirmPlaintextCheckbox')}</span>
                 </label>
 
                 <button
@@ -297,7 +294,7 @@ export function BackupModal({
                   className="w-full py-2 px-4 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] text-zinc-200 font-medium text-xs transition-all flex items-center justify-center gap-2 border border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Descargar en Texto Plano</span>
+                  <span>{t('backup.exportPlaintextButton')}</span>
                 </button>
               </div>
             </div>
@@ -324,10 +321,10 @@ export function BackupModal({
               >
                 <FolderOpen className="w-7 h-7 text-zinc-500 group-hover:text-white mb-2 transition-colors" />
                 <p className="font-medium text-zinc-200">
-                  Haz clic para seleccionar o arrastra un archivo .json
+                  {t('backup.dropzoneTitle')}
                 </p>
                 <p className="text-zinc-500 mt-1 font-mono text-[11px]">
-                  Soporta respaldos cifrados (.json) o texto plano (.json) de Revolt Pass
+                  {t('backup.dropzoneBrowse')}
                 </p>
               </div>
 
@@ -337,10 +334,10 @@ export function BackupModal({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-emerald-400">
                       <CheckCircle2 className="w-4 h-4" />
-                      <span className="font-medium">Archivo Válido</span>
+                      <span className="font-medium">{t('backup.fileSelected')}</span>
                     </div>
                     <span className="font-mono text-zinc-400">
-                      {stagedItems.length} cuentas listas
+                      {stagedItems.length}
                     </span>
                   </div>
 
@@ -355,9 +352,7 @@ export function BackupModal({
                         onChange={() => setImportMode('merge')}
                         className="text-white focus:ring-0"
                       />
-                      <span>
-                        <strong>Fusionar:</strong> Conservar cuentas actuales y agregar las del archivo
-                      </span>
+                      <span>{t('backup.importModeMerge')}</span>
                     </label>
 
                     <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
@@ -369,9 +364,7 @@ export function BackupModal({
                         onChange={() => setImportMode('replace')}
                         className="text-rose-400 focus:ring-0"
                       />
-                      <span className="text-rose-300">
-                        <strong>Reemplazar:</strong> Sobrescribir toda la bóveda con este archivo
-                      </span>
+                      <span className="text-rose-300">{t('backup.importModeReplace')}</span>
                     </label>
                   </div>
 
@@ -384,12 +377,12 @@ export function BackupModal({
                     {isProcessingImport ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
-                        <span>Restaurando Bóveda...</span>
+                        <span>{t('common.loading')}</span>
                       </>
                     ) : (
                       <>
                         <Upload className="w-3.5 h-3.5 text-black" />
-                        <span>Confirmar Restauración</span>
+                        <span>{t('backup.confirmImportButton')}</span>
                       </>
                     )}
                   </button>

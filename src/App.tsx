@@ -61,11 +61,13 @@ import { SecurityModal } from './components/SecurityModal.tsx';
 import type { VaultItem, LocalUserConfig, SyncStatus } from './types/vault.ts';
 import type { ApiResponse } from './worker/types.ts';
 import { VERSION_NAME } from './constants/version.ts';
+import { useTranslation, LanguageSwitcher } from './i18n/index.ts';
 
 type AppScreen = 'loading' | 'register' | 'locked' | 'unlocked';
 type AuthMode = 'login' | 'register';
 
 export function App() {
+  const { t } = useTranslation();
   const [screen, setScreen] = useState<AppScreen>('loading');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [userConfig, setUserConfig] = useState<LocalUserConfig | null>(null);
@@ -112,14 +114,14 @@ export function App() {
     const handleRevoked = () => {
       setMasterKey(null);
       setScreen('locked');
-      toast.error('Tu sesión ha sido revocada remotamente.', {
-        description: 'Por motivos de seguridad, las claves en memoria RAM fueron destruidas.',
+      toast.error(t('toasts.sessionRevokedTitle'), {
+        description: t('toasts.sessionRevokedDesc'),
         duration: 8000,
       });
     };
     window.addEventListener('revolt:session-revoked', handleRevoked);
     return () => window.removeEventListener('revolt:session-revoked', handleRevoked);
-  }, []);
+  }, [t]);
 
   // Listen for PWA installation event (beforeinstallprompt)
   useEffect(() => {
@@ -130,7 +132,7 @@ export function App() {
 
     const handleAppInstalled = () => {
       setInstallPrompt(null);
-      toast.success('Revolt Pass instalado correctamente');
+      toast.success(t('toasts.pwaInstalled'));
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -140,14 +142,14 @@ export function App() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [t]);
 
   const handleInstallApp = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') {
-      toast.success('Instalando Revolt Pass en tu sistema operativo...');
+      toast.success(t('toasts.pwaInstalling'));
     }
     setInstallPrompt(null);
   };
@@ -169,15 +171,15 @@ export function App() {
     const bits = pool > 0 ? Math.round(regPassword.length * Math.log2(pool)) : 0;
 
     if (bits < 40 || regPassword.length < 8) {
-      return { bits, level: 1, label: 'Débil', color: 'text-rose-400' };
+      return { bits, level: 1, label: t('auth.strengthWeak'), color: 'text-rose-400' };
     } else if (bits < 60) {
-      return { bits, level: 2, label: 'Media', color: 'text-amber-400' };
+      return { bits, level: 2, label: t('auth.strengthFair'), color: 'text-amber-400' };
     } else if (bits < 80) {
-      return { bits, level: 3, label: 'Segura', color: 'text-emerald-400' };
+      return { bits, level: 3, label: t('auth.strengthGood'), color: 'text-emerald-400' };
     } else {
-      return { bits, level: 4, label: `Blindada • ${bits} bits`, color: 'text-emerald-300' };
+      return { bits, level: 4, label: t('auth.strengthArmored', { bits }), color: 'text-emerald-300' };
     }
-  }, [regPassword]);
+  }, [regPassword, t]);
 
   // -------------------------------------------------------------------------
   // 1. Application Initialization & State Detection (Mount only)
@@ -200,11 +202,11 @@ export function App() {
 
       const unsubNet = initNetworkSyncListeners(
         () => {
-          toast.info('Conexión reestablecida. Sincronizando en segundo plano...');
+          toast.info(t('toasts.connectionRestored'));
           if (masterKeyRef.current) pushLocalVault('', masterKeyRef.current);
         },
         () => {
-          toast.warning('Modo Offline: las modificaciones se guardarán localmente');
+          toast.warning(t('toasts.offlineMode'));
         }
       );
 
@@ -304,12 +306,12 @@ export function App() {
 
     const cleanUsername = loginUsername.trim().toLowerCase();
     if (!cleanUsername) {
-      toast.error('Por favor ingresa tu nombre de usuario');
+      toast.error(t('toasts.enterUsername'));
       return;
     }
 
     if (!loginPassword) {
-      toast.error('Por favor ingresa tu Contraseña Maestra');
+      toast.error(t('toasts.enterMasterPassword'));
       return;
     }
 
@@ -423,8 +425,8 @@ export function App() {
       setLoginPassword('');
       setScreen('unlocked');
 
-      toast.success('Bóveda vinculada y sincronizada', {
-        description: `Se sincronizaron ${decryptedItems.length} credenciales desde tu cuenta en la nube.`,
+      toast.success(t('toasts.vaultLinked'), {
+        description: t('toasts.vaultLinkedDesc', { count: decryptedItems.length }),
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al iniciar sesión';
@@ -442,22 +444,22 @@ export function App() {
 
     const cleanUsername = regUsername.trim().toLowerCase();
     if (!cleanUsername) {
-      toast.error('Por favor ingresa un nombre de usuario');
+      toast.error(t('toasts.enterUsername'));
       return;
     }
 
     if (cleanUsername.length < 3) {
-      toast.error('El nombre de usuario debe tener al menos 3 caracteres');
+      toast.error(t('auth.usernameRequired'));
       return;
     }
 
     if (regPassword.length < 8) {
-      toast.error('La Contraseña Maestra debe tener al menos 8 caracteres');
+      toast.error(t('auth.passwordTooShort'));
       return;
     }
 
     if (regPassword !== regConfirmPassword) {
-      toast.error('Las contraseñas maestras no coinciden');
+      toast.error(t('auth.passwordMismatch'));
       return;
     }
 
@@ -532,8 +534,8 @@ export function App() {
       setVaultVersion(1);
       setScreen('unlocked');
 
-      toast.success('Bóveda creada exitosamente', {
-        description: 'Tu clave fue derivada con 600.000 rondas de PBKDF2 en un hilo aislado.',
+      toast.success(t('toasts.vaultCreated'), {
+        description: t('toasts.vaultCreatedDesc'),
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al registrar la bóveda';
@@ -646,7 +648,7 @@ export function App() {
       setUnlockPassword('');
       setScreen('unlocked');
 
-      toast.success('Bóveda desbloqueada correctamente');
+      toast.success(t('toasts.vaultUnlocked'));
 
       // 4. Refresh or touch active session in background without creating duplicates
       syncSessionAndDevice(userConfig).catch(() => {});
@@ -657,7 +659,7 @@ export function App() {
       // 5. Attempt remote synchronization in the background
       pullRemoteVault().catch(() => {});
     } catch (err: unknown) {
-      toast.error('Contraseña Maestra incorrecta o bóveda corrupta');
+      toast.error(t('toasts.authError'));
       console.error(err);
     } finally {
       setIsAuthenticating(false);
@@ -669,7 +671,7 @@ export function App() {
   // -------------------------------------------------------------------------
   const handleUnlockWithPasskey = async () => {
     if (!userConfig?.wrapped_master_key || !userConfig.webauthn_credential_id) {
-      toast.error('Windows Hello no está configurado para esta bóveda.');
+      toast.error(t('toasts.passkeyNotConfigured'));
       return;
     }
 
@@ -678,7 +680,7 @@ export function App() {
       // 1. Strictly enforce physical OS prompt (Windows Hello PIN or Biometrics)
       const verified = await verifyPlatformPasskey(userConfig.webauthn_credential_id);
       if (!verified) {
-        toast.error('Autenticación con Windows Hello cancelada o no autorizada.');
+        toast.error(t('toasts.passkeyAuthError'));
         return;
       }
 
@@ -703,7 +705,7 @@ export function App() {
       setVaultVersion(localVault.version);
       setScreen('unlocked');
 
-      toast.success('Desbloqueado con Windows Hello');
+      toast.success(t('toasts.passkeyUnlocked'));
 
       // 3. Refresh or touch active session and record passkey usage timestamp
       syncSessionAndDevice(userConfig, { passkeyId: userConfig.webauthn_credential_id }).catch(() => {});
@@ -725,7 +727,7 @@ export function App() {
     if (!masterKey || !userConfig) return;
 
     try {
-      toast.info('Solicitando credencial de Windows Hello...');
+      toast.info(t('toasts.passkeyRequesting'));
       const reg = await registerPlatformPasskey(userConfig.user_id, userConfig.username);
       const wrappedPkg = await wrapMasterKey(masterKey, reg.credentialId);
 
@@ -757,8 +759,8 @@ export function App() {
       await saveUserConfig(updatedConfig);
       setUserConfig(updatedConfig);
 
-      toast.success('Windows Hello vinculado exitosamente', {
-        description: 'Ahora puedes desbloquear tu bóveda al instante con tu PIN o huella digital.',
+      toast.success(t('toasts.passkeyLinked'), {
+        description: t('toasts.passkeyLinkedDesc'),
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al vincular passkey';
@@ -772,8 +774,8 @@ export function App() {
   const handleLockVault = useCallback(() => {
     setMasterKey(null);
     setScreen('locked');
-    toast.info('Bóveda bloqueada. Claves purgadas de memoria RAM.');
-  }, []);
+    toast.info(t('toasts.lockedManual'));
+  }, [t]);
 
   // -------------------------------------------------------------------------
   // 8. Account Persistence & Updates
@@ -800,7 +802,7 @@ export function App() {
       pushLocalVault(userConfig.user_id, masterKey).catch(() => {});
     } catch (err: unknown) {
       console.error('Error al persistir cambios de la bóveda:', err);
-      toast.error('Error al cifrar y guardar los cambios');
+      toast.error(t('toasts.saveChangesError'));
     }
   };
 
@@ -808,7 +810,7 @@ export function App() {
     startTransition(async () => {
       const updated = [newItem, ...items];
       await persistVaultChanges(updated);
-      toast.success(`Cuenta de ${newItem.issuer} guardada y cifrada`);
+      toast.success(t('toasts.accountSaved', { issuer: newItem.issuer }));
     });
   };
 
@@ -818,7 +820,7 @@ export function App() {
         item.id === updatedItem.id ? { ...updatedItem, updated_at: Date.now() } : item
       );
       await persistVaultChanges(updated);
-      toast.success(`Cuenta de ${updatedItem.issuer} actualizada`);
+      toast.success(t('toasts.accountUpdated', { issuer: updatedItem.issuer }));
     });
   };
 
@@ -840,7 +842,7 @@ export function App() {
     startTransition(async () => {
       const updated = items.filter((item) => item.id !== id);
       await persistVaultChanges(updated);
-      toast.info('Cuenta eliminada de la bóveda');
+      toast.info(t('toasts.accountDeleted'));
     });
   };
 
@@ -873,7 +875,7 @@ export function App() {
           <Shield className="w-5 h-5 animate-pulse text-white" />
         </div>
         <p className="text-[11px] text-zinc-500 font-mono tracking-wider uppercase">
-          Inicializando entorno seguro...
+          {t('auth.initializing')}
         </p>
       </div>
     );
@@ -896,6 +898,10 @@ export function App() {
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="relative w-full max-w-md bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_50px_rgba(0,0,0,0.8)] rounded-xl p-6 sm:p-7 overflow-hidden z-10"
         >
+          <div className="absolute top-4 right-4 z-20">
+            <LanguageSwitcher />
+          </div>
+
           <div className="flex flex-col items-center text-center">
             {/* Back button if local profile exists */}
             {userConfig && (
@@ -906,7 +912,7 @@ export function App() {
                    className="text-xs text-zinc-400 hover:text-white inline-flex items-center gap-1.5 transition-colors py-1 px-2 rounded-md hover:bg-white/[0.05]"
                  >
                    <ArrowLeft className="w-3.5 h-3.5" />
-                   <span>Volver a mi bóveda ({userConfig.username})</span>
+                   <span>{t('auth.backToVault', { username: userConfig.username })}</span>
                  </button>
                </div>
             )}
@@ -917,16 +923,16 @@ export function App() {
             </div>
 
             <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-zinc-400 bg-white/[0.03] border border-white/[0.06] px-2.5 py-0.5 rounded-md mb-2">
-              ZERO-KNOWLEDGE SECURITY
+              {t('auth.zeroKnowledgeBadge')}
             </div>
 
             <h1 className="text-xl font-semibold tracking-tight text-white mb-1">
-              Revolt Pass
+              {t('auth.welcomeTitle')}
             </h1>
             <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto mb-5">
               {authMode === 'login'
-                ? 'Sincroniza y descifra tu bóveda localmente en este dispositivo.'
-                : 'Bóveda personal cifrada con AES-256-GCM y PBKDF2 600.000 rondas.'}
+                ? t('auth.welcomeSubtitleLogin')
+                : t('auth.welcomeSubtitleRegister')}
             </p>
 
             {/* Mode Selector */}
@@ -941,7 +947,7 @@ export function App() {
                 }`}
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Iniciar Sesión</span>
+                <span>{t('auth.loginTab')}</span>
               </button>
               <button
                 type="button"
@@ -953,7 +959,7 @@ export function App() {
                 }`}
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>Crear Bóveda</span>
+                <span>{t('auth.registerTab')}</span>
               </button>
             </div>
 
@@ -962,7 +968,7 @@ export function App() {
               <form onSubmit={handleLoginExisting} className="w-full space-y-3.5 text-left text-xs">
                 <div>
                   <label className="font-medium text-zinc-300 mb-1.5 block">
-                    Nombre de Usuario
+                    {t('auth.usernameLabel')}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
@@ -971,7 +977,7 @@ export function App() {
                     <input
                       type="text"
                       required
-                      placeholder="ej. rojas, admin, personal"
+                      placeholder={t('auth.usernamePlaceholder')}
                       value={loginUsername}
                       onChange={(e) => setLoginUsername(e.target.value)}
                       className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-3 text-xs focus:border-white/30 focus:outline-none transition-colors"
@@ -981,7 +987,7 @@ export function App() {
 
                 <div>
                   <label className="font-medium text-zinc-300 mb-1.5 block">
-                    Contraseña Maestra
+                    {t('auth.passwordLabel')}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
@@ -990,7 +996,7 @@ export function App() {
                     <input
                       type={showLoginPassword ? 'text' : 'password'}
                       required
-                      placeholder="Tu contraseña maestra"
+                      placeholder={t('auth.passwordPlaceholder')}
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-9 text-xs focus:border-white/30 focus:outline-none transition-colors"
@@ -1013,25 +1019,25 @@ export function App() {
                   {isAuthenticating ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
-                      <span>Sincronizando y descifrando...</span>
+                      <span>{t('auth.authenticating')}</span>
                     </>
                   ) : (
                     <>
                       <Unlock className="w-3.5 h-3.5 text-black" />
-                      <span>Descargar y Desbloquear Bóveda</span>
+                      <span>{t('auth.loginButton')}</span>
                     </>
                   )}
                 </button>
 
                 <div className="text-center pt-2">
                   <span className="text-[11px] text-zinc-500">
-                    ¿No tienes una cuenta aún?{' '}
+                    {t('auth.noAccountPrompt')}{' '}
                     <button
                       type="button"
                       onClick={() => setAuthMode('register')}
                       className="text-zinc-300 hover:text-white underline underline-offset-4"
                     >
-                      Crea tu bóveda aquí
+                      {t('auth.createVaultPrompt')}
                     </button>
                   </span>
                 </div>
@@ -1043,7 +1049,7 @@ export function App() {
               <form onSubmit={handleRegister} className="w-full space-y-3.5 text-left text-xs">
                 <div>
                   <label className="font-medium text-zinc-300 mb-1.5 block">
-                    Nombre de Usuario
+                    {t('auth.usernameLabel')}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
@@ -1052,7 +1058,7 @@ export function App() {
                     <input
                       type="text"
                       required
-                      placeholder="ej. rojas, admin, personal"
+                      placeholder={t('auth.usernamePlaceholder')}
                       value={regUsername}
                       onChange={(e) => setRegUsername(e.target.value)}
                       className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-3 text-xs focus:border-white/30 focus:outline-none transition-colors"
@@ -1062,7 +1068,7 @@ export function App() {
 
                 <div>
                   <label className="font-medium text-zinc-300 mb-1.5 block">
-                    Contraseña Maestra (Master Password)
+                    {t('auth.passwordLabel')}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
@@ -1071,7 +1077,7 @@ export function App() {
                     <input
                       type={showRegPassword ? 'text' : 'password'}
                       required
-                      placeholder="Mínimo 8 caracteres de alta entropía"
+                      placeholder={t('auth.confirmPasswordPlaceholder')}
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                       className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-9 text-xs focus:border-white/30 focus:outline-none transition-colors"
@@ -1088,7 +1094,7 @@ export function App() {
                   {regPassword.length > 0 && (
                     <div className="space-y-1.5 pt-2">
                       <div className="flex items-center justify-between text-[11px] font-mono">
-                        <span className="text-zinc-500">Fuerza</span>
+                        <span className="text-zinc-500">{t('auth.strengthLabel')}</span>
                         <span className={passwordEntropy.color}>{passwordEntropy.label}</span>
                       </div>
                       <div className="grid grid-cols-4 gap-1 h-1">
@@ -1115,7 +1121,7 @@ export function App() {
 
                 <div>
                   <label className="font-medium text-zinc-300 mb-1.5 block">
-                    Confirmar Contraseña Maestra
+                    {t('auth.confirmPasswordLabel')}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
@@ -1124,7 +1130,7 @@ export function App() {
                     <input
                       type={showRegConfirmPassword ? 'text' : 'password'}
                       required
-                      placeholder="Repite tu contraseña maestra"
+                      placeholder={t('auth.passwordPlaceholder')}
                       value={regConfirmPassword}
                       onChange={(e) => setRegConfirmPassword(e.target.value)}
                       className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-14 text-xs focus:border-white/30 focus:outline-none transition-colors"
@@ -1156,25 +1162,25 @@ export function App() {
                   {isAuthenticating ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
-                      <span>Derivando Claves (PBKDF2 600k)...</span>
+                      <span>{t('auth.creatingVault')}</span>
                     </>
                   ) : (
                     <>
                       <Lock className="w-3.5 h-3.5 text-black" />
-                      <span>Crear Bóveda Segura</span>
+                      <span>{t('auth.registerButton')}</span>
                     </>
                   )}
                 </button>
 
                 <div className="text-center pt-2">
                   <span className="text-[11px] text-zinc-500">
-                    ¿Ya tienes una bóveda creada?{' '}
+                    {t('auth.alreadyAccountPrompt')}{' '}
                     <button
                       type="button"
                       onClick={() => setAuthMode('login')}
                       className="text-zinc-300 hover:text-white underline underline-offset-4"
                     >
-                      Inicia sesión aquí
+                      {t('auth.loginHerePrompt')}
                     </button>
                   </span>
                 </div>
@@ -1185,10 +1191,10 @@ export function App() {
             <div className="w-full mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-zinc-500">
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                AES-GCM-256
+                {t('auth.aesNotice')}
               </span>
-              <span>PBKDF2 600K</span>
-              <span>CLIENT-SIDE ONLY</span>
+              <span>{t('auth.pbkdf2Notice')}</span>
+              <span>{t('auth.clientSideOnly')}</span>
             </div>
           </div>
         </motion.div>
@@ -1212,6 +1218,10 @@ export function App() {
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="relative w-full max-w-sm bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_50px_rgba(0,0,0,0.8)] rounded-xl p-6 sm:p-7 overflow-hidden z-10"
         >
+          <div className="absolute top-4 right-4 z-20">
+            <LanguageSwitcher />
+          </div>
+
           <div className="flex flex-col items-center text-center">
             {/* Brand Logo */}
             <div className="h-10 w-10 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top flex items-center justify-center mb-3 text-white">
@@ -1219,12 +1229,12 @@ export function App() {
             </div>
 
             <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-zinc-400 bg-white/[0.03] border border-white/[0.06] px-2.5 py-0.5 rounded-md mb-2">
-              SESSION LOCKED • RAM PURGED
+              {t('auth.sessionLockedBadge')}
             </div>
 
             <h1 className="text-xl font-semibold text-white mb-0.5">Revolt Pass</h1>
             <p className="text-xs text-zinc-400 mb-5 font-mono">
-              Usuario: <strong className="text-white">{userConfig?.username}</strong>
+              {t('auth.userLabel')}: <strong className="text-white">{userConfig?.username}</strong>
             </p>
 
             {/* Option 1: Fast Unlock with Windows Hello / PIN */}
@@ -1237,12 +1247,12 @@ export function App() {
                   className="w-full py-2.5 px-4 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] text-white font-medium text-xs border border-white/[0.08] shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50"
                 >
                   <Fingerprint className="w-4 h-4 text-zinc-300" />
-                  <span>Desbloquear con Windows Hello / PIN</span>
+                  <span>{t('auth.windowsHelloButton')}</span>
                 </button>
 
                 <div className="flex items-center my-3.5 text-xs text-zinc-600">
                   <div className="flex-1 h-px bg-white/[0.06]" />
-                  <span className="px-2.5 font-mono text-[10px] text-zinc-500 uppercase">o contraseña maestra</span>
+                  <span className="px-2.5 font-mono text-[10px] text-zinc-500 uppercase">{t('auth.orMasterPassword')}</span>
                   <div className="flex-1 h-px bg-white/[0.06]" />
                 </div>
               </div>
@@ -1257,7 +1267,7 @@ export function App() {
                 <input
                   type={showUnlockPassword ? 'text' : 'password'}
                   required
-                  placeholder="Contraseña Maestra..."
+                  placeholder={t('auth.passwordPlaceholder')}
                   value={unlockPassword}
                   onChange={(e) => setUnlockPassword(e.target.value)}
                   className="w-full bg-[#08090a] border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 rounded-lg py-2 pl-9 pr-9 text-xs focus:border-white/30 focus:outline-none transition-colors"
@@ -1279,12 +1289,12 @@ export function App() {
                 {isAuthenticating ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-black" />
-                    <span>Verificando...</span>
+                    <span>{t('auth.unlocking')}</span>
                   </>
                 ) : (
                   <>
                     <Unlock className="w-3.5 h-3.5 text-black" />
-                    <span>Desbloquear Bóveda</span>
+                    <span>{t('auth.unlockButton')}</span>
                   </>
                 )}
               </button>
@@ -1301,7 +1311,7 @@ export function App() {
                 className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors underline-offset-4 hover:underline inline-flex items-center gap-1.5"
               >
                 <User className="w-3 h-3" />
-                <span>Iniciar sesión con otra cuenta</span>
+                <span>{t('auth.switchAccount')}</span>
               </button>
             </div>
 
@@ -1309,9 +1319,9 @@ export function App() {
             <div className="w-full mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-zinc-500">
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                AES-GCM-256
+                {t('auth.aesNotice')}
               </span>
-              <span>ZERO-KNOWLEDGE</span>
+              <span>{t('auth.zeroKnowledge')}</span>
             </div>
           </div>
         </motion.div>
@@ -1357,7 +1367,7 @@ export function App() {
                   ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
                   : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
               }`}
-              title={`Estado de sincronización: ${syncStatus}`}
+              title={`${t('common.status')}: ${syncStatus}`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
@@ -1370,12 +1380,12 @@ export function App() {
               />
               <span className="hidden md:inline capitalize font-sans">
                 {syncStatus === 'synced'
-                  ? 'Sincronizado'
+                  ? t('nav.synced')
                   : syncStatus === 'syncing'
-                  ? 'Sincronizando'
+                  ? t('nav.syncing')
                   : syncStatus === 'dirty'
-                  ? 'Cambios locales'
-                  : 'Offline / Error'}
+                  ? t('nav.dirty')
+                  : t('nav.syncError')}
               </span>
             </div>
 
@@ -1384,7 +1394,7 @@ export function App() {
               type="button"
               onClick={() => setIsCmdPaletteOpen(true)}
               className="h-8 px-2.5 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] transition-colors flex items-center gap-1.5 text-xs"
-              title="Buscar (Ctrl + K)"
+              title={`${t('nav.quickSearch')} (Ctrl + K)`}
             >
               <Search className="w-3.5 h-3.5" />
               <kbd className="hidden lg:inline text-[10px] font-mono px-1 py-0.2 bg-white/[0.06] rounded text-zinc-400">
@@ -1397,7 +1407,7 @@ export function App() {
               type="button"
               onClick={() => setIsGeneratorOpen(true)}
               className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
-              title="Generador de Contraseñas"
+              title={t('nav.generator')}
             >
               <KeyRound className="w-3.5 h-3.5" />
             </button>
@@ -1407,7 +1417,7 @@ export function App() {
               type="button"
               onClick={() => setIsBackupOpen(true)}
               className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
-              title="Respaldo & Migración (Copia Cifrada / Texto Plano)"
+              title={t('nav.backup')}
             >
               <FolderArchive className="w-3.5 h-3.5" />
             </button>
@@ -1417,7 +1427,7 @@ export function App() {
               type="button"
               onClick={() => setIsSecurityOpen(true)}
               className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
-              title="Panel de Seguridad, Sesiones y Passkeys"
+              title={t('nav.securityPanel')}
             >
               <Shield className="w-3.5 h-3.5 text-zinc-300" />
             </button>
@@ -1428,10 +1438,10 @@ export function App() {
                 type="button"
                 onClick={handleInstallApp}
                 className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                title="Instalar Revolt Pass en tu sistema operativo (PWA)"
+                title={t('nav.installApp')}
               >
                 <Download className="w-3.5 h-3.5 text-zinc-300" />
-                <span className="hidden sm:inline">Instalar App</span>
+                <span className="hidden sm:inline">{t('nav.installApp')}</span>
               </button>
             )}
 
@@ -1441,19 +1451,22 @@ export function App() {
                 type="button"
                 onClick={handleSetupPasskey}
                 className="h-8 px-2.5 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                title="Habilitar PIN de Windows Hello o Biometría"
+                title={t('nav.linkPin')}
               >
                 <Fingerprint className="w-3.5 h-3.5 text-zinc-300" />
-                <span className="hidden sm:inline">Vincular PIN</span>
+                <span className="hidden sm:inline">{t('nav.linkPin')}</span>
               </button>
             )}
+
+            {/* Language Switcher Pill */}
+            <LanguageSwitcher />
 
             {/* Manual Lock Button */}
             <button
               type="button"
               onClick={handleLockVault}
               className="h-8 w-8 rounded-lg text-zinc-400 hover:text-rose-400 bg-[#16181d] border border-white/[0.08] hover:border-rose-500/30 hover:bg-rose-500/10 flex items-center justify-center transition-colors"
-              title="Bloquear Bóveda (Purgar memoria RAM)"
+              title={t('nav.lockVault')}
             >
               <Lock className="w-3.5 h-3.5" />
             </button>
@@ -1475,7 +1488,7 @@ export function App() {
 
       {/* Minimalist Footer */}
       <footer className="w-full py-4 text-center border-t border-white/[0.06] text-zinc-500 text-[11px] font-mono">
-        Revolt Pass · Zero-Knowledge AES-GCM 256 · Cloudflare Edge & D1
+        {t('auth.footerNotice')}
       </footer>
 
       {/* Floating Modals */}

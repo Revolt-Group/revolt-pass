@@ -22,6 +22,7 @@ import { parseOtpAuthUri } from '../lib/crypto/totp.ts';
 import { sanitizeBase32, isValidBase32 } from '../lib/crypto/base32.ts';
 import { BrandIcon } from './BrandIcon.tsx';
 import { resizeImageFile } from '../lib/utils/image.ts';
+import { useTranslation } from '../i18n/index.ts';
 import type { VaultItem, TotpAlgorithm, RecoveryCode } from '../types/vault.ts';
 
 interface QrModalProps {
@@ -33,6 +34,7 @@ interface QrModalProps {
 type IngestionTab = 'camera' | 'dropzone' | 'paste' | 'manual';
 
 export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<IngestionTab>('camera');
 
   // Form State
@@ -313,10 +315,10 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                     </div>
                     <div>
                       <Dialog.Title className="text-base font-semibold tracking-tight text-white">
-                        Vincular Nueva Cuenta 2FA
+                        {t('qrModal.title')}
                       </Dialog.Title>
                       <Dialog.Description className="text-xs text-zinc-400">
-                        Escanea un código QR o introduce la clave secreta manualmente
+                        {t('qrModal.subtitle')}
                       </Dialog.Description>
                     </div>
                   </div>
@@ -334,10 +336,10 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                 <div className="mt-4 flex p-1 bg-[#08090a] border border-white/[0.06] rounded-lg relative">
                   {(
                     [
-                      { id: 'camera', label: 'Cámara', icon: Camera },
-                      { id: 'dropzone', label: 'Arrastrar Captura', icon: UploadCloud },
-                      { id: 'paste', label: 'Ctrl + V', icon: ClipboardPaste },
-                      { id: 'manual', label: 'Manual / Editar', icon: Edit3 },
+                      { id: 'camera', label: t('qrModal.tabCamera'), icon: Camera },
+                      { id: 'dropzone', label: t('qrModal.tabImage'), icon: UploadCloud },
+                      { id: 'paste', label: t('qrModal.tabPaste'), icon: ClipboardPaste },
+                      { id: 'manual', label: t('qrModal.tabManual'), icon: Edit3 },
                     ] as const
                   ).map((tab) => {
                     const Icon = tab.icon;
@@ -552,12 +554,12 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs font-medium text-zinc-300 mb-1 block">
-                            Servicio / Proveedor
+                            {t('qrModal.issuerLabel')}
                           </label>
                           <input
                             type="text"
                             required
-                            placeholder="ej. GitHub, AWS, Google"
+                            placeholder={t('qrModal.issuerPlaceholder')}
                             value={issuer}
                             onChange={(e) => setIssuer(e.target.value)}
                             className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
@@ -566,12 +568,12 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
 
                         <div>
                           <label className="text-xs font-medium text-zinc-300 mb-1 block">
-                            Cuenta / Identificador
+                            {t('qrModal.accountLabel')}
                           </label>
                           <input
                             type="text"
                             required
-                            placeholder="ej. usuario@correo.com"
+                            placeholder={t('qrModal.accountPlaceholder')}
                             value={account}
                             onChange={(e) => setAccount(e.target.value)}
                             className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
@@ -581,12 +583,12 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
 
                       <div>
                         <label className="text-xs font-medium text-zinc-300 mb-1 block">
-                          Secreto Base32
+                          {t('qrModal.secretLabel')}
                         </label>
                         <input
                           type="text"
                           required
-                          placeholder="ej. JBSWY3DPEHPK3PXP"
+                          placeholder={t('qrModal.secretPlaceholder')}
                           value={secret}
                           onChange={(e) => setSecret(e.target.value)}
                           className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs font-mono text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors uppercase"
@@ -595,31 +597,31 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
 
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="text-xs text-zinc-400 mb-1 block">Dígitos</label>
+                          <label className="text-xs text-zinc-400 mb-1 block">{t('qrModal.digitsLabel')}</label>
                           <select
                             value={digits}
                             onChange={(e) => setDigits(Number(e.target.value) as 6 | 8)}
                             className="w-full px-2.5 py-1.5 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-zinc-200"
                           >
-                            <option value={6}>6 Dígitos</option>
-                            <option value={8}>8 Dígitos</option>
+                            <option value={6}>6</option>
+                            <option value={8}>8</option>
                           </select>
                         </div>
 
                         <div>
-                          <label className="text-xs text-zinc-400 mb-1 block">Intervalo (s)</label>
+                          <label className="text-xs text-zinc-400 mb-1 block">{t('qrModal.periodLabel')}</label>
                           <select
                             value={period}
                             onChange={(e) => setPeriod(Number(e.target.value))}
                             className="w-full px-2.5 py-1.5 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-zinc-200"
                           >
-                            <option value={30}>30 segundos</option>
-                            <option value={60}>60 segundos</option>
+                            <option value={30}>30s</option>
+                            <option value={60}>60s</option>
                           </select>
                         </div>
 
                         <div>
-                          <label className="text-xs text-zinc-400 mb-1 block">Algoritmo</label>
+                          <label className="text-xs text-zinc-400 mb-1 block">{t('qrModal.algorithmLabel')}</label>
                           <select
                             value={algorithm}
                             onChange={(e) => setAlgorithm(e.target.value as TotpAlgorithm)}
@@ -633,11 +635,11 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
 
                       <div>
                         <label className="text-xs font-medium text-zinc-300 mb-1 block">
-                          Etiquetas (separadas por comas)
+                          {t('qrModal.tagsLabel')}
                         </label>
                         <input
                           type="text"
-                          placeholder="ej. Infra, Trabajo, Cloud"
+                          placeholder={t('qrModal.tagsPlaceholder')}
                           value={tagsInput}
                           onChange={(e) => setTagsInput(e.target.value)}
                           className="w-full px-3 py-2 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30 transition-colors"
@@ -647,12 +649,12 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                       {/* Recovery Codes Section */}
                       <div className="pt-2 border-t border-white/[0.08]">
                         <label className="text-xs font-semibold text-zinc-300 mb-2 block">
-                          Códigos de Recuperación (Opcional)
+                          {t('itemModal.recoveryCodesTitle')}
                         </label>
                         <div className="flex gap-2 mb-2">
                           <input
                             type="text"
-                            placeholder="Nuevo código de emergencia"
+                            placeholder={t('itemModal.recoveryCodePlaceholder')}
                             value={newRecoveryInput}
                             onChange={(e) => setNewRecoveryInput(e.target.value)}
                             onKeyDown={(e) => {
@@ -669,7 +671,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                             className="px-3 py-1.5 bg-[#16181d] hover:bg-[#1c1f24] text-zinc-200 border border-white/[0.08] rounded-lg text-xs font-medium flex items-center gap-1 transition-colors"
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            Añadir
+                            {t('itemModal.addCodeButton')}
                           </button>
                         </div>
 
@@ -701,13 +703,13 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
                           onClick={onClose}
                           className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
                         >
-                          Cancelar
+                          {t('common.cancel')}
                         </button>
                         <button
                           type="submit"
                           className="px-4 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-zinc-200 text-black shadow-sm transition-all active:scale-[0.99]"
                         >
-                          Guardar Cuenta en Bóveda
+                          {t('qrModal.saveButton')}
                         </button>
                       </div>
                     </form>

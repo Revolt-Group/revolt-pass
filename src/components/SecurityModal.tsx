@@ -18,6 +18,7 @@ import {
   Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from '../i18n/index.ts';
 
 import type { LocalUserConfig, SessionInfo, PasskeyInfo, AuditLogItem } from '../types/vault';
 import type { ApiResponse } from '../worker/types';
@@ -47,6 +48,7 @@ export function SecurityModal({
   masterKey,
   onConfigUpdated,
 }: SecurityModalProps) {
+  const { t, lang } = useTranslation();
   const [activeTab, setActiveTab] = useState<'sessions' | 'passkeys' | 'audit'>('sessions');
 
   // Sessions state
@@ -464,34 +466,34 @@ export function SecurityModal({
     try {
       const parsed = JSON.parse(log.metadata);
       if (log.event_type === 'LOGIN') {
-        const device = parsed.device_name || log.device_name || 'este dispositivo';
-        return `Inicio de sesión exitoso desde ${device}`;
+        const device = parsed.device_name || log.device_name || t('audit.unknownDevice');
+        return t('audit.loginSuccess', { device });
       }
       if (log.event_type === 'REGISTER') {
-        return 'Registro de cuenta e inicialización de bóveda';
+        return t('audit.registerSuccess');
       }
       if (log.event_type === 'PASSKEY_ADDED') {
         const name = parsed.passkey_name || 'Passkey';
-        return `Nueva passkey vinculada: "${name}"`;
+        return t('audit.passkeyAdded', { name });
       }
       if (log.event_type === 'PASSKEY_RENAMED') {
         const newName = parsed.new_name || parsed.name || 'Passkey';
-        return `Passkey renombrada a "${newName}"`;
+        return t('audit.passkeyRenamed', { name: newName });
       }
       if (log.event_type === 'DEVICE_RENAMED') {
-        const newName = parsed.new_name || parsed.device_name || 'Dispositivo';
-        return `Dispositivo renombrado a "${newName}"`;
+        const newName = parsed.new_name || parsed.device_name || t('audit.unknownDevice');
+        return t('audit.deviceRenamed', { name: newName });
       }
       if (log.event_type === 'SESSION_REVOKED') {
-        const target = parsed.target_device || parsed.device_name || 'dispositivo remoto';
-        return `Sesión cerrada para: ${target}`;
+        const target = parsed.target_device || parsed.device_name || t('audit.unknownDevice');
+        return t('audit.sessionRevoked', { device: target });
       }
       if (log.event_type === 'PASSKEY_REVOKED') {
         const target = parsed.target_name || parsed.name || 'Passkey';
-        return `Passkey eliminada: "${target}"`;
+        return t('audit.passkeyRevoked', { name: target });
       }
       if (log.event_type === 'ALL_SESSIONS_REVOKED') {
-        return 'Cierre masivo de todas las demás sesiones activas';
+        return t('audit.allSessionsRevoked');
       }
       return Object.entries(parsed).map(([k, v]) => `${k}: ${v}`).join(' · ');
     } catch {
@@ -499,9 +501,9 @@ export function SecurityModal({
     }
   };
   const formatTimestamp = (tsSeconds: number) => {
-    if (!tsSeconds) return 'Desconocido';
+    if (!tsSeconds) return '---';
     const date = new Date(tsSeconds * 1000);
-    return date.toLocaleString('es-ES', {
+    return date.toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -531,10 +533,10 @@ export function SecurityModal({
               </div>
               <div>
                 <Dialog.Title className="text-base font-semibold text-white tracking-tight">
-                  Panel de Seguridad y Sesiones
+                  {t('security.title')}
                 </Dialog.Title>
                 <Dialog.Description className="text-xs text-zinc-400">
-                  Control de sesiones activas, credenciales biométricas y auditoría de accesos.
+                  {t('security.subtitle')}
                 </Dialog.Description>
               </div>
             </div>
@@ -542,7 +544,7 @@ export function SecurityModal({
               <button
                 type="button"
                 className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all"
-                aria-label="Cerrar panel"
+                aria-label={t('common.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -561,7 +563,7 @@ export function SecurityModal({
               }`}
             >
               <Laptop className="w-3.5 h-3.5" />
-              <span>Sesiones y Dispositivos</span>
+              <span>{t('security.tabSessions')}</span>
             </button>
             <button
               type="button"
@@ -573,7 +575,7 @@ export function SecurityModal({
               }`}
             >
               <Fingerprint className="w-3.5 h-3.5" />
-              <span>Passkeys y Biometría</span>
+              <span>{t('security.tabPasskeys')}</span>
             </button>
             <button
               type="button"
@@ -585,7 +587,7 @@ export function SecurityModal({
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>Historial de Seguridad</span>
+              <span>{t('security.tabAudit')}</span>
             </button>
           </div>
 
@@ -596,9 +598,9 @@ export function SecurityModal({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-semibold text-zinc-200">Dispositivos Conectados</h4>
+                    <h4 className="text-xs font-semibold text-zinc-200">{t('security.sessionsTitle')}</h4>
                     <p className="text-[11px] text-zinc-400">
-                      Dispositivos con sesiones activas que tienen sincronización autorizada.
+                      {t('security.sessionsSubtitle')}
                     </p>
                   </div>
                   {sessions.length > 1 && (
@@ -609,7 +611,7 @@ export function SecurityModal({
                       className="py-1.5 px-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 font-medium text-[11px] hover:bg-rose-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <LogOut className="w-3 h-3" />
-                      <span>{isRevokingOthers ? 'Revocando...' : 'Cerrar todas las demás'}</span>
+                      <span>{isRevokingOthers ? t('security.revokingSessions') : t('security.revokeOtherSessions')}</span>
                     </button>
                   )}
                 </div>
@@ -617,11 +619,11 @@ export function SecurityModal({
                 {isLoadingSessions ? (
                   <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
                     <RefreshCw className="w-4 h-4 animate-spin text-zinc-300" />
-                    <span>Consultando sesiones activas...</span>
+                    <span>{t('security.loadingSessions')}</span>
                   </div>
                 ) : sessions.length === 0 ? (
                   <div className="py-8 text-center bg-[#08090a] rounded-lg border border-white/[0.04] text-zinc-400">
-                    No se encontraron sesiones registradas en el servidor.
+                    {t('security.noSessions')}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -654,7 +656,7 @@ export function SecurityModal({
                                   onClick={() => handleSaveEditSession(session.id)}
                                   disabled={isSavingSessionName}
                                   className="p-1 rounded bg-white/10 hover:bg-white/20 text-emerald-400 transition-colors"
-                                  title="Guardar"
+                                  title={t('security.saveDeviceName')}
                                 >
                                   <Check className="w-3.5 h-3.5" />
                                 </button>
@@ -663,7 +665,7 @@ export function SecurityModal({
                                   onClick={handleCancelEditSession}
                                   disabled={isSavingSessionName}
                                   className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-                                  title="Cancelar"
+                                  title={t('common.cancel')}
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -677,13 +679,13 @@ export function SecurityModal({
                                   type="button"
                                   onClick={() => handleStartEditSession(session)}
                                   className="opacity-40 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-zinc-200 transition-opacity"
-                                  title="Renombrar dispositivo"
+                                  title={t('security.renameDeviceTooltip')}
                                 >
                                   <Pencil className="w-2.5 h-2.5" />
                                 </button>
                                 {session.is_current && (
                                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                                    Este dispositivo
+                                    {t('common.thisDevice')}
                                   </span>
                                 )}
                               </div>
@@ -696,7 +698,7 @@ export function SecurityModal({
                                   <span>·</span>
                                 </span>
                               )}
-                              <span>Activo: {formatTimestamp(session.last_active_at)}</span>
+                              <span>{t('security.activeLabel')}: {formatTimestamp(session.last_active_at)}</span>
                             </div>
                           </div>
                         </div>
@@ -706,10 +708,10 @@ export function SecurityModal({
                             type="button"
                             onClick={() => handleRevokeSession(session.id)}
                             className="py-1 px-2.5 rounded-md text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-[11px] transition-all flex items-center gap-1.5 shrink-0"
-                            title="Cerrar sesión de este dispositivo"
+                            title={t('security.revokeSessionButton')}
                           >
                             <LogOut className="w-3 h-3" />
-                            <span>Cerrar sesión</span>
+                            <span>{t('security.revokeSessionButton')}</span>
                           </button>
                         )}
                       </div>
@@ -724,9 +726,9 @@ export function SecurityModal({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-semibold text-zinc-200">Credenciales FIDO2 / Passkeys</h4>
+                    <h4 className="text-xs font-semibold text-zinc-200">{t('security.passkeysTitle')}</h4>
                     <p className="text-[11px] text-zinc-400">
-                      Dispositivos autorizados para desbloqueo por PIN local o biometría física.
+                      {t('security.passkeysSubtitle')}
                     </p>
                   </div>
                   <button
@@ -739,7 +741,7 @@ export function SecurityModal({
                     className="py-1.5 px-3 rounded-lg bg-white hover:bg-zinc-200 text-black font-medium text-xs shadow-sm flex items-center gap-1.5 transition-all active:scale-[0.99] disabled:opacity-50"
                   >
                     <Plus className="w-3.5 h-3.5 text-black" />
-                    <span>{showEnrollForm ? 'Cancelar' : 'Vincular Passkey'}</span>
+                    <span>{showEnrollForm ? t('security.cancelEnroll') : t('security.enrollPasskeyButton')}</span>
                   </button>
                 </div>
 
@@ -747,7 +749,7 @@ export function SecurityModal({
                 {showEnrollForm && (
                   <div className="p-3 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-xs text-white">Nombre de la nueva passkey</span>
+                      <span className="font-medium text-xs text-white">{t('security.newPasskeyNameLabel')}</span>
                       <button
                         type="button"
                         onClick={() => setShowEnrollForm(false)}
@@ -759,7 +761,7 @@ export function SecurityModal({
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        placeholder="Ej: Windows Hello / Laptop Personal"
+                        placeholder={t('security.newPasskeyPlaceholder')}
                         value={newPasskeyName}
                         onChange={(e) => setNewPasskeyName(e.target.value)}
                         onKeyDown={(e) => {
@@ -777,10 +779,10 @@ export function SecurityModal({
                         {isEnrollingPasskey ? (
                           <>
                             <RefreshCw className="w-3 h-3 animate-spin" />
-                            <span>Vinculando...</span>
+                            <span>{t('security.enrollingPasskey')}</span>
                           </>
                         ) : (
-                          <span>Vincular ahora</span>
+                          <span>{t('security.enrollNowButton')}</span>
                         )}
                       </button>
                     </div>
@@ -790,13 +792,13 @@ export function SecurityModal({
                 {isLoadingPasskeys ? (
                   <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
                     <RefreshCw className="w-4 h-4 animate-spin text-zinc-300" />
-                    <span>Cargando passkeys registradas...</span>
+                    <span>{t('security.loadingPasskeys')}</span>
                   </div>
                 ) : passkeys.length === 0 ? (
                   <div className="py-8 text-center bg-[#08090a] rounded-lg border border-white/[0.04] text-zinc-400 space-y-2">
-                    <p>No tienes passkeys registradas en el servidor.</p>
+                    <p>{t('security.noPasskeys')}</p>
                     <p className="text-[11px] text-zinc-500">
-                      Vincular Windows Hello o biometría te permite desbloquear sin ingresar la contraseña maestra manualmente.
+                      {t('security.noPasskeysHelp')}
                     </p>
                   </div>
                 ) : (
@@ -832,7 +834,7 @@ export function SecurityModal({
                                     onClick={() => handleSaveEditPasskey(pk.id)}
                                     disabled={isSavingPasskeyName}
                                     className="p-1 rounded bg-white/10 hover:bg-white/20 text-emerald-400 transition-colors"
-                                    title="Guardar"
+                                    title={t('security.saveDeviceName')}
                                   >
                                     <Check className="w-3.5 h-3.5" />
                                   </button>
@@ -841,7 +843,7 @@ export function SecurityModal({
                                     onClick={handleCancelEditPasskey}
                                     disabled={isSavingPasskeyName}
                                     className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-                                    title="Cancelar"
+                                    title={t('common.cancel')}
                                   >
                                     <X className="w-3.5 h-3.5" />
                                   </button>
@@ -853,20 +855,20 @@ export function SecurityModal({
                                     type="button"
                                     onClick={() => handleStartEditPasskey(pk)}
                                     className="opacity-40 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-zinc-200 transition-opacity"
-                                    title="Renombrar passkey"
+                                    title={t('security.renamePasskeyTooltip')}
                                   >
                                     <Pencil className="w-2.5 h-2.5" />
                                   </button>
                                   {isLocalCredential && (
                                     <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.06] text-zinc-300 border border-white/[0.1] shrink-0">
-                                      Este equipo
+                                      {t('common.thisComputer')}
                                     </span>
                                   )}
                                 </div>
                               )}
                               <div className="text-[11px] text-zinc-400 mt-0.5 font-mono">
                                 {pk.device_name && <span>{pk.device_name} · </span>}
-                                <span>Vinculado: {formatTimestamp(pk.created_at)}</span>
+                                <span>{t('security.linkedOn')}: {formatTimestamp(pk.created_at)}</span>
                               </div>
                             </div>
                           </div>
@@ -875,10 +877,10 @@ export function SecurityModal({
                             type="button"
                             onClick={() => handleRevokePasskey(pk.id)}
                             className="py-1 px-2.5 rounded-md text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-[11px] transition-all flex items-center gap-1 shrink-0"
-                            title="Revocar passkey de este dispositivo"
+                            title={t('security.deletePasskeyButton')}
                           >
                             <Trash2 className="w-3 h-3" />
-                            <span>Eliminar</span>
+                            <span>{t('security.deletePasskeyButton')}</span>
                           </button>
                         </div>
                       );
@@ -892,20 +894,20 @@ export function SecurityModal({
             {activeTab === 'audit' && (
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-xs font-semibold text-zinc-200">Auditoría de Eventos Críticos</h4>
+                  <h4 className="text-xs font-semibold text-zinc-200">{t('security.auditTitle')}</h4>
                   <p className="text-[11px] text-zinc-400">
-                    Registro inmutable de inicios de sesión, sincronizaciones y cambios en credenciales.
+                    {t('security.auditSubtitle')}
                   </p>
                 </div>
 
                 {isLoadingAudit ? (
                   <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
                     <RefreshCw className="w-4 h-4 animate-spin text-zinc-300" />
-                    <span>Cargando historial de seguridad...</span>
+                    <span>{t('security.loadingAudit')}</span>
                   </div>
                 ) : auditLogs.length === 0 ? (
                   <div className="py-8 text-center bg-[#08090a] rounded-lg border border-white/[0.04] text-zinc-400">
-                    No hay registros de auditoría disponibles aún.
+                    {t('security.noAudit')}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -951,9 +953,9 @@ export function SecurityModal({
                           : (() => {
                               try {
                                 const parsed = log.metadata ? JSON.parse(log.metadata) : {};
-                                return parsed.device_name || parsed.target_device || 'Dispositivo';
+                                return parsed.device_name || parsed.target_device || t('audit.unknownDevice');
                               } catch {
-                                return 'Dispositivo';
+                                return t('audit.unknownDevice');
                               }
                             })();
 
@@ -992,14 +994,14 @@ export function SecurityModal({
           <div className="pt-3 mt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-zinc-500">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Zero-Knowledge Architecture</span>
+              <span>{t('common.zeroKnowledgeBadge')}</span>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="py-1.5 px-3.5 rounded-lg bg-[#16181d] text-zinc-200 border border-white/[0.08] font-medium hover:bg-[#1c1f24] hover:text-white transition-all text-xs"
             >
-              Cerrar
+              {t('common.close')}
             </button>
           </div>
         </Dialog.Content>

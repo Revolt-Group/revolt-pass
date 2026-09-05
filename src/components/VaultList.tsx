@@ -10,6 +10,7 @@ import {
   List as ListIcon,
 } from 'lucide-react';
 import { TotpCard } from './TotpCard.tsx';
+import { useTranslation } from '../i18n/index.ts';
 import type { VaultItem } from '../types/vault.ts';
 
 interface VaultListProps {
@@ -29,6 +30,7 @@ export function VaultList({
   onOpenAddModal,
   onEditAccount,
 }: VaultListProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -77,7 +79,7 @@ export function VaultList({
           <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
-            placeholder="Buscar cuenta, usuario o etiqueta... (Ctrl + K)"
+            placeholder={t('nav.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 bg-[#08090a] border border-white/[0.08] rounded-lg text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-white/30 transition-colors"
@@ -95,7 +97,6 @@ export function VaultList({
                   ? 'bg-[#16181d] text-white border border-white/[0.08]'
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
-              title="Vista en cuadrícula"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
             </button>
@@ -107,7 +108,6 @@ export function VaultList({
                   ? 'bg-[#16181d] text-white border border-white/[0.08]'
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
-              title="Vista compacta de lista"
             >
               <ListIcon className="w-3.5 h-3.5" />
             </button>
@@ -120,7 +120,7 @@ export function VaultList({
             className="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black rounded-lg text-xs font-medium shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.99] shrink-0"
           >
             <Plus className="w-3.5 h-3.5 text-black" />
-            <span>Nueva Cuenta</span>
+            <span>{t('nav.newEntry')}</span>
           </button>
         </div>
       </div>
@@ -130,7 +130,7 @@ export function VaultList({
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs select-none">
           <span className="text-zinc-500 flex items-center gap-1 px-1 text-[11px] font-mono uppercase">
             <Filter className="w-3 h-3" />
-            Filtros:
+            {t('vault.filtersLabel')}
           </span>
           <button
             type="button"
@@ -141,7 +141,7 @@ export function VaultList({
                 : 'bg-[#16181d] border border-white/[0.08] text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Todos ({items.length})
+            {t('common.filterAll')} ({items.length})
           </button>
           {allTags.map((tag) => {
             const isSelected = selectedTag === tag;
@@ -169,9 +169,9 @@ export function VaultList({
           <div className="w-12 h-12 rounded-xl bg-[#16181d] border border-white/[0.1] hairline-top flex items-center justify-center text-zinc-300 mb-3.5">
             <Plus className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-base font-semibold text-white mb-1">Tu bóveda está vacía</h3>
+          <h3 className="text-base font-semibold text-white mb-1">{t('vault.emptyTitle')}</h3>
           <p className="text-xs text-zinc-400 max-w-sm mb-5">
-            Vincula tus cuentas de GitHub, AWS, Google o cualquier servicio compatible con TOTP para proteger tus accesos.
+            {t('vault.emptySubtitle')}
           </p>
           <button
             type="button"
@@ -179,7 +179,7 @@ export function VaultList({
             className="px-4 py-2 bg-white hover:bg-zinc-200 text-black rounded-lg text-xs font-medium shadow-sm flex items-center gap-1.5 transition-all active:scale-[0.99]"
           >
             <Plus className="w-3.5 h-3.5 text-black" />
-            <span>Vincular Primera Cuenta 2FA</span>
+            <span>{t('vault.createFirstItem')}</span>
           </button>
         </div>
       )}
@@ -188,9 +188,9 @@ export function VaultList({
       {items.length > 0 && filteredItems.length === 0 && (
         <div className="py-14 flex flex-col items-center justify-center text-center p-6 border border-white/[0.08] rounded-xl bg-[#0f1013]/50">
           <ShieldOff className="w-8 h-8 text-zinc-500 mb-2.5" />
-          <h4 className="text-sm font-semibold text-white mb-1">Sin coincidencias</h4>
+          <h4 className="text-sm font-semibold text-white mb-1">{t('vault.noResultsTitle')}</h4>
           <p className="text-xs text-zinc-400 mb-4">
-            No se encontraron cuentas para el filtro actual.
+            {t('vault.noResultsSubtitle')}
           </p>
           <button
             type="button"
@@ -200,7 +200,7 @@ export function VaultList({
             }}
             className="px-3 py-1.5 bg-[#16181d] hover:bg-[#1c1f24] text-zinc-300 border border-white/[0.08] rounded-lg text-xs"
           >
-            Limpiar filtros
+            {t('vault.clearFilters')}
           </button>
         </div>
       )}
@@ -210,7 +210,7 @@ export function VaultList({
         <div>
           <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-mono font-medium text-zinc-400 uppercase tracking-wider px-1">
             <Pin className="w-3 h-3 text-zinc-300" />
-            <span>Cuentas Prioritarias ({pinnedItems.length})</span>
+            <span>{t('nav.pinnedVaults')} ({pinnedItems.length})</span>
           </div>
           <div
             ref={pinnedListRef}
@@ -240,7 +240,7 @@ export function VaultList({
         <div>
           {pinnedItems.length > 0 && (
             <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-mono font-medium text-zinc-500 uppercase tracking-wider px-1">
-              <span>Todas las Cuentas ({regularItems.length})</span>
+              <span>{t('nav.allVaults')} ({regularItems.length})</span>
             </div>
           )}
           <div
