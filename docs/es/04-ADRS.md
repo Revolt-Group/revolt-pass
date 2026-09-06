@@ -4,9 +4,10 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-ADR-004` |
-| **Versión** | `1.0.0-PROD` |
+| **Versión** | `1.2.1-PROD` |
 | **Estado** | Aprobado / Registro Vivo de Decisiones de Arquitectura |
 | **Estándar de Formato** | Nygard / MADR (Markdown Architectural Decision Records) |
+| **Licencia** | GNU AGPLv3 + Política de Marca Registrada (Revolt Group) |
 
 ---
 
@@ -18,6 +19,9 @@
 - [ADR-004: Arquitectura Criptográfica Zero-Knowledge en Cliente con AES-256-GCM y PBKDF2](#adr-004-arquitectura-criptográfica-zero-knowledge-en-cliente-con-aes-256-gcm-y-pbkdf2)
 - [ADR-005: Desbloqueo Rápido Local mediante WebAuthn / Platform Authenticator (Windows Hello con PIN / Biometría Móvil)](#adr-005-desbloqueo-rápido-local-mediante-webauthn--platform-authenticator-windows-hello-con-pin--biometría-móvil)
 - [ADR-006: Persistencia Local Estructurada con IndexedDB (`idb`) frente a `localStorage` / `sessionStorage`](#adr-006-persistencia-local-estructurada-con-indexeddb-idb-frente-a-localstorage--sessionstorage)
+- [ADR-007: Internacionalización Bilingüe (i18n ES/EN) Zero-Knowledge con Tipado Estricto](#adr-007-internacionalización-bilingüe-i18n-esen-zero-knowledge-con-tipado-estricto)
+- [ADR-008: Ciclo de Vida Multidispositivo, Revocación Granular de Sesiones y Eliminación Remota de Passkeys FIDO2](#adr-008-ciclo-de-vida-multidispositivo-revocación-granular-de-sesiones-y-eliminación-remota-de-passkeys-fido2)
+- [ADR-009: Adopción de la Licencia GNU AGPLv3 con Política Restrictiva de Marcas Registradas](#adr-009-adopción-de-la-licencia-gnu-agplv3-con-política-restrictiva-de-marcas-registradas)
 
 ---
 
@@ -211,3 +215,49 @@ La aplicación requiere almacenar el blob cifrado de la bóveda, la clave de env
 
 ### Decisión
 Se adopta **IndexedDB mediante la librería minimalista y tipada `idb`**. Proporciona transacciones seguras sin bloquear la interfaz visual de React y facilita la gestión de colas de sincronización offline estructuradas.
+
+---
+
+## ADR-007: Internacionalización Bilingüe (i18n ES/EN) Zero-Knowledge con Tipado Estricto
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+Revolt Pass requiere operar de forma nativa en Español e Inglés sin poner en riesgo la privacidad de los secretos 2FA ni depender de librerías pesadas en tiempo de ejecución o APIs de traducción en la nube que vulneren la premisa Zero-Knowledge.
+
+### Decisión
+1. **Diccionarios Síncronos Compilados:** Se implementan diccionarios estáticos TypeScript en `src/i18n/locales/es.ts` y `en.ts`, empaquetados en el bundle del cliente sin latencia de red.
+2. **Validación Tipográfica Estricta:** Mediante `TranslationSchema` y dot-notation tipada, cualquier omisión de clave en cualquiera de los idiomas o discordancia en parámetros de interpolación (`{{count}}`, `{{issuer}}`) genera un error en tiempo de compilación con `tsc -b`.
+3. **Persistencia Local Segura:** La preferencia se almacena en `localStorage.revolt_lang` con fallback a detección de idioma del navegador, sin telemetría externa.
+
+---
+
+## ADR-008: Ciclo de Vida Multidispositivo, Revocación Granular de Sesiones y Eliminación Remota de Passkeys FIDO2
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+Al cerrar sesión remotamente desde un dispositivo ajeno, si el autenticador de plataforma (Windows Hello / biometría) mantiene la Passkey registrada, un usuario local podría intentar re-autenticarse. Además, el usuario necesita nombrar e identificar inequívocamente cada dispositivo y cada Passkey.
+
+### Decisión
+1. **Separación de Sesiones y Passkeys en D1:** Se modelan dos tablas independientes (`sessions` y `passkeys`) en Cloudflare D1.
+2. **Revocación Remota e Individual:** Endpoints dedicados `DELETE /api/auth/sessions/:id` y `DELETE /api/passkeys/:id` permiten anular sesiones y eliminar la credencial biométrica remotamente, neutralizando cualquier intento de reingreso local en PCs ajenas.
+3. **Persistencia Dual Permanente de Nombres:** Los nombres asignados por el usuario se persisten de forma concurrente en D1 y en `LocalUserConfig` de IndexedDB, y las sentencias SQL de upsert/touch preservan los nombres existentes mediante cláusulas condicionales.
+
+---
+
+## ADR-009: Adopción de la Licencia GNU AGPLv3 con Política Restrictiva de Marcas Registradas
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+El autor desea liberar el proyecto a la comunidad de código abierto para auditoría de seguridad y auto-alojamiento soberano, pero exige:
+1. Impedir que empresas o terceros cierren el código o lucren comercialmente vendiendo el software o servicios SaaS propietarios sin compartir mejoras.
+2. Evitar que terceros hagan pasar el proyecto por propio (apropiación o *white-labeling* indebido).
+
+### Decisión
+1. **GNU Affero General Public License v3.0 (AGPLv3):** Licencia copyleft fuerte que exige que cualquier persona o entidad que ofrezca Revolt Pass como servicio de red o distribuya versiones modificadas, deba poner a disposición el 100% del código fuente correspondiente bajo la misma licencia AGPLv3.
+2. **Política de Marca Registrada (Trademark & Brand Policy bajo Sección 7(e)):** Se deniega expresamente la concesión de licencias sobre las marcas *"Revolt"*, *"Revolt Group"*, *"Revolt Pass"*, logotipos y dominios. Cualquier bifurcación (fork) o versión modificada está obligada legalmente a renombrar el software y retirar toda la identidad visual oficial.

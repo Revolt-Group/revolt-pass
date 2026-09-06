@@ -4,10 +4,11 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-SEC-003` |
-| **Version** | `1.0.0-PROD` |
+| **Version** | `1.2.1-PROD` |
 | **Status** | Approved / Cryptographic Grade Security Specification |
 | **Frameworks & Standards** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
-| **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
+| **Production Domain** | `https://pass.revoltgroup.com.ar` |
+| **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
 
 ---
 
@@ -202,3 +203,18 @@ class ClipboardGuard {
 }
 ```
 This algorithm prevents inadvertent secret leaks into messaging applications, office suites, or screen capture tools.
+
+### 3.4 Session Security and Cryptographic Token Hashing (D1)
+* **Session Tokens:** Each authenticated client possesses an ephemeral session token generated on the client with high entropy (`crypto.getRandomValues`).
+* **Database Breach Resistance:** Session tokens are never stored in plaintext within Cloudflare D1. The Worker computes a **SHA-256** hash of the token (`token_hash`) prior to database storage and indexing in the `sessions` table.
+* **Immediate Granular Revocation:** If a session token is revoked individually (`is_revoked = 1`), any subsequent API request presenting that token is immediately rejected with HTTP `401 Unauthorized`.
+
+### 3.5 Biometric Re-entry Mitigation & Hardware Passkeys Lifecycle (FIDO2)
+* **Threat Vector:** In a corporate, shared, or public workstation environment, a user may log out of their session. However, if the workstation hardware maintains a registered Windows Hello PIN or biometric authenticator, a third party with physical access could attempt to re-authenticate without the Master Password.
+* **Architectural Mitigation:**
+  1. **Remote Passkey Revocation:** Users can list all enrolled Passkeys from any other device and revoke/delete them (`DELETE /api/passkeys/:id`).
+  2. **Elimination of Windows Hello Bypass:** Insecure bypass flows have been eliminated, ensuring that no local key wrapping can be decrypted without completing standard platform authentication.
+
+### 3.6 Strict Internationalization Privacy (Zero-Leak i18n)
+* **Zero Third-Party APIs:** Unlike applications that proxy rendered DOM strings to cloud translation services (Google Translate, DeepL, etc.) — which risks leaking account descriptions, service names, and 2FA credentials —, Revolt Pass utilizes 100% static dictionaries compiled directly into the client bundle.
+* **Zero Language Telemetry:** Locale preferences are stored purely in `localStorage.revolt_lang` and never transmitted to or logged on any remote server.

@@ -4,15 +4,15 @@
 
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](./LICENSE)
+[![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 60/60](https://img.shields.io/badge/Tests-60%2F60_Passing-brightgreen.svg)](#)
+[![Tests: 73/73](https://img.shields.io/badge/Tests-73%2F73_Passing-brightgreen.svg)](#)
 
-> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), soporte de logos personalizados con compresión local y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
+> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), soporte de logos personalizados con compresión local, internacionalización bilingüe (ES/EN) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
 
 ---
 
@@ -20,9 +20,11 @@
 
 * **Cifrado Zero-Knowledge en Cliente:** Cifrado simétrico autenticado **AES-GCM de 256 bits** con vector de inicialización (`IV`) fresco por guardado y derivación de clave maestra mediante **Argon2id / PBKDF2 (600,000 rondas)** en un Web Worker dedicado.
 * **Infraestructura Serverless Edge (\$0 Costo Operativo):** Sincronización bidireccional ultrarrápida impulsada por **Cloudflare Workers** y la base de datos distribuida **Cloudflare D1 (SQLite Serverless)**, operando 100% dentro de la capa gratuita de Cloudflare.
+* **Internacionalización Bilingüe (i18n ES / EN):** Soporte integral de Español e Inglés sin llamadas a traductores en la nube ni fugas de privacidad, con diccionarios tipados compilados en el cliente y selector dinámico instantáneo.
+* **Panel de Seguridad y Gestión Granular de Sesiones:** Monitoreo en tiempo real de dispositivos y sesiones activas, nombrado personalizado persistente de dispositivos, y cierre remoto individual de sesiones.
+* **Desbloqueo Rápido y Administración de Passkeys (WebAuthn Level 3):** Soporte para **Windows Hello (PIN o biometría)**, Touch ID y Face ID. Panel de visualización, nombrado y revocación remota de credenciales Passkey para neutralizar accesos no autorizados en PCs compartidas.
 * **100% Offline-First:** Toda la bóveda se almacena localmente cifrada en **IndexedDB** (`idb`). Podés ver, generar códigos TOTP y gestionar respaldos completamente sin internet. Al recuperar conectividad, el motor de sincronización concilia automáticamente cambios diferidos (*Last-Write-Wins* a nivel de ítem).
 * **Compensación de Deriva Temporal Atómica (Time Drift):** Sincronización continua de reloj contra la hora atómica UTC de Cloudflare, eliminando rechazos de tokens por desajustes en el reloj del dispositivo.
-* **Desbloqueo Rápido con Passkeys / Hardware (WebAuthn Level 3):** Soporte nativo para **Windows Hello (PIN o biometría)** en PC de escritorio/laptops, y **Touch ID / Face ID / Huella** en iOS y Android mediante envoltura local de clave de hardware.
 * **Gestión de Códigos de Recuperación:** Soporte para pegado masivo de códigos de respaldo (ej. 8 o 10 códigos a la vez), control de estado (usado / disponible), copiado seguro y borrado automático del portapapeles a los 45 segundos.
 * **Personalización de Logos y Fotos de Cuenta:** Subida de imagen local, enlace directo HTTPS o pegado desde portapapeles (`Ctrl + V`), con compresión automática en cliente vía Canvas a WebP de 96x96 px (~2 KB) cifrado en la bóveda.
 * **PWA Instalable:** Service Worker con Workbox para caché agresivo de activos estáticos, compatible como app nativa de escritorio en Windows/macOS y app móvil en Android/iOS.
@@ -116,6 +118,12 @@ Agradecemos las contribuciones de la comunidad. Por favor, consulta nuestra **[G
 
 ---
 
-## 📄 Licencia
+## 📄 Licencia y Política de Marca Registrada
 
-Este proyecto se distribuye bajo la licencia **MIT**. Consulta el archivo [`LICENSE`](./LICENSE) para más detalles.
+Este proyecto es software libre distribuido bajo los términos de la **[GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE)**. Consulta el archivo [`LICENSE`](./LICENSE) para el texto legal completo.
+
+### 🛡️ Política de Marca y Activos (Trademark & Brand Policy)
+El código fuente es abierto, pero los nombres **"Revolt"**, **"Revolt Group"**, **"Revolt Pass"**, los logotipos, iconos, gráficos y dominios asociados (`pass.revoltgroup.com.ar`) son marcas y activos protegidos de **Revolt Group**:
+* **Uso no permitido:** No se concede licencia de marca para el uso de estos nombres o logos en bifurcaciones (forks), versiones modificadas o servicios comerciales derivados sin autorización previa expresa por escrito.
+* **Derivados y Forks:** Si creas o distribuyes una versión modificada o servicio derivado basado en este código, estás obligado por la Sección 7(e) de la licencia a renombrar el software con un nombre claramente diferenciado y reemplazar todos los logotipos y elementos gráficos oficiales.
+* **Atribución:** Debes preservar todos los avisos de copyright originales y la atribución a Revolt Group conforme a las Secciones 7(b) y 7(c) de la AGPLv3.

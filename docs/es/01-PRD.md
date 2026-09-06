@@ -4,13 +4,13 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-PRD-001` |
-| **Versión** | `1.0.0-PROD` |
+| **Versión** | `1.2.1-PROD` |
 | **Estado** | Aprobado / Especificación Canónica |
 | **Organización** | Revolt Group |
-| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
+| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
 | **Repositorio Git** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Primaria** | `main` |
-| **Licencia / Distribución** | Código Abierto (Open Source - MIT) |
+| **Licencia / Distribución** | Software Libre Copyleft (GNU AGPLv3) + Política de Marca Registrada |
 
 ---
 
@@ -167,6 +167,28 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 * **RF-12.1:** **Exportación Cifrada (Recomendada):** Descarga de un archivo `.revolt.enc.json` que contiene el blob cifrado con la contraseña maestra y los metadatos de KDF, garantizando portabilidad segura.
 * **RF-12.2:** **Exportación en Plano (Emergencia):** Descarga de un archivo JSON con los secretos descifrados. Requiere ingreso obligatorio de la Contraseña Maestra y confirmación mediante un modal crítico de advertencia destructiva.
 * **RF-12.3:** **Importación:** Carga y validación estructural contra el esquema TypeScript canónico (`VaultItem[]`). Si faltan campos obligatorios, el proceso se aborta de forma segura sin corromper la base de datos existente.
+
+### RF-13: Panel de Seguridad y Gestión Granular de Sesiones Multidispositivo
+* **RF-13.1:** El sistema mantendrá un registro en Cloudflare D1 (`sessions`) para cada dispositivo autenticado, asociando un hash SHA-256 del token de sesión, dirección IP, User-Agent, fingerprint del navegador y marcas de tiempo (`created_at`, `last_active_at`).
+* **RF-13.2:** La interfaz expondrá un modal de Seguridad y Auditoría (`SecurityModal`) que discrimina visualmente la sesión activa del dispositivo actual respecto a otras sesiones remotas.
+* **RF-13.3:** El usuario podrá revocar sesiones de manera individual (`DELETE /api/auth/sessions/:id`) o masiva (`DELETE /api/auth/sessions`). Al revocar una sesión, cualquier petición subsecuente con ese token es rechazada de inmediato.
+* **RF-13.4:** El usuario podrá renombrar sus dispositivos con nombres personalizados y familiares (ej. *"MacBook de Trabajo"*, *"PC de Escritorio Casa"*). Los nombres se conservan permanentemente tanto en la base de datos remota como en `LocalUserConfig` de IndexedDB, previniendo sobreescrituras en refrescos de fondo.
+
+### RF-14: Gestión y Revocación de Hardware Passkeys (WebAuthn / FIDO2)
+* **RF-14.1:** El modal de Seguridad listará todas las credenciales Passkey enroladas en la cuenta (`passkeys`), mostrando el nombre, fecha de creación, último uso y si corresponde al dispositivo en uso actual.
+* **RF-14.2:** El usuario podrá personalizar el nombre de cada Passkey con persistencia permanente en el almacenamiento local IndexedDB y en Cloudflare D1.
+* **RF-14.3:** **Revocación Remota de Passkeys:** El usuario podrá eliminar y revocar cualquier Passkey registrada (`DELETE /api/passkeys/:id`). Si una sesión fue revocada en una PC ajena, la eliminación remota de la Passkey asociada neutraliza de raíz cualquier posibilidad de reingreso biométrico o por PIN de Windows Hello en ese dispositivo.
+* **RF-14.4:** **Eliminación de Bypass de Windows Hello:** Se mitiga la omisión involuntaria o forzada de la verificación biométrica obligando a la verificación estricta de la credencial antes de conceder acceso a la clave de descifrado local.
+
+### RF-15: Subsistema de Internacionalización Bilingüe (i18n ES/EN) Zero-Knowledge
+* **RF-15.1:** Soporte integral y simultáneo para **Español** e **Inglés** en todos los componentes, modales, alertas, generador de contraseñas, comandos de teclado y formatos de fecha/hora.
+* **RF-15.2:** Cero fugas de información: las traducciones residen íntegramente en diccionarios estáticos compilados en el bundle cliente (`src/i18n/locales/`), sin llamadas a APIs externas de traducción ni telemetría que comprometan secretos.
+* **RF-15.3:** Paridad tipográfica en compilación: `TranslationSchema` y claves dot-notation (`TranslationKey`) garantizan que la omisión de cualquier clave o parámetro de interpolación en cualquier idioma rompa el build de TypeScript.
+* **RF-15.4:** Conmutador dinámico de idioma con autodetección de idioma preferido del navegador, persistencia en `localStorage` (`revolt_lang`) y alternador rápido en navbar, pantallas de login/lock y en la paleta de comandos (`Ctrl + K`).
+
+### RF-16: Registro Inmutable de Auditoría de Seguridad (Audit Logs)
+* **RF-16.1:** El Worker registrará eventos de seguridad en la tabla `audit_logs` (inicios de sesión, enrolamiento de passkeys, cierre de sesiones, revocaciones remotas y cambios de credenciales).
+* **RF-16.2:** La interfaz presentará un historial cronológico de auditoría con formateo de fechas y horas adaptado al idioma seleccionado (`es-ES` / `en-US`), con deduplicación para prevenir saturación de registros ante sincronizaciones en segundo plano.
 
 ---
 

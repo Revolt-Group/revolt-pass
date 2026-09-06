@@ -4,10 +4,11 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-ARCH-002` |
-| **Version** | `1.0.0-PROD` |
+| **Version** | `1.2.1-PROD` |
 | **Status** | Approved / Architecture Specification |
-| **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
+| **Production Domain** | `https://pass.revoltgroup.com.ar` |
 | **Tech Stack** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
+| **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
 
 ---
 
@@ -25,7 +26,8 @@ flowchart TB
             TotpView["TotpCard & Circular Timer"]
             QrScanner["QR Scanner (Camera / Dropzone / Paste)"]
             CmdPalette["Command Palette (Ctrl + K)"]
-            SettingsView["Settings & Recovery Codes"]
+            SecurityModal["Security & Sessions Modal"]
+            I18nEngine["i18n Engine (ES/EN Zero-Knowledge)"]
         end
 
         subgraph CoreEngine ["Core Engine & Security (TypeScript)"]
@@ -45,15 +47,18 @@ flowchart TB
 
     subgraph CloudflareEdge ["Cloudflare Global Network (Edge Runtime)"]
         WAF["Cloudflare WAF / DDoS Protection / SSL Termination"]
-        Worker["Cloudflare Worker (Hono / REST API Router)"]
+        Worker["Cloudflare Worker (REST API Router)"]
         
         subgraph Endpoints ["Worker Micro-Endpoints"]
             TimeEp["GET /api/time (UTC Timestamp)"]
-            AuthEp["POST /api/auth/* (User Registration / Salt)"]
+            AuthEp["POST /api/auth/* (Register / Salt)"]
             VaultEp["GET|PUT /api/vault (Encrypted Sync)"]
+            SessionEp["POST|GET|DELETE|PUT /api/auth/sessions (Session Mgmt)"]
+            PasskeyEp["GET|POST|PUT|DELETE /api/passkeys (FIDO2 Registry)"]
+            AuditEp["GET /api/audit-logs (Security Audit)"]
         end
         
-        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users table\n- vaults table")]
+        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & sync_logs")]
     end
 
     %% Relationships
@@ -61,13 +66,19 @@ flowchart TB
     CoreEngine --> RAM
     CoreEngine --> IDB
     App --> CacheStorage
-    SyncEngine <--> |"HTTPS / TLS 1.3\n(Encrypted Blobs Only)"| WAF
+    SyncEngine <--> |"HTTPS / TLS 1.3\n(Encrypted Blobs & Tokens)"| WAF
     WAF --> Worker
     Worker --> TimeEp
     Worker --> AuthEp
     Worker --> VaultEp
-    VaultEp <--> |"Prepared SQL Statements"| D1Database
-    AuthEp <--> |"Prepared SQL Statements"| D1Database
+    Worker --> SessionEp
+    Worker --> PasskeyEp
+    Worker --> AuditEp
+    VaultEp <--> |"Prepared SQL"| D1Database
+    AuthEp <--> |"Prepared SQL"| D1Database
+    SessionEp <--> |"Prepared SQL"| D1Database
+    PasskeyEp <--> |"Prepared SQL"| D1Database
+    AuditEp <--> |"Prepared SQL"| D1Database
 ```
 
 ---
@@ -332,6 +343,29 @@ The API is exposed under the `/api/v1` (or `/api`) prefix. All responses adopt a
   * `200 OK`: Vault updated successfully.
   * `400 Bad Request`: Invalid base64 format or version.
   * `409 Conflict`: Submitted version is not strictly equal to `server.version + 1`.
+
+#### 6. `POST /api/auth/session`
+* **Purpose:** Register a new device session or touch/refresh an existing session, preserving custom device names.
+* **Headers:** `X-User-Id: {user_id}`.
+* **Payload:** `{ "session_token": "...", "device_name": "My PC", "device_fingerprint": "..." }`.
+* **Response:** `{ "success": true, "data": { "session_id": "ses_...", "device_name": "My PC" } }`.
+
+#### 7. `GET /api/auth/sessions` & `DELETE /api/auth/sessions`
+* **Purpose:** List all active user sessions (`GET`) or terminate all other remote sessions (`DELETE`).
+* **Headers:** `X-User-Id: {user_id}`, `Authorization: Bearer {session_token}`.
+
+#### 8. `DELETE /api/auth/sessions/:id` & `PUT /api/auth/sessions/:id`
+* **Purpose:** Granular termination of a specific session (`DELETE`) or custom device renaming (`PUT`).
+* **Payload for PUT:** `{ "device_name": "New Name" }`.
+
+#### 9. `GET /api/passkeys` & `POST /api/passkeys`
+* **Purpose:** List registered Passkey credentials (`GET`) or sync a WebAuthn credential (`POST`) with conditional upsert preserving user-assigned labels.
+
+#### 10. `PUT /api/passkeys/:id` & `DELETE /api/passkeys/:id`
+* **Purpose:** Rename a registered Passkey (`PUT`) or revoke/delete a remote Passkey (`DELETE`) to neutralize unauthorized biometric access on remote or shared computers.
+
+#### 11. `GET /api/audit-logs`
+* **Purpose:** Retrieve the chronological security audit history for the authenticated user.
 
 ---
 

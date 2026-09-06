@@ -4,15 +4,15 @@
 
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](./LICENSE)
+[![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 60/60](https://img.shields.io/badge/Tests-60%2F60_Passing-brightgreen.svg)](#)
+[![Tests: 73/73](https://img.shields.io/badge/Tests-73%2F73_Passing-brightgreen.svg)](#)
 
-> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, custom logos with client-side compression, and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
+> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, custom logos with client-side compression, bilingual internationalization (ES/EN), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
 
 ---
 
@@ -20,9 +20,11 @@
 
 * **Client-Side Zero-Knowledge Encryption:** Authenticated symmetric **256-bit AES-GCM** encryption with a fresh initialization vector (`IV`) per save operation, alongside master key derivation via **Argon2id / PBKDF2 (600,000 rounds)** running in a dedicated Web Worker.
 * **Serverless Edge Infrastructure (\$0 Operating Cost):** Lightning-fast bidirectional synchronization powered by **Cloudflare Workers** and the distributed database **Cloudflare D1 (Serverless SQLite)**, operating 100% within Cloudflare's free tier.
+* **Bilingual Internationalization (i18n ES / EN):** Complete English and Spanish support without third-party cloud translation APIs or privacy leaks, featuring typed client-side compiled dictionaries and instant dynamic switching.
+* **Security & Sessions Panel:** Real-time monitoring of active devices and sessions, persistent custom device naming, and individual remote session termination.
+* **Fast Hardware Unlock & Passkeys Management (WebAuthn Level 3):** Native support for **Windows Hello (PIN or biometrics)** on desktop PCs/laptops, and **Touch ID / Face ID** on mobile devices. Management panel for viewing, naming, and remotely revoking Passkeys to prevent unauthorized re-entry on shared workstations.
 * **100% Offline-First:** The entire vault is stored locally encrypted in **IndexedDB** (`idb`). You can view accounts, generate TOTP codes, and manage backups completely offline. Upon reconnecting, the sync engine automatically reconciles pending changes (*Last-Write-Wins* per item).
 * **Atomic Time Drift Compensation:** Continuous clock synchronization against Cloudflare's atomic UTC time, eliminating token rejections caused by device clock desynchronization.
-* **Fast Hardware Unlock with Passkeys (WebAuthn Level 3):** Native support for **Windows Hello (PIN or biometrics)** on desktop PCs/laptops, and **Touch ID / Face ID / Fingerprint** on iOS and Android via local hardware key wrapping.
 * **Structured Recovery Codes Management:** Bulk pasting of backup codes (e.g. 8 or 10 codes at once), status tracking (used / available), secure one-click copying, and 45-second automatic clipboard clearing.
 * **Custom Account Logos & Photos:** Upload local images, paste direct HTTPS URLs, or paste screenshots directly from the clipboard (`Ctrl + V`), with automatic client-side canvas compression to 96x96 px WebP (~2 KB) encrypted inside the vault.
 * **Installable PWA:** Service Worker with Workbox for aggressive static asset caching, fully installable as a standalone desktop app on Windows/macOS and mobile app on Android/iOS.
@@ -116,6 +118,12 @@ We welcome community contributions. Please review our **[English Contributing Gu
 
 ---
 
-## 📄 License
+## 📄 License & Trademark Policy
+ 
+This project is free software licensed under the **[GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE)**. See the [`LICENSE`](./LICENSE) file for the full legal text.
 
-This project is open-source under the **MIT** license. See the [`LICENSE`](./LICENSE) file for details.
+### 🛡️ Trademark & Brand Assets Policy
+While the underlying source code is open, the names **"Revolt"**, **"Revolt Group"**, **"Revolt Pass"**, the official logos, icons, graphics, and domain names (`pass.revoltgroup.com.ar`) are protected trademarks and assets of **Revolt Group**:
+* **Disallowed Usage:** No trademark license is granted to use these names or logos in forks, modified versions, or commercial offerings without explicit prior written authorization.
+* **Forks & Derivatives:** If you build or distribute a modified version or hosted service based on this code, Section 7(e) of the AGPLv3 requires that you rebrand the software with a distinct name and replace all official logos and graphic branding.
+* **Attribution:** You must preserve all original copyright notices, contributor credits, and author attributions in accordance with Sections 7(b) and 7(c) of the AGPLv3.

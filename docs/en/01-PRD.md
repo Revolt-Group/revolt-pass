@@ -1,16 +1,16 @@
-﻿# Product Requirements Document (PRD)
+# Product Requirements Document (PRD)
 ## Project: Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-PRD-001` |
-| **Version** | `1.0.0-PROD` |
+| **Version** | `1.2.1-PROD` |
 | **Status** | Approved / Canonical Specification |
 | **Organization** | Revolt Group |
-| **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
+| **Production Domain** | `https://pass.revoltgroup.com.ar` |
 | **Git Repository** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Primary Branch** | `main` |
-| **License / Distribution** | Open Source (MIT) |
+| **License / Distribution** | Free & Open Source Copyleft (GNU AGPLv3) + Trademark Policy |
 
 ---
 
@@ -167,6 +167,28 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 * **FR-12.1:** **Encrypted Export (Recommended):** Download of a `.revolt.enc.json` file containing the blob encrypted with the master password and KDF metadata, ensuring secure portability.
 * **FR-12.2:** **Plaintext Export (Emergency):** Download of a JSON file with decrypted secrets. Requires mandatory entry of the Master Password and confirmation via a critical destructive warning modal.
 * **FR-12.3:** **Import:** Loading and structural validation against the canonical TypeScript schema (`VaultItem[]`). If mandatory fields are missing, the process is safely aborted without corrupting the existing database.
+
+### FR-13: Security Panel and Granular Multi-Device Session Management
+* **FR-13.1:** The system maintains a Cloudflare D1 record (`sessions`) for each authenticated device, binding a SHA-256 hash of the session token, IP address, User-Agent, browser fingerprint, and timestamps (`created_at`, `last_active_at`).
+* **FR-13.2:** The UI exposes a Security & Audit modal (`SecurityModal`) that visually distinguishes the currently active session from remote sessions.
+* **FR-13.3:** The user can terminate sessions individually (`DELETE /api/auth/sessions/:id`) or close all other sessions at once (`DELETE /api/auth/sessions`). When a session is revoked, subsequent requests bearing that token are rejected immediately.
+* **FR-13.4:** The user can rename devices with friendly custom identifiers (e.g. *"Work MacBook"*, *"Home Desktop PC"*). Custom names are permanently preserved both in Cloudflare D1 and in IndexedDB `LocalUserConfig`, preventing overwrites on background refreshes.
+
+### FR-14: Hardware Passkeys Management & Remote Revocation (WebAuthn / FIDO2)
+* **FR-14.1:** The Security modal lists all registered Passkey credentials on the account (`passkeys`), displaying custom name, creation date, last used timestamp, and whether it corresponds to the current local device.
+* **FR-14.2:** Users can customize the name of each Passkey with dual persistent storage in IndexedDB and Cloudflare D1.
+* **FR-14.3:** **Remote Passkey Revocation:** Users can delete and revoke any registered Passkey (`DELETE /api/passkeys/:id`). If a session was terminated on a shared or remote computer, remotely deleting the associated Passkey eliminates any possibility of biometric or Windows Hello PIN re-entry on that workstation.
+* **FR-14.4:** **Windows Hello Bypass Elimination:** Mitigates involuntary or forced platform bypass by enforcing strict credential verification before unlocking access to the wrapped decryption key in local storage.
+
+### FR-15: Zero-Knowledge Bilingual Internationalization (i18n ES/EN) Subsystem
+* **FR-15.1:** Complete, simultaneous support for **Spanish** and **English** across all components, modals, alerts, password generator, keyboard shortcuts, and locale-aware date/time formatting.
+* **FR-15.2:** Zero privacy leakage: translations reside entirely in static client-side compiled dictionaries (`src/i18n/locales/`), without third-party translation APIs or telemetry compromising secrets.
+* **FR-15.3:** Build-time type parity: `TranslationSchema` and dot-notation keys (`TranslationKey`) enforce that any missing translation key or interpolation parameter in any language causes a TypeScript compilation failure.
+* **FR-15.4:** Dynamic language switcher with browser locale auto-detection, local persistence in `localStorage` (`revolt_lang`), and quick switching via navbar, login/lock cards, and Command Palette (`Ctrl + K`).
+
+### FR-16: Immutable Security Audit Log Subsystem
+* **FR-16.1:** The Cloudflare Worker records critical security events in the `audit_logs` table (user logons, passkey enrollments, session terminations, remote revocations, and credential changes).
+* **FR-16.2:** The UI presents a chronological audit history formatted to the active locale (`es-ES` / `en-US`), with server-side deduplication to prevent log flooding during background synchronizations.
 
 ---
 

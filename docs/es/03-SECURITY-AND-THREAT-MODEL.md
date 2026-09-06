@@ -4,10 +4,11 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-SEC-003` |
-| **Versión** | `1.0.0-PROD` |
+| **Versión** | `1.2.1-PROD` |
 | **Estado** | Aprobado / Especificación de Seguridad de Grado Criptográfico |
 | **Marco de Referencia** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
-| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
+| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
+| **Licencia** | GNU AGPLv3 + Política de Marca Registrada (Revolt Group) |
 
 ---
 
@@ -202,3 +203,18 @@ class ClipboardGuard {
 }
 ```
 Este algoritmo previene la fuga involuntaria de secretos en aplicaciones de mensajería, suites ofimáticas o herramientas de captura de texto.
+
+### 3.4 Seguridad de Sesiones y Almacenamiento Hash de Tokens (D1)
+* **Tokens de Sesión:** Cada cliente autenticado posee un token de sesión criptográfico generado en cliente con alta entropía (`crypto.getRandomValues`).
+* **Protección contra Infiltración de Base de Datos:** Los tokens de sesión jamás se almacenan en texto plano en la base de datos Cloudflare D1. El Worker computa un hash **SHA-256** del token (`token_hash`) antes de persistirlo o indexarlo en la tabla `sessions`.
+* **Revocación Granular Inmediata:** Si un token es revocado individualmente (`is_revoked = 1`), cualquier solicitud posterior que presente ese token es denegada con código HTTP `401 Unauthorized`.
+
+### 3.5 Mitigación de Reingreso Biométrico y Ciclo de Vida de Passkeys (FIDO2)
+* **Vector de Amenaza:** En un entorno corporativo o compartido, un usuario podría cerrar su sesión en una PC ajena; sin embargo, si el hardware local mantiene registrada una credencial de Windows Hello o biometría vinculada a la cuenta, un tercero con acceso a esa máquina podría intentar re-autenticarse.
+* **Mitigación Arquitectónica:**
+  1. **Revocación Remota:** El usuario puede listar todas sus Passkeys enroladas desde cualquier otro dispositivo y eliminarlas (`DELETE /api/passkeys/:id`).
+  2. **Eliminación del Bypass de Windows Hello:** Se eliminó la omisión insegura de verificación biométrica, asegurando que ninguna clave de envoltura local pueda descifrarse sin pasar por el flujo formal de autenticación de plataforma.
+
+### 3.6 Privacidad Estricta en Internacionalización (Zero-Leak i18n)
+* **Sin Servicios de Terceros:** A diferencia de aplicaciones que envían el DOM a APIs externas (Google Translate, DeepL, etc.) —lo que expondría descripciones de cuentas, nombres de servicios y tokens 2FA—, Revolt Pass utiliza diccionarios 100% estáticos compilados en el bundle cliente.
+* **Cero Telemetría Lingüística:** La selección de idioma se almacena localmente en `localStorage.revolt_lang` y no se envía ni se registra en ningún servidor central.

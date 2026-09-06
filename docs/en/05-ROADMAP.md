@@ -4,11 +4,12 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-RDM-005` |
-| **Version** | `1.0.0-PROD` |
+| **Version** | `1.2.1-PROD` |
 | **Status** | Approved / Sequential Execution Plan |
 | **Remote Repository** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Primary Branch** | `main` |
-| **Target URL** | `https://<your-domain-or-subdomain>.workers.dev` |
+| **Target URL** | `https://pass.revoltgroup.com.ar` |
+| **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
 
 ---
 
@@ -164,7 +165,50 @@ gantt
   4. Frontend deployment on Cloudflare Pages / Workers Sites linked to `<your-domain.com>`.
   5. DNS record verification, SSL certificates, and security headers in production.
 * **Definition of Done (DoD) - Phase 8:**
-  - [x] Production fully operational and responding at `https://<your-domain-or-subdomain>.workers.dev`.
+  - [x] Production fully operational and responding at `https://pass.revoltgroup.com.ar`.
   - [x] "A+" rating on SSL Labs / SecurityHeaders security tests.
   - [x] Complete user registration and vault synchronization tested on live Cloudflare D1.
   - [x] Zero financial budget consumption (100% contained within Cloudflare's free tier).
+
+---
+
+### PHASE 9: Security Panel, Multi-Device Sessions & Passkey Management (v1.1.0)
+* **Objective:** Provide users with granular real-time visibility and control over all active sessions and associated biometric hardware credentials.
+* **Key Activities:**
+  1. Creation of `sessions`, `passkeys`, and `audit_logs` tables in Cloudflare D1.
+  2. Implementation of Worker REST endpoints: `POST/GET/DELETE /api/auth/sessions`, `GET/POST/PUT/DELETE /api/passkeys`, `GET /api/audit-logs`.
+  3. Development of `SecurityModal.tsx` security and audit interface.
+  4. Elimination of Windows Hello platform bypass and enforcement of strict biometric verification.
+  5. Custom device and passkey naming with concurrent persistence in Cloudflare D1 and IndexedDB.
+* **Definition of Done (DoD) - Phase 9:**
+  - [x] Individual and remote session termination operational in real-time.
+  - [x] Remote passkey revocation functioning to neutralize unauthorized biometric re-entry on remote machines.
+  - [x] Custom device and passkey names permanently preserved across hard browser reloads (`Ctrl + F5`).
+
+---
+
+### PHASE 10: Zero-Knowledge Bilingual Internationalization (i18n ES/EN) (v1.2.0)
+* **Objective:** Implement complete language support for Spanish and English without privacy risks or external translation dependencies.
+* **Key Activities:**
+  1. Synchronous client-side compiled dictionary architecture in `src/i18n/locales/es.ts` and `en.ts`.
+  2. Strict `TranslationSchema` and dot-notation `TranslationKey` typing with full parity enforced by `tsc -b`.
+  3. Dynamic language switcher with browser locale auto-detection and local persistence in `localStorage.revolt_lang`.
+  4. 100% translation coverage of UI components, modals, password generator, Command Palette, and date formatting.
+* **Definition of Done (DoD) - Phase 10:**
+  - [x] 100% key parity and zero missing strings verified by Vitest suite (`src/i18n/i18n.test.ts`).
+  - [x] Zero network leaks to cloud translators.
+  - [x] Instant language switching with zero page reload.
+
+---
+
+### PHASE 11: Open-Source Readiness, GNU AGPLv3 Licensing & Trademark Policy (v1.2.1+)
+* **Objective:** Release the repository to the community ensuring robust protection against proprietary commercialization, third-party profit, and brand dilution.
+* **Key Activities:**
+  1. Comprehensive Git history security audit (zero leaked secrets, tokens, or `.env` files).
+  2. Implementation of the **GNU Affero General Public License v3.0 (AGPLv3)** with **Revolt Group Trademark & Brand Assets Policy** (Section 7(e)).
+  3. Metadata updates in `package.json` (`license: "AGPL-3.0-only"`).
+  4. Full canonical documentation synchronization across `docs/es/` and `docs/en/`.
+* **Definition of Done (DoD) - Phase 11:**
+  - [x] Official `LICENSE` file committed at repository root.
+  - [x] License badges and references updated in `README.md` and `README.en.md`.
+  - [x] Repository technically and legally prepared for public release on GitHub.

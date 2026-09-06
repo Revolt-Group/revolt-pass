@@ -4,10 +4,11 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-ARCH-002` |
-| **Versión** | `1.0.0-PROD` |
+| **Versión** | `1.2.1-PROD` |
 | **Estado** | Aprobado / Especificación de Arquitectura |
-| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
+| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
 | **Pila Tecnológica** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
+| **Licencia** | GNU AGPLv3 + Política de Marca Registrada (Revolt Group) |
 
 ---
 
@@ -25,7 +26,8 @@ flowchart TB
             TotpView["TotpCard & Circular Timer"]
             QrScanner["QR Scanner (Camera / Dropzone / Paste)"]
             CmdPalette["Command Palette (Ctrl + K)"]
-            SettingsView["Settings & Recovery Codes"]
+            SecurityModal["Security & Sessions Modal"]
+            I18nEngine["i18n Engine (ES/EN Zero-Knowledge)"]
         end
 
         subgraph CoreEngine ["Motor Core & Seguridad (TypeScript)"]
@@ -45,15 +47,18 @@ flowchart TB
 
     subgraph CloudflareEdge ["Cloudflare Global Network (Edge Runtime)"]
         WAF["Cloudflare WAF / DDoS Protection / SSL Termination"]
-        Worker["Cloudflare Worker (Hono / REST API Router)"]
+        Worker["Cloudflare Worker (Router REST API)"]
         
         subgraph Endpoints ["Worker Micro-Endpoints"]
             TimeEp["GET /api/time (UTC Timestamp)"]
-            AuthEp["POST /api/auth/* (User Registration / Salt)"]
+            AuthEp["POST /api/auth/* (Register / Salt)"]
             VaultEp["GET|PUT /api/vault (Encrypted Sync)"]
+            SessionEp["POST|GET|DELETE|PUT /api/auth/sessions (Session Mgmt)"]
+            PasskeyEp["GET|POST|PUT|DELETE /api/passkeys (FIDO2 Registry)"]
+            AuditEp["GET /api/audit-logs (Security Audit)"]
         end
         
-        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users table\n- vaults table")]
+        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & sync_logs")]
     end
 
     %% Relaciones
@@ -61,13 +66,19 @@ flowchart TB
     CoreEngine --> RAM
     CoreEngine --> IDB
     App --> CacheStorage
-    SyncEngine <--> |"HTTPS / TLS 1.3\n(Encrypted Blobs Only)"| WAF
+    SyncEngine <--> |"HTTPS / TLS 1.3\n(Encrypted Blobs & Tokens)"| WAF
     WAF --> Worker
     Worker --> TimeEp
     Worker --> AuthEp
     Worker --> VaultEp
-    VaultEp <--> |"Prepared SQL Statements"| D1Database
-    AuthEp <--> |"Prepared SQL Statements"| D1Database
+    Worker --> SessionEp
+    Worker --> PasskeyEp
+    Worker --> AuditEp
+    VaultEp <--> |"Prepared SQL"| D1Database
+    AuthEp <--> |"Prepared SQL"| D1Database
+    SessionEp <--> |"Prepared SQL"| D1Database
+    PasskeyEp <--> |"Prepared SQL"| D1Database
+    AuditEp <--> |"Prepared SQL"| D1Database
 ```
 
 ---
@@ -332,6 +343,29 @@ La API se expone bajo el prefijo `/api/v1` (o `/api`). Todas las respuestas adop
   * `200 OK`: Bóveda actualizada correctamente.
   * `400 Bad Request`: Formato de base64 o versión inválido.
   * `409 Conflict`: La versión enviada no es estrictamente igual a `servidor.version + 1`.
+
+#### 6. `POST /api/auth/session`
+* **Propósito:** Registrar un nuevo dispositivo o refrescar la marca de tiempo de una sesión existente, preservando el nombre personalizado del dispositivo.
+* **Cabeceras:** `X-User-Id: {user_id}`.
+* **Payload:** `{ "session_token": "...", "device_name": "Mi PC", "device_fingerprint": "..." }`.
+* **Respuesta:** `{ "success": true, "data": { "session_id": "ses_...", "device_name": "Mi PC" } }`.
+
+#### 7. `GET /api/auth/sessions` & `DELETE /api/auth/sessions`
+* **Propósito:** Listar todas las sesiones activas del usuario (`GET`) o revocar todas las demás sesiones remotas (`DELETE`).
+* **Cabeceras:** `X-User-Id: {user_id}`, `Authorization: Bearer {session_token}`.
+
+#### 8. `DELETE /api/auth/sessions/:id` & `PUT /api/auth/sessions/:id`
+* **Propósito:** Revocación granular de una sesión específica (`DELETE`) o renombrado personalizado de dispositivo (`PUT`).
+* **Payload en PUT:** `{ "device_name": "Nuevo Nombre" }`.
+
+#### 9. `GET /api/passkeys` & `POST /api/passkeys`
+* **Propósito:** Listar credenciales Passkey registradas (`GET`) o sincronizar una nueva credencial WebAuthn (`POST`) con upsert condicional que preserva el nombre asignado por el usuario.
+
+#### 10. `PUT /api/passkeys/:id` & `DELETE /api/passkeys/:id`
+* **Propósito:** Renombrar una credencial Passkey (`PUT`) o revocar/eliminar una Passkey remota (`DELETE`) para neutralizar accesos biométricos no autorizados en estaciones ajenas.
+
+#### 11. `GET /api/audit-logs`
+* **Propósito:** Obtener el historial cronológico de auditoría de seguridad del usuario autenticado.
 
 ---
 

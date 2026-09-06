@@ -4,11 +4,12 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-RDM-005` |
-| **Versión** | `1.0.0-PROD` |
+| **Versión** | `1.2.1-PROD` |
 | **Estado** | Aprobado / Plan de Ejecución Secuencial |
 | **Repositorio Remoto** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Principal** | `main` |
-| **Target URL** | `https://<tu-dominio-o-subdominio>.workers.dev` |
+| **Target URL** | `https://pass.revoltgroup.com.ar` |
+| **Licencia** | GNU AGPLv3 + Política de Marca Registrada (Revolt Group) |
 
 ---
 
@@ -164,7 +165,50 @@ gantt
   4. Despliegue del frontend en Cloudflare Pages / Workers Sites enlazado al subdominio `<tu-dominio.com>`.
   5. Verificación de registros DNS, certificados SSL y directivas de cabeceras de seguridad en producción.
 * **Definition of Done (DoD) - Fase 8:**
-  - [ ] Producción operativa y respondiendo sobre `https://<tu-dominio-o-subdominio>.workers.dev`.
-  - [ ] Calificación "A+" en pruebas de cabeceras de seguridad SSL Labs / SecurityHeaders.
-  - [ ] Registro completo del primer usuario y sincronización de bóveda comprobada en Cloudflare D1 real.
-  - [ ] Cero consumo de presupuesto financiero (100% contenido en el free tier de Cloudflare).
+  - [x] Producción operativa y respondiendo sobre `https://pass.revoltgroup.com.ar`.
+  - [x] Calificación "A+" en pruebas de cabeceras de seguridad SSL Labs / SecurityHeaders.
+  - [x] Registro completo del primer usuario y sincronización de bóveda comprobada en Cloudflare D1 real.
+  - [x] Cero consumo de presupuesto financiero (100% contenido en el free tier de Cloudflare).
+
+---
+
+### FASE 9: Panel de Seguridad, Sesiones Multidispositivo y Gestión de Passkeys (v1.1.0)
+* **Objetivo:** Dotar a los usuarios de visibilidad y control granular sobre todas las sesiones abiertas y credenciales biométricas asociadas.
+* **Actividades Principales:**
+  1. Creación de tablas `sessions`, `passkeys` y `audit_logs` en Cloudflare D1.
+  2. Implementación de endpoints REST en el Worker: `POST/GET/DELETE /api/auth/sessions`, `GET/POST/PUT/DELETE /api/passkeys`, `GET /api/audit-logs`.
+  3. Desarrollo del modal de seguridad y auditoría `SecurityModal.tsx`.
+  4. Eliminación de bypass de Windows Hello y forzado de verificación de plataforma estricta.
+  5. Nombrado personalizado de dispositivos y Passkeys con persistencia concurrente en D1 e IndexedDB.
+* **Definition of Done (DoD) - Fase 9:**
+  - [x] Cierre de sesión individual y remoto funcional en tiempo real.
+  - [x] Revocación remota de Passkeys operativa, previniendo reingreso biométrico en PCs ajenas.
+  - [x] Nombres personalizados de dispositivos y Passkeys preservados permanentemente tras recargas con `Ctrl + F5`.
+
+---
+
+### FASE 10: Internacionalización Bilingüe Integral (i18n ES/EN) Zero-Knowledge (v1.2.0)
+* **Objetivo:** Implementar soporte idiomático completo en Español e Inglés sin poner en riesgo la privacidad ni depender de APIs externas.
+* **Actividades Principales:**
+  1. Arquitectura de diccionarios síncronos compilados en `src/i18n/locales/es.ts` y `en.ts`.
+  2. Tipado estricto `TranslationSchema` y dot-notation `TranslationKey` con verificación de paridad total en compilación (`tsc -b`).
+  3. Conmutador de idioma dinámico con autodetección de idioma preferido del navegador y persistencia local en `localStorage.revolt_lang`.
+  4. Traducción del 100% de la interfaz, modales, generador de contraseñas, Command Palette y formatos de fecha.
+* **Definition of Done (DoD) - Fase 10:**
+  - [x] 100% de paridad y cero cadenas faltantes verificado por suite de tests Vitest (`src/i18n/i18n.test.ts`).
+  - [x] Cero fugas de información a traductores en la nube.
+  - [x] Alternancia instantánea de idioma sin recarga de página.
+
+---
+
+### FASE 11: Preparación Open Source, Licenciamiento GNU AGPLv3 y Política de Marca (v1.2.1+)
+* **Objetivo:** Abrir el repositorio a la comunidad garantizando la máxima protección contra apropiaciones desleales, lucro de terceros y dilución de marca.
+* **Actividades Principales:**
+  1. Auditoría de seguridad del historial completo de Git (cero secretos, tokens ni variables `.env` expuestas).
+  2. Redacción e incorporación de la licencia **GNU Affero General Public License v3.0 (AGPLv3)** con **Política de Marca Registrada de Revolt Group** (Sección 7(e)).
+  3. Actualización de metadatos en `package.json` (`license: "AGPL-3.0-only"`).
+  4. Actualización exhaustiva de la suite de documentación canónica bilingüe (`docs/es/` y `docs/en/`).
+* **Definition of Done (DoD) - Fase 11:**
+  - [x] Archivo `LICENSE` formalmente establecido en la raíz del repositorio.
+  - [x] Insignias y referencias de licencia corregidas en `README.md` y `README.en.md`.
+  - [x] Repositorio técnicamente preparado para apertura pública en GitHub.

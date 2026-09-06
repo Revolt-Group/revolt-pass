@@ -4,9 +4,10 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-ADR-004` |
-| **Version** | `1.0.0-PROD` |
+| **Version** | `1.2.1-PROD` |
 | **Status** | Approved / Living Architecture Decision Record |
 | **Format Standard** | Nygard / MADR (Markdown Architectural Decision Records) |
+| **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
 
 ---
 
@@ -18,6 +19,9 @@
 - [ADR-004: Client-Side Zero-Knowledge Cryptographic Architecture with AES-256-GCM and PBKDF2](#adr-004-client-side-zero-knowledge-cryptographic-architecture-with-aes-256-gcm-and-pbkdf2)
 - [ADR-005: Local Quick Unlock via WebAuthn / Platform Authenticator (Windows Hello with PIN / Mobile Biometrics)](#adr-005-local-quick-unlock-via-webauthn--platform-authenticator-windows-hello-with-pin--mobile-biometrics)
 - [ADR-006: Structured Local Persistence with IndexedDB (`idb`) vs. `localStorage` / `sessionStorage`](#adr-006-structured-local-persistence-with-indexeddb-idb-vs-localstorage--sessionstorage)
+- [ADR-007: Zero-Knowledge Client-Side Bilingual Internationalization (i18n ES/EN) with Strict Typing](#adr-007-zero-knowledge-client-side-bilingual-internationalization-i18n-esen-with-strict-typing)
+- [ADR-008: Multi-Device Lifecycle, Granular Session Revocation, and Remote FIDO2 Passkey Deletion](#adr-008-multi-device-lifecycle-granular-session-revocation-and-remote-fido2-passkey-deletion)
+- [ADR-009: Adoption of GNU AGPLv3 License with Strict Trademark & Brand Assets Policy](#adr-009-adoption-of-gnu-agplv3-license-with-strict-trademark--brand-assets-policy)
 
 ---
 
@@ -211,3 +215,49 @@ The application must store the encrypted vault blob, WebAuthn wrapping key, and 
 
 ### Decision
 Adopt **IndexedDB via the minimalist, typed wrapper `idb`**. Provides secure transactional operations without blocking the React UI thread, facilitating structured offline sync queues.
+
+---
+
+## ADR-007: Zero-Knowledge Client-Side Bilingual Internationalization (i18n ES/EN) with Strict Typing
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+Revolt Pass must operate natively in Spanish and English without jeopardizing 2FA secret privacy, incurring runtime bundle bloat, or relying on external cloud translation APIs that breach the Zero-Knowledge paradigm.
+
+### Decision
+1. **Client-Side Compiled Synchronous Dictionaries:** Implement static TypeScript translation dictionaries in `src/i18n/locales/es.ts` and `en.ts`, packaged directly into the client bundle with zero network latency.
+2. **Strict Build-Time Typing:** Using `TranslationSchema` and typed dot-notation keys (`TranslationKey`), any missing translation key in either language or interpolation parameter mismatch (`{{count}}`, `{{issuer}}`) triggers a build error during `tsc -b`.
+3. **Secure Local Persistence:** Language preferences persist in `localStorage.revolt_lang` with automatic browser language detection fallback and zero external telemetry.
+
+---
+
+## ADR-008: Multi-Device Lifecycle, Granular Session Revocation, and Remote FIDO2 Passkey Deletion
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+When a user logs out remotely from a shared or external workstation, if the platform authenticator (Windows Hello or biometric sensor) retains a registered Passkey, a local user could attempt re-authentication. Furthermore, users require clear, custom naming to identify each device and credential.
+
+### Decision
+1. **Decoupled Sessions and Passkeys in D1:** Model independent `sessions` and `passkeys` tables in Cloudflare D1.
+2. **Granular Remote Revocation:** Dedicated endpoints `DELETE /api/auth/sessions/:id` and `DELETE /api/passkeys/:id` permit remote session termination and biometric credential deletion, neutralizing unauthorized re-entry on remote machines.
+3. **Permanent Dual-Layer Name Persistence:** User-assigned names persist concurrently in D1 and IndexedDB `LocalUserConfig`, with backend upsert/touch SQL queries conditionally preserving existing custom names.
+
+---
+
+## ADR-009: Adoption of GNU AGPLv3 License with Strict Trademark & Brand Assets Policy
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+The project owner seeks to release Revolt Pass to the open-source community for cryptographic auditability and sovereign self-hosting, while strictly ensuring:
+1. Third parties cannot take the codebase proprietary, commercialize closed-source derivatives, or sell SaaS services without contributing changes back.
+2. Third parties cannot pass off the application as their own (preventing unauthorized white-labeling or brand dilution).
+
+### Decision
+1. **GNU Affero General Public License v3.0 (AGPLv3):** Strong copyleft license requiring anyone operating a network service or distributing modified versions of Revolt Pass to make the complete corresponding source code available under AGPLv3.
+2. **Trademark & Brand Assets Policy (Section 7(e)):** Expressly declines to grant trademark rights for "Revolt", "Revolt Group", "Revolt Pass", logos, and domain names. Any fork or derivative work is legally required to rebrand with distinct names and replace all official visual branding.
