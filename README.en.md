@@ -66,12 +66,19 @@ database_name = "revolt-pass-db"
 database_id = "<PASTE_YOUR_DATABASE_ID_HERE>"
 ```
 
-### 5. Apply database migrations
+### 5. Configure Frontend Environment Variables (`.env.local`)
+Copy the environment variables template:
+```bash
+cp .env.example .env.local
+```
+By default, `VITE_PRIVATE_INSTANCE=false` (open mode, ideal for self-hosters or families where anyone on your server can register an isolated vault). If you want to disable public registration and lock the instance exclusively to your personal vault, set `VITE_PRIVATE_INSTANCE=true`.
+
+### 6. Apply database migrations
 ```bash
 pnpm wrangler d1 execute revolt-pass-db --file=schema.sql --remote
 ```
 
-### 6. Build and Deploy
+### 7. Build and Deploy
 ```bash
 pnpm build
 pnpm wrangler deploy
@@ -89,7 +96,7 @@ The complete and canonical technical specification is available in Spanish and E
 | **[01-PRD.md](./docs/en/01-PRD.md)** | **[01-PRD.md](./docs/es/01-PRD.md)** | Product Requirements, Scope & Engineering KPIs |
 | **[02-ARCHITECTURE.md](./docs/en/02-ARCHITECTURE.md)** | **[02-ARCHITECTURE.md](./docs/es/02-ARCHITECTURE.md)** | C4 Architecture, End-to-End Data Flows & D1 Schema |
 | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/en/03-SECURITY-AND-THREAT-MODEL.md)** | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/es/03-SECURITY-AND-THREAT-MODEL.md)** | Cryptography, STRIDE Threat Model & Memory Hygiene |
-| **[04-ADRS.md](./docs/en/04-ADRS.md)** | **[04-ADRS.md](./docs/es/04-ADRS.md)** | Architecture Decision Records (ADR-001 to ADR-006) |
+| **[04-ADRS.md](./docs/en/04-ADRS.md)** | **[04-ADRS.md](./docs/es/04-ADRS.md)** | Architecture Decision Records (ADR-001 to ADR-010) |
 | **[05-ROADMAP.md](./docs/en/05-ROADMAP.md)** | **[05-ROADMAP.md](./docs/es/05-ROADMAP.md)** | Sequential Phases Execution Plan & Definition of Done |
 
 ---
@@ -112,9 +119,12 @@ pnpm wrangler dev
 
 ---
 
-## 🤝 Contributing
+## 🤝 Contributing & Security
 
-We welcome community contributions. Please review our **[English Contributing Guide](./CONTRIBUTING.md)** (*o la [Guía de Contribución en Español](./CONTRIBUTING.es.md)*) before opening a Pull Request or reporting security vulnerabilities.
+We welcome community contributions. Please review our **[English Contributing Guide](./CONTRIBUTING.md)** (*o la [Guía de Contribución en Español](./CONTRIBUTING.es.md)*) before opening a Pull Request.
+
+### 🔒 Security Policy & Responsible Disclosure
+To report security vulnerabilities, please **DO NOT open a public issue**. Use GitHub's **Private Vulnerability Reporting** feature or review our complete security policy in **[SECURITY.md](./SECURITY.md)** (*or [Versión en Español](./SECURITY.es.md)*).
 
 ---
 

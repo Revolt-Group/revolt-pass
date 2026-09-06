@@ -66,12 +66,19 @@ database_name = "revolt-pass-db"
 database_id = "<PEGA_AQUI_TU_DATABASE_ID>"
 ```
 
-### 5. Aplicar las migraciones de base de datos
+### 5. Configurar Variables de Entorno Frontend (`.env.local`)
+Copia la plantilla de variables de entorno:
+```bash
+cp .env.example .env.local
+```
+Por defecto, `VITE_PRIVATE_INSTANCE=false` (modo abierto, ideal para auto-alojamiento personal o familiar donde cualquiera en tu servidor puede crear su bóveda aislada). Si deseas restringir el registro público y bloquear la instancia exclusivamente para tu uso personal, establece `VITE_PRIVATE_INSTANCE=true`.
+
+### 6. Aplicar las migraciones de base de datos
 ```bash
 pnpm wrangler d1 execute revolt-pass-db --file=schema.sql --remote
 ```
 
-### 6. Compilar y Desplegar
+### 7. Compilar y Desplegar
 ```bash
 pnpm build
 pnpm wrangler deploy
@@ -89,7 +96,7 @@ La especificación técnica exhaustiva y canónica se encuentra disponible en Es
 | **[01-PRD.md](./docs/es/01-PRD.md)** | **[01-PRD.md](./docs/en/01-PRD.md)** | Requerimientos de producto, alcance y KPIs de ingeniería |
 | **[02-ARCHITECTURE.md](./docs/es/02-ARCHITECTURE.md)** | **[02-ARCHITECTURE.md](./docs/en/02-ARCHITECTURE.md)** | Arquitectura C4, flujos integrales de datos y esquema D1 |
 | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/es/03-SECURITY-AND-THREAT-MODEL.md)** | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/en/03-SECURITY-AND-THREAT-MODEL.md)** | Criptografía, modelo STRIDE e higiene de memoria/portapapeles |
-| **[04-ADRS.md](./docs/es/04-ADRS.md)** | **[04-ADRS.md](./docs/en/04-ADRS.md)** | Registros de decisiones arquitectónicas (ADR-001 a ADR-006) |
+| **[04-ADRS.md](./docs/es/04-ADRS.md)** | **[04-ADRS.md](./docs/en/04-ADRS.md)** | Registros de decisiones arquitectónicas (ADR-001 a ADR-010) |
 | **[05-ROADMAP.md](./docs/es/05-ROADMAP.md)** | **[05-ROADMAP.md](./docs/en/05-ROADMAP.md)** | Plan de fases secuenciales y criterios Definition of Done |
 
 ---
@@ -112,9 +119,12 @@ pnpm wrangler dev
 
 ---
 
-## 🤝 Contribuciones
+## 🤝 Contribuciones y Seguridad
 
-Agradecemos las contribuciones de la comunidad. Por favor, consulta nuestra **[Guía de Contribución](./CONTRIBUTING.es.md)** (*or [English Contributing Guide](./CONTRIBUTING.md)*) antes de enviar un Pull Request o reportar incidentes de seguridad.
+Agradecemos las contribuciones de la comunidad. Por favor, consulta nuestra **[Guía de Contribución](./CONTRIBUTING.es.md)** (*or [English Contributing Guide](./CONTRIBUTING.md)*) antes de enviar un Pull Request.
+
+### 🔒 Política de Seguridad y Divulgación Responsable
+Para reportar vulnerabilidades de seguridad, por favor **NO abras un issue público**. Utiliza la herramienta confidencial de **Reportes Privados de Vulnerabilidades de GitHub** o consulta nuestra política completa en **[SECURITY.es.md](./SECURITY.es.md)** (*or [English Security Policy](./SECURITY.md)*).
 
 ---
 

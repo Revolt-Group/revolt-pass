@@ -158,6 +158,53 @@ export function App() {
     setInstallPrompt(null);
   };
 
+  // Owner shortcut toggle (Ctrl+Shift+U or Ctrl+Alt+U or Cmd+Shift/Alt+U)
+  const toggleMasterAccess = useCallback(() => {
+    setIsMasterAccessUnlocked((prev) => {
+      const next = !prev;
+      if (next) {
+        toast.info(t('auth.masterAccessUnlocked'));
+      } else {
+        toast.info(t('auth.masterAccessLocked'));
+      }
+      return next;
+    });
+  }, [t]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isUKey = e.code === 'KeyU' || e.key?.toLowerCase() === 'u';
+      const hasModifier = (e.ctrlKey || e.metaKey) && (e.shiftKey || e.altKey);
+
+      if (isUKey && hasModifier) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleMasterAccess();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [toggleMasterAccess]);
+
+  const shieldClickCountRef = useRef(0);
+  const shieldClickTimerRef = useRef<number | null>(null);
+
+  const handleShieldMultiClick = useCallback(() => {
+    shieldClickCountRef.current += 1;
+    if (shieldClickTimerRef.current) {
+      window.clearTimeout(shieldClickTimerRef.current);
+    }
+    if (shieldClickCountRef.current >= 3) {
+      shieldClickCountRef.current = 0;
+      toggleMasterAccess();
+    } else {
+      shieldClickTimerRef.current = window.setTimeout(() => {
+        shieldClickCountRef.current = 0;
+      }, 1200);
+    }
+  }, [toggleMasterAccess]);
+
   // -------------------------------------------------------------------------
   // Real-time Master Password Entropy Calculation
   // -------------------------------------------------------------------------
@@ -922,9 +969,15 @@ export function App() {
 
           {/* Restricted Private Instance Overlay (only active when IS_PRIVATE_INSTANCE && !isAccessAllowed) */}
           {IS_PRIVATE_INSTANCE && !isAccessAllowed && (
-            <div className="absolute inset-0 z-30 bg-[#0f1013]/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center select-none pointer-events-none cursor-default">
-              <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center mb-4 text-zinc-400 shadow-inner">
-                <ShieldAlert className="w-6 h-6 text-zinc-300" />
+            <div className="absolute inset-0 z-30 bg-[#0f1013]/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center select-none cursor-default">
+              <div
+                onClick={handleShieldMultiClick}
+                role="button"
+                tabIndex={-1}
+                aria-label="Security Status"
+                className="h-12 w-12 rounded-xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center mb-4 text-zinc-400 shadow-inner cursor-pointer active:scale-95 transition-transform select-none"
+              >
+                <ShieldAlert className="w-6 h-6 text-zinc-300 pointer-events-none" />
               </div>
 
               <div className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-zinc-400 bg-white/[0.03] border border-white/[0.06] px-2.5 py-0.5 rounded-md mb-3">
@@ -976,13 +1029,13 @@ export function App() {
               {t('auth.welcomeTitle')}
             </h1>
             <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto mb-5">
-              {IS_PRIVATE_INSTANCE || authMode === 'login'
+              {(IS_PRIVATE_INSTANCE && !isMasterAccessUnlocked) || authMode === 'login'
                 ? t('auth.welcomeSubtitleLogin')
                 : t('auth.welcomeSubtitleRegister')}
             </p>
 
-            {/* Mode Selector (visible only on open/non-private instances) */}
-            {!IS_PRIVATE_INSTANCE && (
+            {/* Mode Selector (visible on open instances OR when owner unlocks private instance) */}
+            {(!IS_PRIVATE_INSTANCE || isMasterAccessUnlocked) && (
               <div className="w-full grid grid-cols-2 p-1 bg-[#08090a] border border-white/[0.06] rounded-lg mb-5 text-xs">
                 <button
                   type="button"
@@ -1012,7 +1065,7 @@ export function App() {
             )}
 
             {/* FORM 1: LOG IN */}
-            {(IS_PRIVATE_INSTANCE || authMode === 'login') && (
+            {((IS_PRIVATE_INSTANCE && !isMasterAccessUnlocked) || authMode === 'login') && (
               <form onSubmit={handleLoginExisting} className="w-full space-y-3.5 text-left text-xs">
                 <div>
                   <label className="font-medium text-zinc-300 mb-1.5 block">
@@ -1077,7 +1130,7 @@ export function App() {
                   )}
                 </button>
 
-                {!IS_PRIVATE_INSTANCE && (
+                {(!IS_PRIVATE_INSTANCE || isMasterAccessUnlocked) && (
                   <div className="text-center pt-2">
                     <span className="text-[11px] text-zinc-500">
                       {t('auth.noAccountPrompt')}{' '}
@@ -1095,7 +1148,7 @@ export function App() {
             )}
 
             {/* FORM 2: REGISTER */}
-            {!IS_PRIVATE_INSTANCE && authMode === 'register' && (
+            {(!IS_PRIVATE_INSTANCE || isMasterAccessUnlocked) && authMode === 'register' && (
               <form onSubmit={handleRegister} className="w-full space-y-3.5 text-left text-xs">
                 <div>
                   <label className="font-medium text-zinc-300 mb-1.5 block">

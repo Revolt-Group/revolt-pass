@@ -22,6 +22,7 @@
 - [ADR-007: Internacionalización Bilingüe (i18n ES/EN) Zero-Knowledge con Tipado Estricto](#adr-007-internacionalización-bilingüe-i18n-esen-zero-knowledge-con-tipado-estricto)
 - [ADR-008: Ciclo de Vida Multidispositivo, Revocación Granular de Sesiones y Eliminación Remota de Passkeys FIDO2](#adr-008-ciclo-de-vida-multidispositivo-revocación-granular-de-sesiones-y-eliminación-remota-de-passkeys-fido2)
 - [ADR-009: Adopción de la Licencia GNU AGPLv3 con Política Restrictiva de Marcas Registradas](#adr-009-adopción-de-la-licencia-gnu-agplv3-con-política-restrictiva-de-marcas-registradas)
+- [ADR-010: Modo Desacoplado de Instancia Privada y Auto-alojamiento Comunitario (`VITE_PRIVATE_INSTANCE`)](#adr-010-modo-desacoplado-de-instancia-privada-y-auto-alojamiento-comunitario-vite_private_instance)
 
 ---
 
@@ -261,3 +262,29 @@ El autor desea liberar el proyecto a la comunidad de código abierto para audito
 ### Decisión
 1. **GNU Affero General Public License v3.0 (AGPLv3):** Licencia copyleft fuerte que exige que cualquier persona o entidad que ofrezca Revolt Pass como servicio de red o distribuya versiones modificadas, deba poner a disposición el 100% del código fuente correspondiente bajo la misma licencia AGPLv3.
 2. **Política de Marca Registrada (Trademark & Brand Policy bajo Sección 7(e)):** Se deniega expresamente la concesión de licencias sobre las marcas *"Revolt"*, *"Revolt Group"*, *"Revolt Pass"*, logotipos y dominios. Cualquier bifurcación (fork) o versión modificada está obligada legalmente a renombrar el software y retirar toda la identidad visual oficial.
+
+---
+
+## ADR-010: Modo Desacoplado de Instancia Privada y Auto-alojamiento Comunitario (`VITE_PRIVATE_INSTANCE`)
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+Revolt Pass se publica como software libre bajo licencia AGPLv3 para que cualquier usuario o comunidad pueda auto-alojar su propio gestor 2FA soberano en Cloudflare Workers y D1.
+Sin embargo, en la instancia oficial de producción desplegada por el autor, el servicio es de uso exclusivamente personal. Se requiere:
+1. Permitir que la instancia pública oficial restrinja de manera inflexible el registro de nuevos usuarios extraños sin exponer información sensible.
+2. Evitar introducir restricciones propietarias o hardcodeos en el código fuente que afecten negativamente a los usuarios de la comunidad que clonen o hagan *fork* del repositorio para sus propios servidores.
+3. Permitir que el propietario legítimo pueda inicializar o registrar su cuenta en navegadores nuevos o sesiones privadas mediante un mecanismo discreto de autenticación previa.
+
+### Alternativas Evaluadas
+1. **Hardcodear la restricción en `schema.sql` y el código fuente:** Rompe la experiencia de los auto-alojadores de código abierto, obligándolos a modificar manualmente el código fuente para poder usar la aplicación.
+2. **Autenticación por lista blanca en el servidor mediante Cloudflare Access:** Agrega dependencia de un servicio externo pago o de configuración compleja de Cloudflare Zero Trust, innecesario para un gestor de contraseñas cliente Zero-Knowledge.
+3. **Desacoplamiento mediante variable de entorno en tiempo de compilación (`VITE_PRIVATE_INSTANCE`) + trigger de base de datos remoto:** Mantiene el repositorio completamente limpio y abierto por defecto (`VITE_PRIVATE_INSTANCE=false`), mientras que la instancia de producción activa el flag en su configuración local `.env.local` y activa un trigger `BEFORE INSERT` en su base de datos D1 remota.
+
+### Decisión
+Se adopta el **Desacoplamiento de Instancia Privada mediante `VITE_PRIVATE_INSTANCE` y Trigger Remoto D1**:
+1. **Configuración Abierta por Defecto:** En `.env.example` y por defecto en el repositorio, `VITE_PRIVATE_INSTANCE=false`. Cualquier usuario que clone el proyecto dispone inmediatamente de una aplicación abierta con registro libre para su familia o comunidad.
+2. **Capa Visual Restringida para Instancias Privadas:** Cuando `VITE_PRIVATE_INSTANCE=true` está configurado, la interfaz inicial de la aplicación se bloquea con una pantalla superpuesta (`Restricted Access Overlay`) informando que la instancia es privada, y tornando inerte el formulario inferior.
+3. **Mecanismo de Desbloqueo del Propietario:** El propietario puede desactivar la pantalla restrictiva en cualquier momento mediante atajos de teclado globales en fase de captura (`Ctrl + Shift + U` o `Ctrl + Alt + U`) o mediante un triple clic discreto en el icono de escudo central.
+4. **Defensa en Profundidad en el Backend:** En la base de datos de producción remota, un trigger SQLite bloquea cualquier inserción de usuarios adicionales a nivel de motor de almacenamiento, garantizando seguridad absoluta independientemente del frontend.

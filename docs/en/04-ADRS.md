@@ -22,6 +22,7 @@
 - [ADR-007: Zero-Knowledge Client-Side Bilingual Internationalization (i18n ES/EN) with Strict Typing](#adr-007-zero-knowledge-client-side-bilingual-internationalization-i18n-esen-with-strict-typing)
 - [ADR-008: Multi-Device Lifecycle, Granular Session Revocation, and Remote FIDO2 Passkey Deletion](#adr-008-multi-device-lifecycle-granular-session-revocation-and-remote-fido2-passkey-deletion)
 - [ADR-009: Adoption of GNU AGPLv3 License with Strict Trademark & Brand Assets Policy](#adr-009-adoption-of-gnu-agplv3-license-with-strict-trademark--brand-assets-policy)
+- [ADR-010: Decoupled Private Instance Mode and Community Self-Hosting (`VITE_PRIVATE_INSTANCE`)](#adr-010-decoupled-private-instance-mode-and-community-self-hosting-vite_private_instance)
 
 ---
 
@@ -261,3 +262,29 @@ The project owner seeks to release Revolt Pass to the open-source community for 
 ### Decision
 1. **GNU Affero General Public License v3.0 (AGPLv3):** Strong copyleft license requiring anyone operating a network service or distributing modified versions of Revolt Pass to make the complete corresponding source code available under AGPLv3.
 2. **Trademark & Brand Assets Policy (Section 7(e)):** Expressly declines to grant trademark rights for "Revolt", "Revolt Group", "Revolt Pass", logos, and domain names. Any fork or derivative work is legally required to rebrand with distinct names and replace all official visual branding.
+
+---
+
+## ADR-010: Decoupled Private Instance Mode and Community Self-Hosting (`VITE_PRIVATE_INSTANCE`)
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+Revolt Pass is distributed as free, open-source software under the GNU AGPLv3 license to empower any individual or organization to self-host their own sovereign 2FA vault on Cloudflare Workers and D1.
+However, in the official production deployment operated by the project owner, the service is reserved exclusively for personal use. The application must:
+1. Strictly restrict public self-registration on the owner's hosted instance without exposing private metadata or backend internal errors.
+2. Avoid hardcoding proprietary barriers or schema restrictions into the open-source repository that would degrade or break the experience for community self-hosters.
+3. Provide an unobtrusive, client-side unlock mechanism allowing the legitimate vault owner to access registration or login forms on new devices or incognito sessions.
+
+### Evaluated Alternatives
+1. **Hardcoding single-user restrictions into `schema.sql` or frontend source code:** Impairs community adoption by requiring third-party users to manually edit core source files just to make self-hosting work.
+2. **Server-side whitelisting via Cloudflare Access / Zero Trust:** Introduces external paid dependencies, vendor lock-in, and configuration overhead incompatible with lightweight Zero-Knowledge client architecture.
+3. **Decoupling via build-time environment variable (`VITE_PRIVATE_INSTANCE`) + remote D1 database trigger:** Keeps the public repository 100% open by default (`VITE_PRIVATE_INSTANCE=false`), while allowing private instances to enforce UI restrictions via `.env.local` and database-level invariants via a remote `BEFORE INSERT` trigger.
+
+### Decision
+Adopt **Private Instance Decoupling via `VITE_PRIVATE_INSTANCE` and Remote D1 Trigger**:
+1. **Open-Source Default Configuration:** In `.env.example` and tracked repository code, `VITE_PRIVATE_INSTANCE=false`. Community users who clone the repository immediately obtain a fully functional, open multi-user instance for their family or personal infrastructure.
+2. **Restricted Access Visual Overlay:** When `VITE_PRIVATE_INSTANCE=true` is supplied, unauthenticated visitors without a local vault profile encounter a full-screen blurred `Restricted Access Overlay` with all background registration inputs disabled and dimmed.
+3. **Discrete Owner Unlock Shortcuts:** The owner can dismiss the restricted overlay at any time via capture-phase keyboard shortcuts (`Ctrl + Shift + U` or `Ctrl + Alt + U`) or by performing a triple-click on the central security shield icon.
+4. **Backend Defense-in-Depth:** On the owner's remote production database, an SQLite trigger rejects unauthorized new account insertions directly at the storage engine level, providing zero-trust enforcement even if client-side code is tampered with.

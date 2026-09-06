@@ -51,6 +51,7 @@ export const es = {
     privateInstanceTitle: 'Revolt Pass — Instancia Privada de Acceso Restringido',
     privateInstanceSubtitle: 'Este sistema pertenece exclusivamente a Revolt Group. El acceso público no está permitido.',
     masterAccessUnlocked: 'Modo de acceso administrativo habilitado.',
+    masterAccessLocked: 'Modo de acceso restringido restaurado.',
     loginTab: 'Iniciar Sesión',
     registerTab: 'Crear Bóveda',
     usernameLabel: 'Nombre de Usuario',

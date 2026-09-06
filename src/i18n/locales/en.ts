@@ -53,6 +53,7 @@ export const en: TranslationSchema = {
     privateInstanceTitle: 'Revolt Pass — Restricted Private Instance',
     privateInstanceSubtitle: 'This system belongs exclusively to Revolt Group. Public access is not permitted.',
     masterAccessUnlocked: 'Administrative access mode enabled.',
+    masterAccessLocked: 'Restricted access mode restored.',
     loginTab: 'Log In',
     registerTab: 'Create Vault',
     usernameLabel: 'Username',
