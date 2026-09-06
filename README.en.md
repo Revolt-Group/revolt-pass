@@ -123,7 +123,7 @@ We welcome community contributions. Please review our **[English Contributing Gu
 This project is free software licensed under the **[GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE)**. See the [`LICENSE`](./LICENSE) file for the full legal text.
 
 ### 🛡️ Trademark & Brand Assets Policy
-While the underlying source code is open, the names **"Revolt"**, **"Revolt Group"**, **"Revolt Pass"**, the official logos, icons, graphics, and domain names (`pass.revoltgroup.com.ar`) are protected trademarks and assets of **Revolt Group**:
+While the underlying source code is open, the names **"Revolt"**, **"Revolt Group"**, **"Revolt Pass"**, the official logos, icons, graphics, and associated domain names are protected trademarks and assets of **Revolt Group**:
 * **Disallowed Usage:** No trademark license is granted to use these names or logos in forks, modified versions, or commercial offerings without explicit prior written authorization.
 * **Forks & Derivatives:** If you build or distribute a modified version or hosted service based on this code, Section 7(e) of the AGPLv3 requires that you rebrand the software with a distinct name and replace all official logos and graphic branding.
 * **Attribution:** You must preserve all original copyright notices, contributor credits, and author attributions in accordance with Sections 7(b) and 7(c) of the AGPLv3.

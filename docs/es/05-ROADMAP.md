@@ -8,7 +8,7 @@
 | **Estado** | Aprobado / Plan de Ejecución Secuencial |
 | **Repositorio Remoto** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Principal** | `main` |
-| **Target URL** | `https://pass.revoltgroup.com.ar` |
+| **Target URL** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Licencia** | GNU AGPLv3 + Política de Marca Registrada (Revolt Group) |
 
 ---
@@ -165,7 +165,7 @@ gantt
   4. Despliegue del frontend en Cloudflare Pages / Workers Sites enlazado al subdominio `<tu-dominio.com>`.
   5. Verificación de registros DNS, certificados SSL y directivas de cabeceras de seguridad en producción.
 * **Definition of Done (DoD) - Fase 8:**
-  - [x] Producción operativa y respondiendo sobre `https://pass.revoltgroup.com.ar`.
+  - [x] Producción operativa y respondiendo sobre `https://<tu-dominio-o-subdominio>.workers.dev`.
   - [x] Calificación "A+" en pruebas de cabeceras de seguridad SSL Labs / SecurityHeaders.
   - [x] Registro completo del primer usuario y sincronización de bóveda comprobada en Cloudflare D1 real.
   - [x] Cero consumo de presupuesto financiero (100% contenido en el free tier de Cloudflare).

@@ -7,7 +7,7 @@
 | **Versión** | `1.2.1-PROD` |
 | **Estado** | Aprobado / Especificación Canónica |
 | **Organización** | Revolt Group |
-| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
+| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Repositorio Git** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Primaria** | `main` |
 | **Licencia / Distribución** | Software Libre Copyleft (GNU AGPLv3) + Política de Marca Registrada |

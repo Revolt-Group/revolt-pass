@@ -123,7 +123,7 @@ Agradecemos las contribuciones de la comunidad. Por favor, consulta nuestra **[G
 Este proyecto es software libre distribuido bajo los términos de la **[GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE)**. Consulta el archivo [`LICENSE`](./LICENSE) para el texto legal completo.
 
 ### 🛡️ Política de Marca y Activos (Trademark & Brand Policy)
-El código fuente es abierto, pero los nombres **"Revolt"**, **"Revolt Group"**, **"Revolt Pass"**, los logotipos, iconos, gráficos y dominios asociados (`pass.revoltgroup.com.ar`) son marcas y activos protegidos de **Revolt Group**:
+El código fuente es abierto, pero los nombres **"Revolt"**, **"Revolt Group"**, **"Revolt Pass"**, los logotipos, iconos, gráficos y dominios asociados son marcas y activos protegidos de **Revolt Group**:
 * **Uso no permitido:** No se concede licencia de marca para el uso de estos nombres o logos en bifurcaciones (forks), versiones modificadas o servicios comerciales derivados sin autorización previa expresa por escrito.
 * **Derivados y Forks:** Si creas o distribuyes una versión modificada o servicio derivado basado en este código, estás obligado por la Sección 7(e) de la licencia a renombrar el software con un nombre claramente diferenciado y reemplazar todos los logotipos y elementos gráficos oficiales.
 * **Atribución:** Debes preservar todos los avisos de copyright originales y la atribución a Revolt Group conforme a las Secciones 7(b) y 7(c) de la AGPLv3.

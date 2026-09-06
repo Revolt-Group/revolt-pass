@@ -6,7 +6,7 @@
 | **Identificador de Documento** | `RP-ARCH-002` |
 | **Versión** | `1.2.1-PROD` |
 | **Estado** | Aprobado / Especificación de Arquitectura |
-| **Dominio Productivo** | `https://pass.revoltgroup.com.ar` |
+| **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Pila Tecnológica** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
 | **Licencia** | GNU AGPLv3 + Política de Marca Registrada (Revolt Group) |
 

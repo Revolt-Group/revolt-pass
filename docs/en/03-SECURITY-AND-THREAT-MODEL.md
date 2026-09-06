@@ -7,7 +7,7 @@
 | **Version** | `1.2.1-PROD` |
 | **Status** | Approved / Cryptographic Grade Security Specification |
 | **Frameworks & Standards** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
-| **Production Domain** | `https://pass.revoltgroup.com.ar` |
+| **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
 | **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
 
 ---
