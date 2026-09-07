@@ -121,4 +121,45 @@ describe('backup module', () => {
     expect(google.issuer).toBe('Google Workspace');
     expect(google.recovery_codes).toEqual([{ code: 'REC-GOOGLE-999', used: false }]);
   });
+
+  it('preserves recovery codes, notes, and tags when importing through reconciliation engine', async () => {
+    const salt = generateSalt();
+    const saltBase64 = btoa(String.fromCharCode(...salt));
+    const masterKey = await deriveMasterKey('MyPassword123!', salt, 1000);
+
+    // Export vault with recovery codes
+    const backupJson = await exportEncryptedBackup(mockItems, masterKey, saltBase64);
+    const decrypted = await importEncryptedBackup(backupJson, masterKey);
+
+    // Map to ImportedAccount as BackupModal does
+    const converted = decrypted.map((item) => ({
+      name: item.account,
+      issuer: item.issuer,
+      secret: item.secret,
+      type: item.type === 'totp' ? ('totp' as const) : ('hotp' as const),
+      algorithm: item.algorithm === 'SHA256' ? ('SHA256' as const) : ('SHA1' as const),
+      digits: item.digits,
+      period: item.period,
+      platform: 'unknown' as const,
+      recovery_codes: item.recovery_codes,
+      notes: item.notes,
+      tags: item.tags,
+      pinned: item.pinned,
+      icon_url: item.icon_url,
+      originalVaultItem: item,
+    }));
+
+    // Import into an empty vault (new items)
+    const { analyzeReconciliation, applyReconciliation } = await import('../importers/reconcile');
+    const summary = analyzeReconciliation([], converted);
+    const restored = applyReconciliation([], summary, 'keep_existing');
+
+    expect(restored.length).toBe(2);
+    const github = restored.find((i) => i.issuer === 'GitHub')!;
+    expect(github.recovery_codes).toBeDefined();
+    expect(github.recovery_codes?.length).toBe(2);
+    expect(github.recovery_codes![0].code).toBe('REC-1111-2222');
+    expect(github.pinned).toBe(true);
+    expect(github.tags).toEqual(['dev']);
+  });
 });

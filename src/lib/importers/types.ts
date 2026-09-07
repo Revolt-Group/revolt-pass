@@ -1,4 +1,4 @@
-import type { VaultItem } from '../../types/vault';
+import type { VaultItem, RecoveryCode } from '../../types/vault';
 
 export type ImportPlatform =
   | 'google_auth'
@@ -23,6 +23,12 @@ export interface ImportedAccount {
   period: number;
   counter?: number;
   platform: ImportPlatform;
+  recovery_codes?: RecoveryCode[];
+  notes?: string;
+  tags?: string[];
+  pinned?: boolean;
+  icon_url?: string;
+  originalVaultItem?: VaultItem;
 }
 
 export interface ImportResult {

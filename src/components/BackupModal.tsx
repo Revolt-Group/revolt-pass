@@ -27,6 +27,7 @@ import {
   exportPlaintextBackup,
   detectBackupFormat,
   importEncryptedBackup,
+  importPlaintextBackup,
   triggerFileDownload,
 } from '../lib/security/backup';
 import {
@@ -194,7 +195,7 @@ export function BackupModal({
       }
       try {
         const decryptedItems = await importEncryptedBackup(trimmed, masterKey);
-        // Convert to ImportedAccount format for standard reconciliation preview
+        // Convert to ImportedAccount format while retaining full VaultItem metadata
         const converted = decryptedItems.map((item) => ({
           name: item.account,
           issuer: item.issuer,
@@ -204,6 +205,12 @@ export function BackupModal({
           digits: item.digits,
           period: item.period,
           platform: 'unknown' as const,
+          recovery_codes: item.recovery_codes,
+          notes: item.notes,
+          tags: item.tags,
+          pinned: item.pinned,
+          icon_url: item.icon_url,
+          originalVaultItem: item,
         }));
         const summary = analyzeReconciliation(items, converted);
         setParsedImport({
@@ -217,6 +224,41 @@ export function BackupModal({
         return;
       } catch {
         toast.error('No se pudo descifrar el archivo con la clave maestra actual.');
+        return;
+      }
+    }
+
+    if (nativeFormat === 'plaintext') {
+      try {
+        const plaintextItems = importPlaintextBackup(trimmed);
+        const converted = plaintextItems.map((item) => ({
+          name: item.account,
+          issuer: item.issuer,
+          secret: item.secret,
+          type: item.type === 'totp' ? ('totp' as const) : ('hotp' as const),
+          algorithm: item.algorithm === 'SHA256' ? ('SHA256' as const) : ('SHA1' as const),
+          digits: item.digits,
+          period: item.period,
+          platform: 'unknown' as const,
+          recovery_codes: item.recovery_codes,
+          notes: item.notes,
+          tags: item.tags,
+          pinned: item.pinned,
+          icon_url: item.icon_url,
+          originalVaultItem: item,
+        }));
+        const summary = analyzeReconciliation(items, converted);
+        setParsedImport({
+          platform: 'unknown',
+          platformLabel: 'Respaldo Revolt Pass (Texto Plano)',
+          accounts: converted,
+          warnings: [],
+        });
+        setReconciliation(summary);
+        toast.success(`Respaldo validado: ${converted.length} cuentas`);
+        return;
+      } catch {
+        toast.error('Error al leer el archivo de respaldo en texto plano.');
         return;
       }
     }
@@ -758,7 +800,12 @@ export function BackupModal({
                               </div>
                             </div>
 
-                            <div className="shrink-0">
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              {d.account.recovery_codes && d.account.recovery_codes.length > 0 && (
+                                <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[9px] font-mono">
+                                  {d.account.recovery_codes.length} rec.
+                                </span>
+                              )}
                               {d.status === 'new' && (
                                 <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-medium">
                                   {t('backup.diffNew')}

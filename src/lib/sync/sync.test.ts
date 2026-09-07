@@ -253,6 +253,41 @@ describe('Vault Synchronization and Reconciliation', () => {
       expect(reconciled[0].secret).toBe('LOCAL_SECRET');
       expect(reconciled[0].updated_at).toBe(5000);
     });
+
+    it('merges and preserves recovery codes on colliding items', () => {
+      const localWithoutCodes: VaultItem = {
+        id: 'shared-item',
+        type: 'totp',
+        issuer: 'GitHub',
+        account: 'octocat',
+        secret: 'LOCAL_SECRET',
+        digits: 6,
+        period: 30,
+        algorithm: 'SHA1',
+        created_at: 1000,
+        updated_at: 5000, // Newer local edit
+      };
+
+      const remoteWithCodes: VaultItem = {
+        id: 'shared-item',
+        type: 'totp',
+        issuer: 'GitHub',
+        account: 'octocat',
+        secret: 'OLD_SECRET',
+        digits: 6,
+        period: 30,
+        algorithm: 'SHA1',
+        recovery_codes: [{ code: 'REC-1234', used: false }],
+        created_at: 1000,
+        updated_at: 2000,
+      };
+
+      const reconciled = reconcileVaultItems([localWithoutCodes], [remoteWithCodes]);
+      expect(reconciled).toHaveLength(1);
+      expect(reconciled[0].account).toBe('octocat');
+      expect(reconciled[0].secret).toBe('LOCAL_SECRET');
+      expect(reconciled[0].recovery_codes).toEqual([{ code: 'REC-1234', used: false }]);
+    });
   });
 
   // =========================================================================
@@ -288,6 +323,70 @@ describe('Vault Synchronization and Reconciliation', () => {
       const vault = await getLocalVault();
       expect(vault?.version).toBe(2);
       expect(vault?.sync_status).toBe('synced');
+    });
+
+    it('Pull Sync: downloads newer version and decrypts items in RAM if masterKey is provided', async () => {
+      const salt = generateSalt(16);
+      const masterKey = await deriveMasterKeyDirect('ContraseñaTest!123', salt, 1000);
+      const userId = 'usr_pull_decrypt_test';
+
+      await saveUserConfig({
+        user_id: userId,
+        username: 'decrypt_user',
+        kdf_salt: 'salt',
+        auto_lock_minutes: 5,
+        clipboard_clear_seconds: 45,
+      });
+
+      // Local vault version 1
+      await saveLocalVault({
+        user_id: userId,
+        encrypted_blob: 'blob',
+        iv: 'iv',
+        version: 1,
+        updated_at: 1000,
+        sync_status: 'synced',
+      });
+
+      // Remote vault version 2 with 1 account
+      const remoteAccount: VaultItem = {
+        id: 'acc-remote',
+        type: 'totp',
+        issuer: 'AWS',
+        account: 'cloud_admin',
+        secret: 'JBSWY3DPEHPK3PXP',
+        digits: 6,
+        period: 30,
+        algorithm: 'SHA1',
+        recovery_codes: [{ code: 'AWS-REC-1', used: false }],
+        created_at: 2000,
+        updated_at: 2000,
+      };
+
+      const remoteEnc = await encryptVault([remoteAccount], masterKey, 2);
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            user_id: userId,
+            encrypted_blob: remoteEnc.encryptedBlob,
+            iv: remoteEnc.iv,
+            version: 2,
+            updated_at: 2000,
+          },
+        }),
+      });
+
+      const res = await pullRemoteVault('', masterKey, mockFetch as unknown as typeof fetch);
+      expect(res.pulled).toBe(true);
+      expect(res.version).toBe(2);
+      expect(res.items).toBeDefined();
+      expect(res.items).toHaveLength(1);
+      expect(res.items![0].issuer).toBe('AWS');
+      expect(res.items![0].recovery_codes).toEqual([{ code: 'AWS-REC-1', used: false }]);
     });
 
     it('Push Sync with Automatic 409 Conflict Resolution', async () => {

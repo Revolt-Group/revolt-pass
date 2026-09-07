@@ -18,6 +18,7 @@ import {
   UserPlus,
   ArrowLeft,
   MoreVertical,
+  RefreshCw,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { motion } from 'motion/react';
@@ -141,6 +142,21 @@ export function App() {
     };
     window.addEventListener('revolt:session-token-updated', handleTokenUpdated);
     return () => window.removeEventListener('revolt:session-token-updated', handleTokenUpdated);
+  }, []);
+
+  // Listen for vault synchronization events from background sync / conflict resolution
+  useEffect(() => {
+    const handleVaultSynced = (e: Event) => {
+      const custom = e as CustomEvent<{ version: number; items?: VaultItem[] }>;
+      if (custom.detail?.items) {
+        setItems(custom.detail.items);
+        if (custom.detail.version) {
+          setVaultVersion(custom.detail.version);
+        }
+      }
+    };
+    window.addEventListener('revolt:vault-synced', handleVaultSynced);
+    return () => window.removeEventListener('revolt:vault-synced', handleVaultSynced);
   }, []);
 
   // Listen for multi-account migration QR scan event
@@ -358,6 +374,34 @@ export function App() {
       autoLock.stop();
     };
   }, [screen, masterKey, userConfig?.auto_lock_minutes]);
+
+  // -------------------------------------------------------------------------
+  // Reactive Multi-Device Sync: Focus, Visibility Change & 30s Polling
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (screen !== 'unlocked' || !masterKey) return;
+
+    const triggerBackgroundSync = () => {
+      if (document.visibilityState === 'visible') {
+        pullRemoteVault('', masterKey).then((res) => {
+          if (res.pulled && res.items) {
+            setItems(res.items);
+            if (res.version) setVaultVersion(res.version);
+          }
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('focus', triggerBackgroundSync);
+    document.addEventListener('visibilitychange', triggerBackgroundSync);
+    const interval = window.setInterval(triggerBackgroundSync, 30000);
+
+    return () => {
+      window.removeEventListener('focus', triggerBackgroundSync);
+      document.removeEventListener('visibilitychange', triggerBackgroundSync);
+      window.clearInterval(interval);
+    };
+  }, [screen, masterKey]);
 
   // Universal shortcut Ctrl + K / Cmd + K
   useEffect(() => {
@@ -746,7 +790,12 @@ export function App() {
       }
 
       // 5. Attempt remote synchronization in the background
-      pullRemoteVault().catch(() => {});
+      pullRemoteVault('', key).then((res) => {
+        if (res.pulled && res.items) {
+          setItems(res.items);
+          if (res.version) setVaultVersion(res.version);
+        }
+      }).catch(() => {});
     } catch (err: unknown) {
       toast.error(t('toasts.authError'));
       console.error(err);
@@ -800,7 +849,12 @@ export function App() {
       syncSessionAndDevice(userConfig, { passkeyId: userConfig.webauthn_credential_id }).catch(() => {});
       syncLocalPasskey(userConfig).catch(() => {});
 
-      pullRemoteVault().catch(() => {});
+      pullRemoteVault('', key).then((res) => {
+        if (res.pulled && res.items) {
+          setItems(res.items);
+          if (res.version) setVaultVersion(res.version);
+        }
+      }).catch(() => {});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error en la verificación biométrica';
       toast.error(msg);
@@ -890,7 +944,7 @@ export function App() {
       });
 
       // Trigger asynchronous synchronization to Cloudflare D1
-      pushLocalVault(userConfig.user_id, masterKey).catch(() => {});
+      pushLocalVault('', masterKey).catch(() => {});
     } catch (err: unknown) {
       console.error('Error al persistir cambios de la bóveda:', err);
       toast.error(t('toasts.saveChangesError'));
@@ -955,6 +1009,32 @@ export function App() {
   const handleVaultRestored = async (newItems: VaultItem[]) => {
     await persistVaultChanges(newItems);
   };
+
+  // -------------------------------------------------------------------------
+  // 10. Manual Cloud Synchronization Trigger
+  // -------------------------------------------------------------------------
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+
+  const handleManualSync = useCallback(async () => {
+    if (!masterKey || isManualSyncing) return;
+    setIsManualSyncing(true);
+    toast.info(t('toasts.syncing'));
+    try {
+      await pushLocalVault('', masterKey);
+      const res = await pullRemoteVault('', masterKey);
+      if (res.pulled && res.items) {
+        setItems(res.items);
+        if (res.version) setVaultVersion(res.version);
+        toast.success(t('toasts.syncSuccess'));
+      } else {
+        toast.success(t('toasts.alreadySynced'));
+      }
+    } catch {
+      toast.error(t('toasts.syncError'));
+    } finally {
+      setIsManualSyncing(false);
+    }
+  }, [masterKey, isManualSyncing, t]);
 
   // -------------------------------------------------------------------------
   // RENDER: INITIAL LOADING SCREEN
@@ -1485,28 +1565,33 @@ export function App() {
 
           {/* Top Actions and Sync Status */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Sync Status Pill */}
-            <div
-              className={`flex items-center gap-1.5 px-2 py-1 sm:px-2.5 rounded-md text-[11px] font-mono border ${
-                syncStatus === 'synced'
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  : syncStatus === 'syncing' || syncStatus === 'dirty'
-                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+            {/* Sync Status Pill / Manual Sync Button */}
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isManualSyncing}
+              className={`flex items-center gap-1.5 px-2 py-1 sm:px-2.5 rounded-md text-[11px] font-mono border transition-all active:scale-[0.98] ${
+                isManualSyncing || syncStatus === 'syncing' || syncStatus === 'dirty'
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
+                  : syncStatus === 'synced'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20'
               }`}
-              title={`${t('common.status')}: ${syncStatus}`}
+              title={isManualSyncing ? 'Sincronizando con la nube...' : 'Estado de sincronización (Clic para sincronizar ahora)'}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  syncStatus === 'synced'
-                    ? 'bg-emerald-400'
-                    : syncStatus === 'syncing' || syncStatus === 'dirty'
+                  isManualSyncing || syncStatus === 'syncing' || syncStatus === 'dirty'
                     ? 'bg-amber-400 animate-ping'
+                    : syncStatus === 'synced'
+                    ? 'bg-emerald-400'
                     : 'bg-rose-400'
                 }`}
               />
               <span className="hidden sm:inline capitalize font-sans text-xs">
-                {syncStatus === 'synced'
+                {isManualSyncing
+                  ? 'Sincronizando...'
+                  : syncStatus === 'synced'
                   ? t('nav.synced')
                   : syncStatus === 'syncing'
                   ? t('nav.syncing')
@@ -1514,7 +1599,7 @@ export function App() {
                   ? t('nav.dirty')
                   : t('nav.syncError')}
               </span>
-            </div>
+            </button>
 
             {/* Command Palette Button */}
             <button
@@ -1653,6 +1738,15 @@ export function App() {
                         <span>{t('nav.installApp')}</span>
                       </DropdownMenu.Item>
                     )}
+
+                    <DropdownMenu.Item
+                      onSelect={handleManualSync}
+                      disabled={isManualSyncing}
+                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.08] cursor-pointer outline-none transition-colors text-sky-400"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isManualSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isManualSyncing ? 'Sincronizando...' : 'Sincronizar ahora'}</span>
+                    </DropdownMenu.Item>
 
                     <DropdownMenu.Separator className="h-px bg-white/[0.08] my-1" />
 

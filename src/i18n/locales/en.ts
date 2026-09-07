@@ -407,5 +407,9 @@ export const en: TranslationSchema = {
     passkeyAuthError: 'Windows Hello authentication cancelled or unauthorized.',
     passkeyNotConfigured: 'Windows Hello is not configured for this vault.',
     leakCheckError: 'Error checking data breach database.',
+    syncSuccess: 'Vault synchronized with cloud server',
+    syncError: 'Error synchronizing with cloud server',
+    alreadySynced: 'Vault is up to date with cloud',
+    syncing: 'Synchronizing with cloud...',
   },
 };

@@ -88,15 +88,20 @@ export function applyReconciliation(
     const digits: 6 | 8 = acc.digits === 8 ? 8 : 6;
 
     return {
-      id: overrideId || crypto.randomUUID(),
-      type: 'totp',
+      id: overrideId || acc.originalVaultItem?.id || crypto.randomUUID(),
+      type: acc.originalVaultItem?.type || 'totp',
       issuer: acc.issuer,
       account: nameSuffix ? `${acc.name} ${nameSuffix}` : acc.name,
       secret: acc.secret,
       digits,
       period: acc.period || 30,
       algorithm,
-      created_at: now,
+      pinned: acc.pinned ?? acc.originalVaultItem?.pinned,
+      recovery_codes: acc.recovery_codes ?? acc.originalVaultItem?.recovery_codes,
+      notes: acc.notes ?? acc.originalVaultItem?.notes,
+      tags: acc.tags ?? acc.originalVaultItem?.tags,
+      icon_url: acc.icon_url ?? acc.originalVaultItem?.icon_url,
+      created_at: acc.originalVaultItem?.created_at || now,
       updated_at: now,
     };
   }
@@ -112,13 +117,34 @@ export function applyReconciliation(
             ...diff.existingItem,
             issuer: diff.account.issuer || diff.existingItem.issuer,
             account: diff.account.name || diff.existingItem.account,
+            recovery_codes: diff.account.recovery_codes ?? diff.existingItem.recovery_codes,
+            notes: diff.account.notes ?? diff.existingItem.notes,
+            tags: diff.account.tags ?? diff.existingItem.tags,
+            pinned: diff.account.pinned ?? diff.existingItem.pinned,
+            icon_url: diff.account.icon_url ?? diff.existingItem.icon_url,
             updated_at: now,
           };
         }
       } else if (strategy === 'keep_both') {
         result.push(convertToVaultItem(diff.account, undefined, '(Duplicado)'));
+      } else if (strategy === 'keep_existing' && diff.existingItem) {
+        const existing = diff.existingItem;
+        // If existing item has no recovery codes but imported item has them, enrich existing
+        if (
+          diff.account.recovery_codes &&
+          diff.account.recovery_codes.length > 0 &&
+          (!existing.recovery_codes || existing.recovery_codes.length === 0)
+        ) {
+          const index = result.findIndex((i) => i.id === existing.id);
+          if (index !== -1) {
+            result[index] = {
+              ...result[index],
+              recovery_codes: diff.account.recovery_codes,
+              updated_at: now,
+            };
+          }
+        }
       }
-      // 'keep_existing' does nothing (skips)
     } else if (diff.status === 'conflict') {
       if (strategy === 'overwrite' && diff.existingItem) {
         const index = result.findIndex((i) => i.id === diff.existingItem!.id);

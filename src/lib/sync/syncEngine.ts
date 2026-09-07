@@ -69,9 +69,20 @@ export function reconcileVaultItems(
       itemMap.set(localItem.id, localItem);
     } else {
       // Item exists in both -> Retain the one with more recent updated_at timestamp
-      if (localItem.updated_at >= remoteItem.updated_at) {
-        itemMap.set(localItem.id, localItem);
-      }
+      const keepLocal = localItem.updated_at >= remoteItem.updated_at;
+      const winner = keepLocal ? localItem : remoteItem;
+      const other = keepLocal ? remoteItem : localItem;
+
+      // Smart recovery codes merge: ensure recovery codes aren't dropped if present on either
+      const mergedRecoveryCodes =
+        winner.recovery_codes && winner.recovery_codes.length > 0
+          ? winner.recovery_codes
+          : other.recovery_codes;
+
+      itemMap.set(localItem.id, {
+        ...winner,
+        recovery_codes: mergedRecoveryCodes,
+      });
     }
   }
 
@@ -89,8 +100,21 @@ function handleAuthStatus(status: number): void {
  */
 export async function pullRemoteVault(
   baseUrl = '',
-  customFetch = fetch
-): Promise<{ pulled: boolean; version?: number }> {
+  masterKeyOrFetch?: CryptoKey | null | typeof fetch,
+  customFetch?: typeof fetch
+): Promise<{ pulled: boolean; version?: number; items?: VaultItem[] }> {
+  let masterKey: CryptoKey | null = null;
+  let fetchFn: typeof fetch = fetch;
+
+  if (typeof masterKeyOrFetch === 'function') {
+    fetchFn = masterKeyOrFetch;
+  } else {
+    masterKey = masterKeyOrFetch ?? null;
+    if (customFetch) {
+      fetchFn = customFetch;
+    }
+  }
+
   const userConfig = await getUserConfig();
   if (!userConfig || !userConfig.user_id) {
     return { pulled: false };
@@ -115,7 +139,7 @@ export async function pullRemoteVault(
       headers['If-None-Match'] = `"v${localVersion}"`;
     }
 
-    const response = await customFetch(`${baseUrl}/api/vault`, {
+    const response = await fetchFn(`${baseUrl}/api/vault`, {
       method: 'GET',
       headers,
     });
@@ -157,7 +181,25 @@ export async function pullRemoteVault(
         last_sync_attempt: Date.now(),
       });
       updateSyncState('synced');
-      return { pulled: true, version: remote.version };
+
+      let decryptedItems: VaultItem[] | undefined;
+      if (masterKey) {
+        try {
+          decryptedItems = await decryptVault(remote.encrypted_blob, remote.iv, masterKey);
+        } catch (e) {
+          console.error('Failed to decrypt remote vault with current masterKey:', e);
+        }
+      }
+
+      if (typeof window !== 'undefined' && decryptedItems) {
+        window.dispatchEvent(
+          new CustomEvent('revolt:vault-synced', {
+            detail: { version: remote.version, items: decryptedItems },
+          })
+        );
+      }
+
+      return { pulled: true, version: remote.version, items: decryptedItems };
     }
 
     updateSyncState('synced');
@@ -324,7 +366,15 @@ export async function resolveConflict(
   });
 
   // 6. Retry push with unified consecutive version
-  return await pushLocalVault(baseUrl, masterKey, customFetch);
+  const pushSuccess = await pushLocalVault(baseUrl, masterKey, customFetch);
+  if (pushSuccess && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('revolt:vault-synced', {
+        detail: { version: nextVersion, items: mergedItems },
+      })
+    );
+  }
+  return pushSuccess;
 }
 
 /**

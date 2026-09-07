@@ -405,6 +405,10 @@ export const es = {
     passkeyAuthError: 'Autenticación con Windows Hello cancelada o no autorizada.',
     passkeyNotConfigured: 'Windows Hello no está configurado para esta bóveda.',
     leakCheckError: 'Error al consultar la base de datos de filtraciones.',
+    syncSuccess: 'Bóveda sincronizada con el servidor',
+    syncError: 'Error al sincronizar con el servidor',
+    alreadySynced: 'Bóveda al día con la nube',
+    syncing: 'Sincronizando con la nube...',
   },
 };
 
