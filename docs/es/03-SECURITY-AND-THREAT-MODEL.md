@@ -81,7 +81,7 @@ Para proporcionar una experiencia sin fricción sin comprometer el modelo Zero-K
    * La aplicación solicita la aserción con `navigator.credentials.get({ publicKey: { challenge, userVerification: "required" } })`.
    * El usuario introduce su **PIN de Windows Hello** o coloca su huella en el móvil.
    * Tras la aserción válida devuelta por el TPM/Enclave de hardware del sistema operativo, el cliente libera la `DeviceWrappingKey`, desencripta `wrapped_master_key` y reconstruye la `MasterKey` en la memoria RAM volátil.
-   * Si el usuario revoca la credencial, desinstala la PWA o falla la verificación, la clave de envoltura se purga y el sistema exige la Contraseña Maestra completa.
+   * Si el usuario revoca la credencial, desinstala la PWA o falla la verificación, la clave de envoltura se purga y el sistema exige la Contraseña Maestra.
 
 ---
 

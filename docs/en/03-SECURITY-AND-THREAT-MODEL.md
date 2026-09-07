@@ -81,7 +81,7 @@ To provide a frictionless experience without compromising the Zero-Knowledge mod
    * The application requests assertion with `navigator.credentials.get({ publicKey: { challenge, userVerification: "required" } })`.
    * The user enters their **Windows Hello PIN** or touches the fingerprint sensor on mobile.
    * Upon valid assertion returned by the OS hardware TPM/Enclave, the client releases `DeviceWrappingKey`, decrypts `wrapped_master_key`, and reconstructs `MasterKey` in volatile RAM.
-   * If the user revokes the credential, uninstalls the PWA, or verification fails, the wrapping key is purged and the system requires the full Master Password.
+   * If the user revokes the credential, uninstalls the PWA, or verification fails, the wrapping key is purged and the system requires the Master Password.
 
 ---
 

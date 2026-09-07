@@ -1,56 +1,62 @@
-# Roadmap & Execution Plan
+# Roadmap & Technical Evolution Plan
 ## Project: Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-RDM-005` |
-| **Version** | `1.2.1-PROD` |
-| **Status** | Approved / Sequential Execution Plan |
+| **Current Version** | `1.2.1-PROD` (Live & Production Ready) |
+| **Status** | Approved / Quality-Driven Milestone Evolution Plan |
 | **Remote Repository** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Primary Branch** | `main` |
-| **Target URL** | `https://<your-domain-or-subdomain>.workers.dev` |
+| **Timeline Philosophy** | Quality & Security First (Quality-Driven, no arbitrary calendar day limits) |
 | **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
 
 ---
 
-## 1. Execution Methodology and Quality Gates
+## 1. Engineering Philosophy and Quality Gates
 
-The implementation of **Revolt Pass** is organized into **8 rigorous sequential phases**. Each phase includes a distinct set of **Acceptance Criteria (Definition of Done - DoD)**. No subsequent phase may commence without the prior phase satisfying 100% of its acceptance criteria and receiving explicit technical verification.
+At **Revolt Pass**, software engineering and architectural evolution are guided by an unyielding commitment to **security, cryptographic resilience, and world-class user experience**, prioritizing technical rigor and thorough validation over arbitrary calendar deadlines or artificial day estimates.
+
+Every milestone or product release is structured around a rigorous **Definition of Done (DoD)**. No feature or architectural change is promoted to production or marked as complete without satisfying 100% of its automated unit tests, strict static type checks (`tsc -b`), memory hygiene audits, and Zero-Knowledge security verification.
 
 ```mermaid
-gantt
-    title Sequential Engineering Phases Timeline
-    dateFormat  YYYY-MM-DD
-    section Phase 1
-    Base Setup & Scaffolding          :f1, 2026-09-05, 1d
-    section Phase 2
-    Core Cryptographic Engine (Client):f2, after f1, 2d
-    section Phase 3
-    Cloudflare Workers & D1 Backend   :f3, after f2, 1d
-    section Phase 4
-    Offline Layer & Synchronization   :f4, after f3, 2d
-    section Phase 5
-    UI Components & UX Experience     :f5, after f4, 2d
-    section Phase 6
-    RAM, Clipboard & IO Security      :f6, after f5, 1d
-    section Phase 7
-    PWA & Workbox Configuration       :f7, after f6, 1d
-    section Phase 8
-    Audit, QA & Final Production Deploy:f8, after f7, 1d
+flowchart TD
+    subgraph COMPLETADAS ["Production Foundation in Production (v1.0 to v1.2.1)"]
+        v10["Phases 1 to 8: Cryptographic Core & PWA<br/>AES-256-GCM, PBKDF2 600k in Web Worker, Cloudflare D1 Edge, WebAuthn, AutoLock"]
+        v11["Phase 9: Multi-Device & Auditing (v1.1)<br/>D1 Sessions, Granular Remote Revocation, FIDO2 Passkeys, Audit Logs"]
+        v12["Phases 10 & 11: i18n, Backups & Open Source Release (v1.2.1)<br/>Bilingual i18n ES/EN, Encrypted Backups, Private Instance Mode, AGPLv3"]
+        v10 --> v11 --> v12
+    end
+
+    subgraph PROXIMAS ["Technical Evolution Horizons (Upcoming Versions)"]
+        v13["Milestone v1.3: Hygiene Diagnostics & HaveIBeenPwned<br/>k-Anonymity SHA-1, Base32 Entropy Alerts, Visual Scorecard"]
+        v14["Milestone v1.4: Universal Importers & Mass Onboarding<br/>Google Auth Protobuf Parser, Aegis, 2FAS, Bitwarden, 1Pass Importers"]
+        v20["Milestone v2.0: Full Secret Suite & Vault Evolution<br/>Passwords, Credit Cards, Markdown Notes, SSH Keys, 30d Trash Bin"]
+        v21["Milestone v2.1: Browser Extension (Manifest V3)<br/>Contextual Autofill via eTLD+1 Matching, Inline 2FA Token Injection"]
+        v22["Milestone v2.2: Native Desktop Application (Tauri v2 + Rust)<br/>Lightweight Binary <10MB, OS Windows Hello / Touch ID, Global Floating Hotkey"]
+        v12 -.-> v13 --> v14 --> v20 --> v21 --> v22
+    end
+
+    style COMPLETADAS fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
+    style PROXIMAS fill:#090d16,stroke:#6366f1,stroke-width:2px,stroke-dasharray: 5 5,color:#f8fafc
+    style v10 fill:#1e293b,stroke:#3b82f6,color:#fff
+    style v11 fill:#1e293b,stroke:#3b82f6,color:#fff
+    style v12 fill:#166534,stroke:#22c55e,color:#fff
+    style v13 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v14 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v20 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v21 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v22 fill:#1e1b4b,stroke:#818cf8,color:#fff
 ```
 
 ---
 
-## 2. Detailed Development Phases
+## 2. Block I: Deployed Foundation Phases (v1.0 — v1.2.1)
+
+The following foundational phases represent the architectural baseline that is **100% implemented, audited, and live in production**:
 
 ### PHASE 1: Environment Setup and Base Scaffolding
 * **Objective:** Initialize project structure with official tooling, strict TypeScript configuration, Tailwind CSS, and Wrangler support for Cloudflare D1.
-* **Key Activities:**
-  1. Initialization with `pnpm create vite . --template react-ts`.
-  2. Installation of core dependencies: `tailwindcss`, `@tailwindcss/vite` (or PostCSS), `lucide-react`, `idb`, `@zxing/browser`, `vite-plugin-pwa`.
-  3. Configuration of `tsconfig.json` with `strict: true`, `noImplicitAny: true`, `exactOptionalPropertyTypes: true`.
-  4. Configuration of `wrangler.toml` binding D1 database (`DB`) and declaring environment variables.
-  5. Git setup (`.gitignore`, verifying `main` branch and remote link `https://github.com/Revolt-Group/revolt-pass.git`).
 * **Definition of Done (DoD) - Phase 1:**
   - [x] Command `pnpm build` compiles cleanly with 0 errors and 0 TypeScript warnings.
   - [x] Local development server (`pnpm dev`) responds in `<100ms`.
@@ -59,156 +65,201 @@ gantt
 
 ---
 
-### PHASE 2: Client Core Cryptographic Engine
-* **Objective:** Implement native cryptographic suite in TypeScript following RFC 6238, RFC 4648, and Web Crypto API without external encryption dependencies.
-* **Key Activities:**
-  1. `src/lib/crypto/base32.ts`: Pure Base32 decoder and encoder handling canonical alphabets and flexible padding.
-  2. `src/lib/crypto/totp.ts`: TOTP token generation with HMAC-SHA1 and HMAC-SHA256, time-step calculations, and dynamic truncation.
-  3. `src/lib/crypto/kdf.worker.ts`: Dedicated Web Worker for PBKDF2-SHA256 derivation (600,000 iterations) without freezing the UI.
-  4. `src/lib/crypto/vault.ts`: Authenticated vault encryption and decryption with AES-GCM (256-bit key, random 12-byte IV per operation, 128-bit tag).
-  5. `src/lib/crypto/webauthn.ts`: FIDO2 registration and authentication module with platform authenticator (Windows Hello PIN and mobile biometrics) for local key wrapping.
+### PHASE 2: Core Cryptographic Engine on Client
+* **Objective:** Implement native TypeScript cryptographic suite adhering to RFC 6238, RFC 4648, and Web Crypto API standards, free from obsolete third-party dependencies.
 * **Definition of Done (DoD) - Phase 2:**
-  - [x] Unit tests validated against official RFC 6238 Appendix B vectors (exact tokens for predefined timestamps).
-  - [x] JSON payload encryption and decryption generates identical output (*roundtrip test*).
-  - [x] Intentional 1-bit tampering of `encrypted_blob` triggers immediate rejection by `AES-GCM` (`OperationError`).
-  - [x] PBKDF2 executes in background Web Worker without blocking React visual rendering.
+  - [x] Unit tests validated against official vectors in RFC 6238 Appendix B.
+  - [x] JSON payload encryption and decryption yields identical data (*roundtrip test*).
+  - [x] Intentional 1-bit tampering in the ciphertext triggers immediate rejection by `AES-GCM` (`OperationError`).
+  - [x] PBKDF2 (600,000 rounds) executes in background via dedicated Web Worker without freezing the React UI thread.
 
 ---
 
 ### PHASE 3: Edge Backend & Remote Persistence Layer
-* **Objective:** Create REST API in Cloudflare Workers and provision relational schema in Cloudflare D1.
-* **Key Activities:**
-  1. Creation and execution of initial database migration (`schema.sql`) in Cloudflare D1.
-  2. Creation of API router in Cloudflare Workers (`src/worker/index.ts`).
-  3. Endpoint `GET /api/time`: Emitting server UTC timestamp with `Cache-Control: no-store` headers.
-  4. Authentication endpoints: `POST /api/auth/register`, `GET /api/auth/salt`.
-  5. Vault endpoints: `GET /api/vault` and `PUT /api/vault` with optimistic concurrency control (`version`).
-  6. Strict security headers middleware (CSP, HSTS, X-Frame-Options, CORS for `<your-domain.com>`).
+* **Objective:** Build REST API on Cloudflare Workers and provision relational schema on Cloudflare D1.
 * **Definition of Done (DoD) - Phase 3:**
-  - [x] D1 database initialized with `users`, `vaults`, and `sync_logs` tables.
-  - [x] `GET /api/time` returns server timestamp with latency under 50ms.
-  - [x] Attempts to update a vault with an outdated version deterministically return `HTTP 409 Conflict`.
+  - [x] D1 database provisioned with relational tables.
+  - [x] `GET /api/time` returns server timestamp with <50ms latency for Time Drift compensation.
+  - [x] Vault updates with stale versions deterministically return `HTTP 409 Conflict`.
   - [x] All responses packaged in canonical format `{ success, data, error, timestamp }`.
 
 ---
 
-### PHASE 4: Local Persistence Layer & Offline Synchronization
-* **Objective:** Ensure data sovereignty and 100% offline availability via IndexedDB and asynchronous synchronization engine.
-* **Key Activities:**
-  1. `src/lib/storage/idb.ts`: Initialization of `idb` with `vault_encrypted`, `user_config`, and `sync_queue` stores.
-  2. `src/lib/sync/syncEngine.ts`: Synchronization state machine (`synced`, `dirty`, `syncing`, `conflict`).
-  3. Last-Write-Wins conflict resolution algorithm per item (`VaultItem.updated_at`).
-  4. Time Drift Synchronizer: millimetric offset calculation between workstation clock and Worker.
+### PHASE 4: Local Persistence Layer & Offline Sync
+* **Objective:** Guarantee data sovereignty and 100% offline availability via IndexedDB and asynchronous sync engine.
 * **Definition of Done (DoD) - Phase 4:**
-  - [x] Application can be closed and reopened offline, retrieving the latest local encrypted state.
-  - [x] Offline modifications automatically sync with D1 as soon as connectivity is restored (`window.addEventListener('online')`).
-  - [x] Time drift accurately compensated if operating system clock is intentionally altered by 5 minutes.
+  - [x] Application opens and operates fully without Internet connectivity, loading encrypted local state.
+  - [x] Offline modifications sync automatically to D1 upon network restoration (`window.addEventListener('online')`).
+  - [x] Time drift is smoothly compensated even if client clock is intentionally skewed.
 
 ---
 
-### PHASE 5: UI Components & Fortune 500-Grade User Experience
-* **Objective:** Build Dark-Mode First user interface inspired by the aesthetic standards of Raycast, Linear, and Vercel.
-* **Key Activities:**
-  1. `src/components/VaultList.tsx`: Fluid account listing with instant filtering, tag grouping, and pinned favorites section (`pinned`).
-  2. `src/components/TotpCard.tsx`: Card with brand logo, name, circular SVG countdown indicator, copy button with haptic feedback (`navigator.vibrate`), and collapsible Recovery Codes section.
-  3. `src/components/CommandPalette.tsx`: Universal floating search accessible via `Ctrl + K` / `Cmd + K`.
-  4. `src/components/QrModal.tsx`:
-     * Live camera scanning with device selector via `@zxing/browser`.
-     * Dropzone to drag images/screenshots.
-     * Global paste interceptor (`Ctrl + V`) to scan clipboard screenshots directly.
-  5. `src/components/PasswordGeneratorModal.tsx`: High-entropy password generator with bit calculation.
-  6. `src/components/BrandIcon.tsx`: Simple Icons CDN integration with fallback to deterministic gradient monogram.
+### PHASE 5: UI Components & Dark-Mode First UX Experience
+* **Objective:** Build Fortune 500-grade Dark-Mode First interface inspired by Raycast, Linear, and Vercel design systems.
 * **Definition of Done (DoD) - Phase 5:**
-  - [x] Fully responsive interface on mobile screens (375px) and 4K desktop displays.
-  - [x] Shortcut `Ctrl + K` opens command palette in under 50ms and copies code with `Enter`.
-  - [x] QR scanning works seamlessly via camera, dropping an image, or pressing `Ctrl + V`.
-  - [x] Circular countdown animation updates smoothly without frame drops.
+  - [x] Fully responsive layout on mobile screens (375px) and 4K desktop displays.
+  - [x] Shortcut `Ctrl + K` opens Command Palette in <50ms with instant `Enter` key copying.
+  - [x] QR code scanning functions seamlessly via webcam, file dropzone, or clipboard paste (`Ctrl + V`).
+  - [x] Circular SVG countdown animation renders smoothly at 60 FPS without stutter.
 
 ---
 
-### PHASE 6: Memory, Clipboard & Backup Security
-* **Objective:** Harden local application attack surface against data leaks.
-* **Key Activities:**
-  1. `src/lib/security/autoLock.ts`: Mouse/keyboard inactivity timer purging RAM variables after 5 minutes (configurable).
-  2. Reactive locking on tab visibility (`visibilitychange`).
-  3. `src/lib/security/clipboardGuard.ts`: Clipboard auto-clearing after 45 seconds with content verification.
-  4. Fast unlock modal with priority support for **Windows Hello PIN** on PC and biometrics on smartphones.
-  5. Export/import module: JSON file encrypted with Master Key and optional plaintext download under destructive confirmation.
+### PHASE 6: Memory Security, Clipboard Guard & Backups
+* **Objective:** Shield client application surface from memory leakages and clipboard hijacking.
 * **Definition of Done (DoD) - Phase 6:**
-  - [x] After 5 minutes without mouse/keyboard activity, application returns to lock screen and `MasterKey` in memory is destroyed.
-  - [x] Copying a TOTP code clears the OS clipboard verifiably after exactly 45 seconds.
-  - [x] Quick unlock with Windows Hello PIN restores session in <400ms.
-  - [x] Vault export and import completely reconstitutes all accounts, tags, and recovery codes.
+  - [x] After mouse/keyboard inactivity or tab visibility change, session locks and RAM `MasterKey` is destroyed.
+  - [x] Copying a TOTP token or secret triggers guarded clipboard wipe after 45 seconds.
+  - [x] Quick unlock with Windows Hello PIN or mobile biometrics restores session instantly.
+  - [x] Encrypted JSON vault export/import faithfully restores accounts, tags, and recovery codes.
 
 ---
 
 ### PHASE 7: PWA, Service Worker & Offline Hardening
-* **Objective:** Transform project into a fully installable, resilient Progressive Web App at operating system level.
-* **Key Activities:**
-  1. Configuration of `vite-plugin-pwa` in `vite.config.ts` with canonical manifest (`name: "Revolt Pass"`, `short_name: "RevoltPass"`, `theme_color: "#0a0a0c"`).
-  2. Generation and provisioning of PWA icons (`192x192`, `512x512`, `maskable`, `apple-touch-icon`).
-  3. Configuration of Workbox caching rules to precache 100% of static bundles.
-  4. Native installation testing on Windows (standalone window PWA) and mobile phones.
+* **Objective:** Deliver a Progressive Web App installable across major operating systems.
 * **Definition of Done (DoD) - Phase 7:**
-  - [x] PWA scores 100/100 on Google Lighthouse PWA audit.
-  - [x] App installs as native desktop application on Windows 10/11 with high-resolution icon.
-  - [x] Physical network disconnection allows continuous navigation and TOTP code generation without interruption.
+  - [x] PWA achieves 100/100 score on Google Lighthouse PWA audit.
+  - [x] App installs as standalone desktop window on Windows 10/11 and mobile devices.
+  - [x] Physical network disconnection allows continuous vault operations without interruption.
 
 ---
 
 ### PHASE 8: Security Audit, QA & Production Deployment
-* **Objective:** Perform exhaustive verification, dependency checking, and production deployment onto `<your-domain.com>`.
-* **Key Activities:**
-  1. Dependency security audit (`pnpm audit`).
-  2. Bundle size verification and dead-code elimination (*tree shaking*).
-  3. API and D1 database deployment via `wrangler deploy` and `wrangler d1 migrations apply`.
-  4. Frontend deployment on Cloudflare Pages / Workers Sites linked to `<your-domain.com>`.
-  5. DNS record verification, SSL certificates, and security headers in production.
+* **Objective:** Subject the application to rigorous verification, dependency audit, and production deployment.
 * **Definition of Done (DoD) - Phase 8:**
-  - [x] Production fully operational and responding at `https://<your-domain-or-subdomain>.workers.dev`.
-  - [x] "A+" rating on SSL Labs / SecurityHeaders security tests.
-  - [x] Complete user registration and vault synchronization tested on live Cloudflare D1.
-  - [x] Zero financial budget consumption (100% contained within Cloudflare's free tier).
+  - [x] Production service operational globally on Cloudflare edge network with ultra-low latency.
+  - [x] "A+" rating on SSL Labs / SecurityHeaders security benchmarks.
+  - [x] Complete test suite of 73 unit and integration tests passing at 100% in Vitest.
+  - [x] Zero financial operating overhead (sustainably contained within Cloudflare free tier).
 
 ---
 
-### PHASE 9: Security Panel, Multi-Device Sessions & Passkey Management (v1.1.0)
-* **Objective:** Provide users with granular real-time visibility and control over all active sessions and associated biometric hardware credentials.
-* **Key Activities:**
-  1. Creation of `sessions`, `passkeys`, and `audit_logs` tables in Cloudflare D1.
-  2. Implementation of Worker REST endpoints: `POST/GET/DELETE /api/auth/sessions`, `GET/POST/PUT/DELETE /api/passkeys`, `GET /api/audit-logs`.
-  3. Development of `SecurityModal.tsx` security and audit interface.
-  4. Elimination of Windows Hello platform bypass and enforcement of strict biometric verification.
-  5. Custom device and passkey naming with concurrent persistence in Cloudflare D1 and IndexedDB.
+### PHASE 9: Security Panel, Multi-Device Sessions & Passkey Lifecycle (v1.1.0)
+* **Objective:** Provide users with granular control and visibility over all active sessions and biometric passkeys.
 * **Definition of Done (DoD) - Phase 9:**
-  - [x] Individual and remote session termination operational in real-time.
-  - [x] Remote passkey revocation functioning to neutralize unauthorized biometric re-entry on remote machines.
-  - [x] Custom device and passkey names permanently preserved across hard browser reloads (`Ctrl + F5`).
+  - [x] D1 relational tables `sessions`, `passkeys`, and `audit_logs` provisioned.
+  - [x] Granular individual and remote session termination operational with instant client memory wipe.
+  - [x] Remote passkey deletion neutralizes biometric re-entry on external workstations.
+  - [x] Custom device and passkey names permanently preserved across browser refreshes (`Ctrl + F5`).
 
 ---
 
 ### PHASE 10: Zero-Knowledge Bilingual Internationalization (i18n ES/EN) (v1.2.0)
-* **Objective:** Implement complete language support for Spanish and English without privacy risks or external translation dependencies.
-* **Key Activities:**
-  1. Synchronous client-side compiled dictionary architecture in `src/i18n/locales/es.ts` and `en.ts`.
-  2. Strict `TranslationSchema` and dot-notation `TranslationKey` typing with full parity enforced by `tsc -b`.
-  3. Dynamic language switcher with browser locale auto-detection and local persistence in `localStorage.revolt_lang`.
-  4. 100% translation coverage of UI components, modals, password generator, Command Palette, and date formatting.
+* **Objective:** Implement comprehensive native Spanish and English support without cloud translation APIs or runtime overhead.
 * **Definition of Done (DoD) - Phase 10:**
-  - [x] 100% key parity and zero missing strings verified by Vitest suite (`src/i18n/i18n.test.ts`).
-  - [x] Zero network leaks to cloud translators.
-  - [x] Instant language switching with zero page reload.
+  - [x] Synchronous static TypeScript dictionaries in `src/i18n/locales/es.ts` and `en.ts` with strict typing.
+  - [x] 100% key parity enforced at build time (`tsc -b`) and validated by Vitest.
+  - [x] Dynamic language switching with browser language autodetection and telemetry-free local persistence.
 
 ---
 
-### PHASE 11: Open-Source Readiness, GNU AGPLv3 Licensing & Trademark Policy (v1.2.1+)
-* **Objective:** Release the repository to the community ensuring robust protection against proprietary commercialization, third-party profit, and brand dilution.
-* **Key Activities:**
-  1. Comprehensive Git history security audit (zero leaked secrets, tokens, or `.env` files).
-  2. Implementation of the **GNU Affero General Public License v3.0 (AGPLv3)** with **Revolt Group Trademark & Brand Assets Policy** (Section 7(e)).
-  3. Metadata updates in `package.json` (`license: "AGPL-3.0-only"`).
-  4. Full canonical documentation synchronization across `docs/es/` and `docs/en/`.
+### PHASE 11: Private Instance Decoupling, AGPLv3 License & Security Policy (v1.2.1)
+* **Objective:** Open the codebase to the community while securing the owner's private instance and establishing responsible disclosure channels.
 * **Definition of Done (DoD) - Phase 11:**
-  - [x] Official `LICENSE` file committed at repository root.
-  - [x] License badges and references updated in `README.md` and `README.en.md`.
-  - [x] Repository technically and legally prepared for public release on GitHub.
+  - [x] `VITE_PRIVATE_INSTANCE` environment variable decoupled: open (`false`) in public repo, restricted (`true`) on owner's instance.
+  - [x] Restricted Access Overlay with capture-phase unlock shortcuts (`Ctrl + Alt + U`, `Ctrl + Shift + U`, and triple-click on shield).
+  - [x] D1 SQLite `BEFORE INSERT` trigger providing defense-in-depth against unauthorized accounts on production database.
+  - [x] **GNU AGPLv3** license adopted with **Trademark & Brand Assets Policy (Section 7(e))**.
+  - [x] Canonical bilingual security policies [`SECURITY.md`](../../SECURITY.md) and [`SECURITY.es.md`](../../SECURITY.es.md) integrated with GitHub Private Vulnerability Reporting.
+
+---
+
+## 3. Block II: Technical Evolution & Product Horizons
+
+The following milestones define the future product evolution. Each milestone will be implemented sequentially and promoted to production strictly upon reaching 100% of its technical quality gates:
+
+---
+
+### 📍 Milestone v1.3: Hygiene Diagnostics & HaveIBeenPwned (k-Anonymity)
+* **Objective:** Equip the vault with proactive vulnerability telemetry and password hygiene diagnostics under a strict Zero-Knowledge paradigm.
+* **Key Deliverables:**
+  1. **HaveIBeenPwned k-Anonymity Integration:**
+     - Client computes SHA-1 hash of stored secrets locally.
+     - Only the first 5 hexadecimal characters of the hash are transmitted to a Cloudflare Worker edge proxy (`/api/pwned-check?prefix=XXXXX`).
+     - Edge caching of HIBP responses for 24 hours to mask user IP addresses.
+     - Comparison of the remaining 35 characters executed 100% client-side inside a Web Worker.
+  2. **Vault Hygiene Telemetry:**
+     - Detection of weak Base32 TOTP secrets (<80-bit entropy).
+     - Identification of duplicate secrets reused across multiple accounts.
+     - Deprecated algorithm alerts (SHA-1 services that could adopt SHA-256).
+     - Visual warning if no encrypted backup has been created in the last 30 days.
+  3. **Visual Security Scorecard:**
+     - Quantitative health score (0 to 100%) in the security panel with actionable remediation recommendations.
+* **Definition of Done (DoD) - v1.3:**
+  - [ ] No plaintext password, full secret, or SHA-1 hash longer than 5 characters ever leaves the client device.
+  - [ ] HIBP lookups execute in background without degrading 60 FPS UI rendering.
+  - [ ] Scorecard accurately reflects reproducible quantitative metrics validated by automated tests.
+
+---
+
+### 📍 Milestone v1.4: Universal Importers & Mass Onboarding
+* **Objective:** Remove all switching friction by enabling smooth, zero-knowledge migration from major proprietary and open-source authenticators.
+* **Key Deliverables:**
+  1. **Google Authenticator Migration Decoder:**
+     - Pure TypeScript binary Protocol Buffers (`MigrationPayload`) parser without heavy runtime libraries.
+     - Instant decoding of `otpauth-migration://offline?data=...` QR payloads.
+  2. **Multi-Format Parsers:**
+     - Support for Aegis Authenticator `.json` files (plain or Scrypt/AES-GCM encrypted).
+     - Parser for 2FAS Authenticator `.2fas` backup files.
+     - Importers for Bitwarden and 1Password CSV / JSON export files.
+     - Parser for plain text lists of `otpauth://` URIs.
+  3. **Interactive Duplicate Resolution Modal:**
+     - Structured preview prior to committing writes to IndexedDB/D1.
+     - Identification of conflicting accounts (`issuer` + `account`) with options: *Overwrite*, *Keep both*, or *Skip*.
+* **Definition of Done (DoD) - v1.4:**
+  - [ ] Automated import test suite validated against real-world sample exports from Google Auth, Aegis, 2FAS, and Bitwarden.
+  - [ ] Protobuf extraction takes place in volatile memory without persisting plaintext records to disk.
+  - [ ] Conflict resolution dialog deterministically prevents accidental loss of existing credentials.
+
+---
+
+### 📍 Milestone v2.0: Full Secret Suite & Vault Evolution
+* **Objective:** Expand Revolt Pass from a dedicated 2FA authenticator into a full-scale Zero-Knowledge password and secrets management suite.
+* **Key Deliverables:**
+  1. **Polymorphic Vault Items:**
+     - **Logins:** Username, password, website URLs with eTLD+1 matching, TOTP seed, and custom fields.
+     - **Payment Cards:** Cardholder name, card number, expiration date, and CVV security code.
+     - **Secure Notes:** Rich text editor with client-side encrypted Markdown.
+     - **Server & SSH Keys:** Public/private key pairs, passphrases, and API access tokens.
+     - **Identities:** Passports, national identity documents, and driver's licenses.
+  2. **Relational Schema Evolution in D1:**
+     - Unified `vault_items` table with polymorphic AES-256-GCM encrypted payloads.
+     - `folders` table with client-side encrypted folder names.
+  3. **Password History & Trash Bin:**
+     - History of the last 5 previous passwords retained inside encrypted payload.
+     - Trash bin with automatic permanent purge after 30 days and immediate manual recovery.
+* **Definition of Done (DoD) - v2.0:**
+  - [ ] Backwards compatibility guaranteed: existing v1.x 2FA vaults migrate seamlessly with zero data loss.
+  - [ ] Client decryption latency remains <100ms for vaults containing over 1,000 secret items.
+  - [ ] Database schema preserves Zero-Knowledge paradigm without revealing secret types or metadata to the server.
+
+---
+
+### 📍 Milestone v2.1: Browser Extension (Manifest V3)
+* **Objective:** Provide seamless contextual autofill across Chrome, Edge, Brave, and Firefox.
+* **Key Deliverables:**
+  1. **Manifest V3 Architecture:**
+     - Background Service Worker sharing 100% of the cryptographic and sync logic from `src/lib/`.
+     - In-memory key management with auto-lock alarms via `chrome.alarms`.
+  2. **Context-Aware DOM Injection:**
+     - Detection of credential fields and display of accounts filtered by current tab origin (`window.location.origin`).
+     - Automated copy or inline injection of 6-digit TOTP token upon login form submission.
+* **Definition of Done (DoD) - v2.1:**
+  - [ ] Full compliance with Chrome Web Store and Firefox Add-ons extension store guidelines.
+  - [ ] Strict cross-origin isolation preventing credential leakage across browser tabs.
+
+---
+
+### 📍 Milestone v2.2: Native Desktop Application (Tauri v2 + Rust)
+* **Objective:** Deliver an ultra-lightweight desktop experience with native OS hardware security integration.
+* **Key Deliverables:**
+  1. **Rust-Powered Tauri v2 Core:**
+     - Lightweight compiled binary with minimal memory footprint (~25 MB RAM vs >150 MB in Electron) and <10 MB installer size.
+  2. **Hardware Security Integration:**
+     - Direct communication with native OS APIs: **Windows Hello** (`windows-rs`) and **macOS Touch ID** (`LocalAuthentication`).
+  3. **Global Floating Quick-Search Palette:**
+     - Operating-system-wide shortcut (`Ctrl + Shift + Space` / `Cmd + Shift + Space`) invoking floating search overlay over any active window.
+     - Direct keyboard simulation (*auto-type*) for injecting credentials into terminal windows and legacy applications.
+* **Definition of Done (DoD) - v2.2:**
+  - [ ] Official install packages compiled for Windows (MSIX/EXE), macOS (Universal DMG), and Linux (AppImage/Deb).
+  - [ ] Cold start latency under 250ms.
+  - [ ] Offline vault persisted in local SQLite database encrypted with SQLCipher.

@@ -119,7 +119,7 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 * **FR-04.2:** On Windows workstations, the system uses the integrated platform authenticator (**Windows Hello**), allowing unlock via **numeric PIN or biometrics**.
 * **FR-04.3:** On mobile devices (Android/iOS) and macOS, it uses the native biometric sensor (Touch ID, Face ID, or Android fingerprint sensor).
 * **FR-04.4:** Wrapping mechanism: The vault derived key is encrypted using a local key generated for WebAuthn and stored protected in IndexedDB. Accessing this wrapped key requires successful user verification (`userVerification: "required"`).
-* **FR-04.5:** If the user resets the browser or the biometric session fails 3 times, the system immediately reverts to prompting for the full Master Password.
+* **FR-04.5:** If the user resets the browser or the biometric session fails 3 times, the system immediately reverts to prompting for the Master Password.
 
 ### FR-05: Account Ingestion and QR Scanner
 * **FR-05.1:** Must parse standard authentication URIs:

@@ -119,7 +119,7 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 * **RF-04.2:** En estaciones de trabajo con Windows, el sistema utilizará el autenticador de plataforma integrado (**Windows Hello**), permitiendo el desbloqueo mediante **PIN numérico o biometría**.
 * **RF-04.3:** En dispositivos móviles (Android/iOS) y macOS, utilizará el sensor biométrico nativo (Touch ID, Face ID o sensor dactilar Android).
 * **RF-04.4:** Mecanismo de envoltura: La llave derivada de la bóveda se cifrará utilizando una clave local generada para WebAuthn y se almacenará protegida en IndexedDB. El acceso a dicha clave de envoltura requiere la verificación de usuario satisfactoria (`userVerification: "required"`).
-* **RF-04.5:** Si el usuario reinicia el navegador o la sesión biométrica falla 3 veces, el sistema revertirá de inmediato solicitando la Contraseña Maestra completa.
+* **RF-04.5:** Si el usuario reinicia el navegador o la sesión biométrica falla 3 veces, el sistema revertirá de inmediato solicitando la Contraseña Maestra.
 
 ### RF-05: Ingesta de Cuentas y Escáner QR
 * **RF-05.1:** Debe parsear URIs estándar de autenticación:
