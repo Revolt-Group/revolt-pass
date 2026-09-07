@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] - 2026-09-07
+
+### Security & Hardening
+- **Content-Security-Policy (CSP) Header (FIX-01):**
+  - Enforced strict CSP on all static asset responses from the Cloudflare Worker, mitigating Cross-Site Scripting (XSS / VEC-06).
+  - Restricts default, script, font, and frame ancestors, with scoped image/connect sources for trusted CDNs (`cdn.simpleicons.org`).
+- **Edge Rate Limiting on Sensitive Endpoints (FIX-02):**
+  - Implemented Cloudflare Workers native rate limiter integration on `/api/auth/salt` and `/api/auth/register`.
+  - Returns `HTTP 429 Too Many Requests` with `Retry-After: 60` header when rate limits are exceeded, mitigating username enumeration and automated account creation attacks.
+  - Documented configuration binding in `wrangler.toml.example`.
+- **Domain-Restricted CORS Origin (FIX-03):**
+  - Replaced permissive wildcard CORS (`*`) with dynamic configuration reflecting `env.APP_DOMAIN` in production environments.
+  - Gracefully falls back to wildcard only on unconfigured local development setups.
+- **Sliding Session Token Rotation on Sync (FIX-04):**
+  - Implemented automatic token rotation during vault synchronization (`GET /api/vault` and `PUT /api/vault`).
+  - Worker returns `X-New-Session-Token` with a new cryptographically random token hash upon authenticated sync.
+  - Client (`syncEngine.ts`) intercepts the header and updates the active session token in IndexedDB (`user_config`).
+  - Immediately invalidates previous token hashes in D1, drastically reducing exposure window of stolen tokens.
+  - Extended session validity sliding window on each authenticated interaction.
+
+### Changed
+- Bumped project version to `v1.3.1` across `package.json` and `src/constants/version.ts`.
+- Expanded automated test suite from 88 to **94 tests** across 14 test suites, verifying CSP headers, rate limiters, CORS policies, and sliding session token rotation.
+
+---
+
 ## [1.3.0] - 2026-09-07
 
 ### Added

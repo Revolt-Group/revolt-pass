@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-RDM-005` |
-| **Current Version** | `1.3.0-PROD` (Live & Production Ready) |
+| **Current Version** | `1.3.1-PROD` (Live & Production Ready) |
 | **Status** | Approved / Quality-Driven Milestone Evolution Plan |
 | **Remote Repository** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Primary Branch** | `main` |
@@ -21,20 +21,22 @@ Every milestone or product release is structured around a rigorous **Definition 
 
 ```mermaid
 flowchart TD
-    subgraph COMPLETADAS ["Production Foundation in Production (v1.0 to v1.3.0)"]
+    subgraph COMPLETADAS ["Production Foundation in Production (v1.0 to v1.3.1)"]
         v10["Phases 1 to 8: Cryptographic Core & PWA<br/>AES-256-GCM, PBKDF2 600k in Web Worker, Cloudflare D1 Edge, WebAuthn, AutoLock"]
         v11["Phase 9: Multi-Device & Auditing (v1.1)<br/>D1 Sessions, Granular Remote Revocation, FIDO2 Passkeys, Audit Logs"]
         v12["Phases 10 & 11: i18n, Backups & Open Source Release (v1.2.1)<br/>Bilingual i18n ES/EN, Encrypted Backups, Private Instance Mode, AGPLv3"]
         v13["Phase 12: Hygiene & HaveIBeenPwned (v1.3.0)<br/>k-Anonymity SHA-1, Base32 Entropy Alerts, Visual Scorecard"]
-        v10 --> v11 --> v12 --> v13
+        v131["Phase 13: Hardening & Token Rotation (v1.3.1)<br/>Strict CSP, Edge Rate Limiter, Scoped CORS, Sliding Token Rotation"]
+        v10 --> v11 --> v12 --> v13 --> v131
     end
 
     subgraph PROXIMAS ["Technical Evolution Horizons (Upcoming Versions)"]
-        v14["Milestone v1.4: Universal Importers & Mass Onboarding<br/>Google Auth Protobuf Parser, Aegis, 2FAS, Bitwarden, 1Pass Importers"]
-        v20["Milestone v2.0: Full Secret Suite & Vault Evolution<br/>Passwords, Credit Cards, Markdown Notes, SSH Keys, 30d Trash Bin"]
-        v21["Milestone v2.1: Browser Extension (Manifest V3)<br/>Contextual Autofill via eTLD+1 Matching, Inline 2FA Token Injection"]
-        v22["Milestone v2.2: Native Desktop Application (Tauri v2 + Rust)<br/>Lightweight Binary <10MB, OS Windows Hello / Touch ID, Global Floating Hotkey"]
-        v13 -.-> v14 --> v20 --> v21 --> v22
+        v14["Milestone v1.4: Universal Importers, Exporters & YubiKey<br/>Google Auth, Aegis, 2FAS, Bitwarden + otpauth:// export & FIDO2 roaming"]
+        v15["Milestone v1.5: Argon2id KDF & Proactive Notifications<br/>Argon2id WASM cryptographic upgrade, Cloudflare Email Workers"]
+        v20["Milestone v2.0: Full Secret Suite & Vault Evolution<br/>Passwords, Credit Cards, Markdown Notes, SSH Keys, 5d Snapshots, Emergency Kit"]
+        v21["Milestone v2.1: Browser Extension (Manifest V3)<br/>Contextual Autofill via eTLD+1 Matching, Inline 2FA Token Injection, 2m Auto-lock"]
+        v22["Milestone v2.2: Native Desktop Application (Tauri v2 + Rust)<br/>Lightweight Binary <10MB, OS Windows Hello / Touch ID, Signed Auto-updater"]
+        v131 -.-> v14 --> v15 --> v20 --> v21 --> v22
     end
 
     style COMPLETADAS fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
@@ -43,7 +45,9 @@ flowchart TD
     style v11 fill:#1e293b,stroke:#3b82f6,color:#fff
     style v12 fill:#166534,stroke:#22c55e,color:#fff
     style v13 fill:#166534,stroke:#22c55e,color:#fff
+    style v131 fill:#166534,stroke:#22c55e,color:#fff
     style v14 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v15 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v20 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v21 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v22 fill:#1e1b4b,stroke:#818cf8,color:#fff
@@ -51,7 +55,7 @@ flowchart TD
 
 ---
 
-## 2. Block I: Deployed Foundation Phases (v1.0 — v1.3.0)
+## 2. Block I: Deployed Foundation Phases (v1.0 — v1.3.1)
 
 The following foundational phases represent the architectural baseline that is **100% implemented, audited, and live in production**:
 
@@ -171,6 +175,18 @@ The following foundational phases represent the architectural baseline that is *
   - [x] Interactive visual health scorecard with real-time percentage gauge and direct remediation actions.
   - [x] Real-time k-Anonymity HaveIBeenPwned breach tester with transparent zero-knowledge explanation.
   - [x] Full suite of 88 automated unit and integration tests passing at 100% in Vitest with 0 strict TypeScript errors (`tsc -b`).
+
+---
+
+### PHASE 13: Edge Security Hardening & Sliding Session Token Rotation (v1.3.1)
+* **Objective:** Align runtime defenses with the documented threat model, mitigate user enumeration via edge rate limiting, enforce scoped CORS origins, and protect active sessions with continuous token rotation.
+* **Definition of Done (DoD) - Phase 13:**
+  - [x] Strict Content-Security-Policy (CSP) headers applied to all static asset responses from the Worker (mitigating VEC-06 / XSS).
+  - [x] Native Cloudflare Workers edge rate limiter on `/api/auth/salt` and `/api/auth/register` returning `Retry-After: 60`.
+  - [x] CORS allowed origin dynamically restricted to `env.APP_DOMAIN` in production, falling back to wildcard only on unconfigured development environments.
+  - [x] Automatic sliding session token rotation on vault synchronization (`GET` and `PUT /api/vault`) with immediate revocation of the previous token in Cloudflare D1.
+  - [x] Client PWA (`syncEngine.ts`) intercepts `X-New-Session-Token` and updates the active session in IndexedDB (`user_config`).
+  - [x] Automated test suite expanded to 94 tests passing at 100% in Vitest with 0 strict TypeScript compilation errors (`tsc -b`).
 
 ---
 

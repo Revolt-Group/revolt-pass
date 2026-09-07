@@ -18,27 +18,36 @@ import type {
   UpdatePasskeyRequestBody,
 } from './types.ts';
 
-const SECURITY_HEADERS: Record<string, string> = {
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Session-Token, If-None-Match',
-};
+/**
+ * FIX-03 (v1.3.1): Returns security headers with domain-restricted CORS.
+ * Uses APP_DOMAIN env var when set; falls back to '*' only for dev/self-hosted instances
+ * where APP_DOMAIN is not configured. Pass `env` from all authenticated API handlers.
+ */
+function getSecurityHeaders(env?: Env): Record<string, string> {
+  return {
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Access-Control-Allow-Origin': env?.APP_DOMAIN || '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Session-Token, If-None-Match',
+  };
+}
 
 /**
  * Generates a JSON response with embedded security headers.
+ * Pass `env` to enable domain-restricted CORS (FIX-03).
  */
 export function jsonResponse<T>(
   data: ApiResponse<T>,
   status = 200,
-  extraHeaders: Record<string, string> = {}
+  extraHeaders: Record<string, string> = {},
+  env?: Env
 ): Response {
   const headers = new Headers({
     'Content-Type': 'application/json',
-    ...SECURITY_HEADERS,
+    ...getSecurityHeaders(env),
     ...extraHeaders,
   });
 
@@ -50,12 +59,14 @@ export function jsonResponse<T>(
 
 /**
  * Generates a standardized error response.
+ * Pass `env` to enable domain-restricted CORS (FIX-03).
  */
 export function errorResponse(
   code: string,
   message: string,
   status = 400,
-  details?: unknown
+  details?: unknown,
+  env?: Env
 ): Response {
   return jsonResponse(
     {
@@ -67,9 +78,12 @@ export function errorResponse(
       },
       timestamp: Date.now(),
     },
-    status
+    status,
+    {},
+    env
   );
 }
+
 
 /**
  * Hashes a raw session token using SHA-256 for secure server-side storage.
@@ -139,8 +153,81 @@ function getIpCountry(request: Request): string | undefined {
 }
 
 /**
+ * FIX-02 (v1.3.1): Applies rate limit check for a given key.
+ * Returns a 429 error Response if limit is exceeded, null otherwise.
+ * Degrades gracefully when RATE_LIMITER binding is not configured.
+ */
+async function applyRateLimit(
+  key: string,
+  env: Env
+): Promise<Response | null> {
+  if (!env.RATE_LIMITER) return null;
+  const { success } = await env.RATE_LIMITER.limit({ key });
+  if (!success) {
+    return jsonResponse(
+      {
+        success: false,
+        error: { code: 'RATE_LIMITED', message: 'Demasiadas solicitudes. Intentá nuevamente en un momento.' },
+        timestamp: Date.now(),
+      },
+      429,
+      { 'Retry-After': '60' },
+      env
+    );
+  }
+  return null;
+}
+
+/**
+ * FIX-04 (v1.3.1): Rotates session token — generates a new token_hash,
+ * updates D1, and returns the new plaintext token.
+ * The caller adds it to the response as X-New-Session-Token.
+ */
+async function rotateSessionToken(sessionId: string, env: Env): Promise<string | null> {
+  try {
+    const newToken = generateToken();
+    const newTokenHash = await hashToken(newToken);
+    const newExpiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // sliding 30d
+    await env.DB.prepare(
+      'UPDATE sessions SET token_hash = ?, expires_at = ?, last_active_at = unixepoch() WHERE id = ?'
+    )
+      .bind(newTokenHash, newExpiresAt, sessionId)
+      .run();
+    return newToken;
+  } catch {
+    // Non-fatal: if rotation fails, the old token remains valid until it expires
+    return null;
+  }
+}
+
+/**
+ * FIX-04 (v1.3.1): If a valid session token is provided, rotates it
+ * and returns the new plaintext token string to be sent in X-New-Session-Token.
+ */
+async function rotateSessionOnRequest(
+  request: Request,
+  env: Env,
+  userId: string
+): Promise<string | null> {
+  const sessionToken = request.headers.get('X-Session-Token');
+  if (!sessionToken) return null;
+
+  const tokenHash = await hashToken(sessionToken);
+  const session = await env.DB.prepare(
+    'SELECT id FROM sessions WHERE token_hash = ? AND user_id = ? AND is_revoked = 0'
+  )
+    .bind(tokenHash, userId)
+    .first<{ id: string }>();
+
+  if (!session) return null;
+  return rotateSessionToken(session.id, env);
+}
+
+
+/**
  * Validates the provided session token if present.
  * If revoked or expired, returns an HTTP 401 error response.
+ * Also applies sliding session logic: updates last_active_at and extends expires_at by 30 days.
  */
 async function checkSessionValidity(
   request: Request,
@@ -163,18 +250,22 @@ async function checkSessionValidity(
     return errorResponse(
       'SESSION_REVOKED',
       'Sesión revocada o inválida. Por favor, vuelva a iniciar sesión.',
-      401
+      401,
+      undefined,
+      env
     );
   }
 
   const nowSeconds = Math.floor(Date.now() / 1000);
   if (session.expires_at < nowSeconds) {
-    return errorResponse('SESSION_EXPIRED', 'La sesión ha expirado', 401);
+    return errorResponse('SESSION_EXPIRED', 'La sesión ha expirado', 401, undefined, env);
   }
 
+  // Sliding session: refresh last_active_at and extend expires_at by 30 days
+  const slidingExpiresAt = nowSeconds + 30 * 24 * 60 * 60;
   try {
-    await env.DB.prepare('UPDATE sessions SET last_active_at = unixepoch() WHERE id = ?')
-      .bind(session.id)
+    await env.DB.prepare('UPDATE sessions SET last_active_at = unixepoch(), expires_at = ? WHERE id = ?')
+      .bind(slidingExpiresAt, session.id)
       .run();
   } catch {
     // Non-fatal if update fails
@@ -182,6 +273,11 @@ async function checkSessionValidity(
 
   return null;
 }
+
+
+
+
+
 
 /**
  * Main REST API request handler.
@@ -191,9 +287,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: new Headers(SECURITY_HEADERS),
+      headers: new Headers(getSecurityHeaders(env)),
     });
   }
+
 
   const url = new URL(request.url);
   const path = url.pathname;
@@ -212,7 +309,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           timestamp: Date.now(),
         },
         200,
-        { 'Cache-Control': 'no-store' }
+        { 'Cache-Control': 'no-store' },
+        env
       );
     }
 
@@ -277,12 +375,18 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     // POST /api/auth/register: Atomic initial registration of user and vault
     // -----------------------------------------------------------------------
     if (request.method === 'POST' && (path === '/api/auth/register' || path === '/api/v1/auth/register')) {
+      // FIX-02 (v1.3.1): Rate limiting on registration to prevent automated spam
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const rateLimitError = await applyRateLimit(`register:${ip}`, env);
+      if (rateLimitError) return rateLimitError;
+
       let body: RegisterRequestBody & { device_name?: string };
       try {
         body = (await request.json()) as RegisterRequestBody & { device_name?: string };
       } catch {
-        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400);
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400, undefined, env);
       }
+
 
       const { username, kdf_salt, encrypted_blob, iv, passkey_credential_id, device_name } = body;
 
@@ -378,6 +482,11 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     // GET /api/auth/salt: Retrieve kdf_salt for client-side key derivation
     // -----------------------------------------------------------------------
     if (request.method === 'GET' && (path === '/api/auth/salt' || path === '/api/v1/auth/salt')) {
+      // FIX-02 (v1.3.1): Rate limiting on salt endpoint to mitigate username enumeration
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const rateLimitError = await applyRateLimit(`salt:${ip}`, env);
+      if (rateLimitError) return rateLimitError;
+
       const usernameParam = url.searchParams.get('username');
 
       if (!usernameParam || !usernameParam.trim()) {
@@ -1140,6 +1249,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       const sessionError = await checkSessionValidity(request, env, userId);
       if (sessionError) return sessionError;
 
+      // FIX-04 (v1.3.1): Sliding session token rotation on sync
+      const newSessionToken = await rotateSessionOnRequest(request, env, userId);
+
       const vault = await env.DB.prepare(
         'SELECT user_id, encrypted_blob, iv, version, updated_at FROM vaults WHERE user_id = ?'
       )
@@ -1153,7 +1265,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         }>();
 
       if (!vault) {
-        return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada para este usuario', 404);
+        return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada para este usuario', 404, undefined, env);
       }
 
       // ETag and HTTP 304 Not Modified support
@@ -1161,13 +1273,22 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       const etag = `"v${vault.version}"`;
 
       if (ifNoneMatch === etag || ifNoneMatch === String(vault.version)) {
+        const headers = new Headers({
+          ...getSecurityHeaders(env),
+          ETag: etag,
+        });
+        if (newSessionToken) {
+          headers.set('X-New-Session-Token', newSessionToken);
+        }
         return new Response(null, {
           status: 304,
-          headers: new Headers({
-            ...SECURITY_HEADERS,
-            ETag: etag,
-          }),
+          headers,
         });
+      }
+
+      const extraHeaders: Record<string, string> = { ETag: etag };
+      if (newSessionToken) {
+        extraHeaders['X-New-Session-Token'] = newSessionToken;
       }
 
       return jsonResponse(
@@ -1183,7 +1304,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           timestamp: Date.now(),
         },
         200,
-        { ETag: etag }
+        extraHeaders,
+        env
       );
     }
 
@@ -1194,17 +1316,20 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       const userId = request.headers.get('X-User-Id');
 
       if (!userId) {
-        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401);
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
       }
 
       const sessionError = await checkSessionValidity(request, env, userId);
       if (sessionError) return sessionError;
 
+      // FIX-04 (v1.3.1): Sliding session token rotation on sync
+      const newSessionToken = await rotateSessionOnRequest(request, env, userId);
+
       let body: VaultUpdateRequestBody;
       try {
         body = (await request.json()) as VaultUpdateRequestBody;
       } catch {
-        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400);
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400, undefined, env);
       }
 
       const { encrypted_blob, iv, version } = body;
@@ -1213,7 +1338,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         return errorResponse(
           'MISSING_REQUIRED_FIELDS',
           'Los campos encrypted_blob, iv y version (numérico) son requeridos',
-          400
+          400,
+          undefined,
+          env
         );
       }
 
@@ -1223,7 +1350,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         .first<{ version: number }>();
 
       if (!current) {
-        return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada', 404);
+        return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada', 404, undefined, env);
       }
 
       // STRICT OPTIMISTIC CONCURRENCY CONTROL:
@@ -1236,7 +1363,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           {
             server_version: current.version,
             client_version: version,
-          }
+          },
+          env
         );
       }
 
@@ -1259,6 +1387,11 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         ).bind(userId, resolvedDeviceName, JSON.stringify({ version })),
       ]);
 
+      const extraHeaders: Record<string, string> = {};
+      if (newSessionToken) {
+        extraHeaders['X-New-Session-Token'] = newSessionToken;
+      }
+
       return jsonResponse({
         success: true,
         data: {
@@ -1267,7 +1400,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           updated_at: Math.floor(Date.now() / 1000),
         },
         timestamp: Date.now(),
-      });
+      }, 200, extraHeaders, env);
     }
 
     // Endpoint not found

@@ -138,6 +138,19 @@ export async function saveUserConfig(config: LocalUserConfig): Promise<void> {
   await db.put('user_config', config, 'profile');
 }
 
+/**
+ * FIX-04 (v1.3.1): Updates only the session_token in local user profile (sliding session token rotation).
+ */
+export async function updateSessionToken(newToken: string): Promise<void> {
+  const db = await getDb();
+  const config = await db.get('user_config', 'profile');
+  if (config) {
+    config.session_token = newToken;
+    await db.put('user_config', config, 'profile');
+  }
+}
+
+
 // =========================================================================
 // OPERATIONS ON SYNC_QUEUE (OFFLINE MUTATIONS)
 // =========================================================================

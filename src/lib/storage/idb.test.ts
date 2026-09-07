@@ -6,6 +6,7 @@ import {
   setSyncStatus,
   getUserConfig,
   saveUserConfig,
+  updateSessionToken,
   enqueueSyncOp,
   getSyncQueue,
   removeSyncOp,
@@ -82,6 +83,25 @@ describe('IndexedDB Storage Layer (idb)', () => {
     expect(retrieved?.wrapped_master_key).toBe('wrapped_key_payload');
     expect(retrieved?.auto_lock_minutes).toBe(5);
   });
+
+  it('updates session_token via updateSessionToken without affecting other config fields', async () => {
+    const userConfig: LocalUserConfig = {
+      user_id: 'usr_token_test',
+      username: 'token_user',
+      kdf_salt: 'salt123',
+      session_token: 'initial_token_abc',
+      auto_lock_minutes: 10,
+    };
+
+    await saveUserConfig(userConfig);
+    await updateSessionToken('rotated_token_xyz');
+
+    const updated = await getUserConfig();
+    expect(updated?.session_token).toBe('rotated_token_xyz');
+    expect(updated?.username).toBe('token_user');
+    expect(updated?.auto_lock_minutes).toBe(10);
+  });
+
 
   it('enqueues, lists, and removes operations in sync_queue', async () => {
     const op1 = {

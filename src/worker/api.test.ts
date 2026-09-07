@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import worker from './index.ts';
 import { handleApiRequest, hashToken } from './api.ts';
 import type {
   Env,
@@ -202,8 +203,21 @@ class MockD1Database {
           async run(): Promise<D1Response> {
             const normalizedQuery = query.toLowerCase().replace(/\s+/g, ' ');
 
+            // UPDATE sessions SET token_hash = ?, expires_at = ?, last_active_at = unixepoch() WHERE id = ?
+            if (normalizedQuery.includes('update sessions set token_hash =')) {
+              const tokenHash = String(params[0]);
+              const expiresAt = Number(params[1]);
+              const sessionId = String(params[2]);
+              const s = db.sessions.get(sessionId);
+              if (s) {
+                s.token_hash = tokenHash;
+                s.expires_at = expiresAt;
+                s.last_active_at = Math.floor(Date.now() / 1000);
+              }
+            }
+
             // UPDATE sessions SET last_active_at = unixepoch() WHERE id = ?
-            if (normalizedQuery.includes('update sessions set last_active_at =')) {
+            if (normalizedQuery.includes('update sessions set last_active_at =') && !normalizedQuery.includes('token_hash =')) {
               const sessionId = String(params[0]);
               const s = db.sessions.get(sessionId);
               if (s) {
@@ -1250,4 +1264,180 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
       }
     });
   });
+
+  // =========================================================================
+  // v1.3.1 SECURITY HARDENING TESTS (FIX-01, FIX-02, FIX-03, FIX-04)
+  // =========================================================================
+  describe('v1.3.1 Security Hardening Tests', () => {
+    it('FIX-01: Static asset responses include Content-Security-Policy header', async () => {
+      const mockAssets: any = {
+        fetch: async () => new Response('<!DOCTYPE html><html><body>Revolt Pass</body></html>', {
+          status: 200,
+          headers: new Headers({ 'Content-Type': 'text/html' }),
+        }),
+      };
+
+      const envWithAssets: Env = {
+        ...env,
+        ASSETS: mockAssets,
+      };
+
+      const req = new Request('https://pass.revoltgroup.com.ar/', { method: 'GET' });
+      const res = await worker.fetch(req, envWithAssets);
+
+      expect(res.status).toBe(200);
+      const csp = res.headers.get('Content-Security-Policy');
+      expect(csp).toBeDefined();
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("script-src 'self'");
+      expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).toContain("frame-ancestors 'none'");
+    });
+
+    it('FIX-02: Returns HTTP 429 and Retry-After when rate limit is exceeded on GET /api/auth/salt', async () => {
+      const mockRateLimiter = {
+        limit: async () => ({ success: false }),
+      };
+
+      const rateLimitedEnv: Env = {
+        ...env,
+        RATE_LIMITER: mockRateLimiter,
+      };
+
+      const req = new Request('https://pass.example.com/api/auth/salt?username=alice', {
+        method: 'GET',
+        headers: { 'CF-Connecting-IP': '198.51.100.1' },
+      });
+
+      const res = await handleApiRequest(req, rateLimitedEnv);
+      expect(res.status).toBe(429);
+      expect(res.headers.get('Retry-After')).toBe('60');
+
+      const json = (await res.json()) as ApiResponse;
+      expect(json.success).toBe(false);
+      expect(json.error?.code).toBe('RATE_LIMITED');
+    });
+
+    it('FIX-02: Returns HTTP 429 and Retry-After when rate limit is exceeded on POST /api/auth/register', async () => {
+      const mockRateLimiter = {
+        limit: async () => ({ success: false }),
+      };
+
+      const rateLimitedEnv: Env = {
+        ...env,
+        RATE_LIMITER: mockRateLimiter,
+      };
+
+      const req = new Request('https://pass.example.com/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '198.51.100.2',
+        },
+        body: JSON.stringify({
+          username: 'spammer',
+          kdf_salt: 'salt123',
+          encrypted_blob: 'blob123',
+          iv: 'iv123',
+        }),
+      });
+
+      const res = await handleApiRequest(req, rateLimitedEnv);
+      expect(res.status).toBe(429);
+      expect(res.headers.get('Retry-After')).toBe('60');
+
+      const json = (await res.json()) as ApiResponse;
+      expect(json.success).toBe(false);
+      expect(json.error?.code).toBe('RATE_LIMITED');
+    });
+
+    it('FIX-03: Reflects APP_DOMAIN in Access-Control-Allow-Origin header and falls back to wildcard when unset', async () => {
+      const prodEnv: Env = {
+        ...env,
+        APP_DOMAIN: 'https://pass.revoltgroup.com.ar',
+      };
+
+      const reqOptions = new Request('https://pass.revoltgroup.com.ar/api/vault', {
+        method: 'OPTIONS',
+      });
+      const resOptions = await handleApiRequest(reqOptions, prodEnv);
+      expect(resOptions.headers.get('Access-Control-Allow-Origin')).toBe('https://pass.revoltgroup.com.ar');
+
+      const reqTime = new Request('https://pass.revoltgroup.com.ar/api/time', {
+        method: 'GET',
+      });
+      const resTime = await handleApiRequest(reqTime, prodEnv);
+      expect(resTime.headers.get('Access-Control-Allow-Origin')).toBe('https://pass.revoltgroup.com.ar');
+
+      // Fallback to '*' when APP_DOMAIN is undefined
+      const devEnv: Env = {
+        ...env,
+        APP_DOMAIN: undefined,
+      };
+      const resDev = await handleApiRequest(reqOptions, devEnv);
+      expect(resDev.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    });
+
+    it('FIX-04: Rotates session token on vault sync, issues X-New-Session-Token, and invalidates old token', async () => {
+      // 1. Register user and receive initial session token
+      const reqReg = new Request('https://pass.example.com/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'rotation_user',
+          kdf_salt: 'salt_rot',
+          encrypted_blob: 'blob_rot_1',
+          iv: 'iv_rot_1',
+        }),
+      });
+      const resReg = await handleApiRequest(reqReg, env);
+      expect(resReg.status).toBe(201);
+      const regJson = (await resReg.json()) as ApiResponse<{ user_id: string; session_token: string }>;
+      const userId = regJson.data!.user_id;
+      const initialToken = regJson.data!.session_token;
+
+      // 2. Perform GET /api/vault with initialToken -> triggers rotation
+      const reqSync1 = new Request('https://pass.example.com/api/vault', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': initialToken,
+        },
+      });
+      const resSync1 = await handleApiRequest(reqSync1, env);
+      expect(resSync1.status).toBe(200);
+
+      const rotatedToken = resSync1.headers.get('X-New-Session-Token');
+      expect(rotatedToken).toBeDefined();
+      expect(typeof rotatedToken).toBe('string');
+      expect(rotatedToken).not.toBe(initialToken);
+
+      // 3. Second sync using rotatedToken succeeds
+      const reqSync2 = new Request('https://pass.example.com/api/vault', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': rotatedToken!,
+          'If-None-Match': '"v1"',
+        },
+      });
+      const resSync2 = await handleApiRequest(reqSync2, env);
+      expect(resSync2.status).toBe(304);
+
+      // 4. Replaying initialToken is now rejected with 401 SESSION_REVOKED
+      const reqReplay = new Request('https://pass.example.com/api/vault', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': initialToken,
+        },
+      });
+      const resReplay = await handleApiRequest(reqReplay, env);
+      expect(resReplay.status).toBe(401);
+      const replayJson = (await resReplay.json()) as ApiResponse;
+      expect(replayJson.error?.code).toBe('SESSION_REVOKED');
+    });
+  });
 });
+

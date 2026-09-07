@@ -9,6 +9,7 @@ import {
   saveLocalVault,
   setSyncStatus,
   getUserConfig,
+  updateSessionToken,
 } from '../storage/idb.ts';
 import { encryptVault, decryptVault } from '../crypto/vault.ts';
 import type { VaultItem, SyncStatus, EncryptedVaultPayload } from '../../types/vault.ts';
@@ -124,6 +125,12 @@ export async function pullRemoteVault(
       throw new Error('SESSION_REVOKED');
     }
 
+    // FIX-04 (v1.3.1): Sliding session token rotation pickup
+    const newSessionToken = response.headers?.get?.('X-New-Session-Token');
+    if (newSessionToken) {
+      await updateSessionToken(newSessionToken);
+    }
+
     // 304 Not Modified: Server and client are identically synchronized
     if (response.status === 304) {
       await setSyncStatus('synced');
@@ -215,6 +222,12 @@ export async function pushLocalVault(
 
     // 200 OK: Synchronization successful
     if (response.ok) {
+      // FIX-04 (v1.3.1): Sliding session token rotation pickup
+      const newSessionToken = response.headers?.get?.('X-New-Session-Token');
+      if (newSessionToken) {
+        await updateSessionToken(newSessionToken);
+      }
+
       await setSyncStatus('synced');
       updateSyncState('synced');
       return true;

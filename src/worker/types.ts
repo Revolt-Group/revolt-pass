@@ -2,13 +2,25 @@
  * Revolt Pass - Types for Cloudflare Worker & D1
  */
 
+/**
+ * Cloudflare Workers Rate Limiter binding.
+ * Configured via [[unsafe.bindings]] in wrangler.toml.
+ * Optional so the Worker degrades gracefully in dev environments.
+ */
+export interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface Env {
   DB: D1Database;
   ASSETS?: Fetcher;
   ENVIRONMENT?: string;
   APP_NAME?: string;
   APP_DOMAIN?: string;
+  /** FIX-02 (v1.3.1): Cloudflare native rate limiter — optional, degrades gracefully if absent. */
+  RATE_LIMITER?: RateLimiter;
 }
+
 
 export interface ApiErrorPayload {
   code: string;

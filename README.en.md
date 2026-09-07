@@ -5,21 +5,22 @@
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.3.0](https://img.shields.io/badge/Version-v1.3.0-blue.svg)](./CHANGELOG.md)
+[![Version: v1.3.1](https://img.shields.io/badge/Version-v1.3.1-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 88/88](https://img.shields.io/badge/Tests-88%2F88_Passing-brightgreen.svg)](#)
+[![Tests: 94/94](https://img.shields.io/badge/Tests-94%2F94_Passing-brightgreen.svg)](#)
 
-> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, custom logos with client-side compression, bilingual internationalization (ES/EN), proactive vault health diagnostics, k-Anonymity breach detection (HaveIBeenPwned), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
+> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, custom logos with client-side compression, bilingual internationalization (ES/EN), proactive vault health diagnostics, k-Anonymity breach detection (HaveIBeenPwned), edge hardening (CSP, Rate Limiting, token rotation), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
 
 ---
 
 ## 🌟 Key Features
 
 * **Client-Side Zero-Knowledge Encryption:** Authenticated symmetric **256-bit AES-GCM** encryption with a fresh initialization vector (`IV`) per save operation, alongside master key derivation via **Argon2id / PBKDF2 (600,000 rounds)** running in a dedicated Web Worker.
+* **Edge Security Hardening & Defense-in-Depth (v1.3.1):** Strict Content-Security-Policy (CSP) headers mitigating XSS attacks (VEC-06), Cloudflare Workers native rate limiting preventing user enumeration and registration spam, domain-scoped CORS matching `APP_DOMAIN`, and automatic sliding session token rotation on every vault sync.
 * **Vault Health, Cryptographic Hygiene & k-Anonymity Leak Checker (v1.3):** Real-time client-side security diagnostic with an interactive Scorecard (0-100%), detection of weak Base32 secrets (<80 bits), duplicate secrets reused across services, backup freshness monitoring (>30 days), and HaveIBeenPwned data breach detection backed by mathematical Zero-Knowledge k-Anonymity (only 5 hex chars of SHA-1 sent to the proxy with padding).
 * **Serverless Edge Infrastructure (\$0 Operating Cost):** Lightning-fast bidirectional synchronization powered by **Cloudflare Workers** and the distributed database **Cloudflare D1 (Serverless SQLite)**, operating 100% within Cloudflare's free tier.
 * **Bilingual Internationalization (i18n ES / EN):** Complete English and Spanish support without third-party cloud translation APIs or privacy leaks, featuring typed client-side compiled dictionaries and instant dynamic switching.

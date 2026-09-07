@@ -10,7 +10,23 @@ const STATIC_SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
+  // FIX-01 (v1.3.1): Implement CSP documented in 03-SECURITY-AND-THREAT-MODEL.md (VEC-06 mitigation).
+  // 'unsafe-inline' in style-src is required for Tailwind v4 runtime injection.
+  // If migrated to static CSS in the future, remove 'unsafe-inline'.
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https://cdn.simpleicons.org",
+    "connect-src 'self' https://cdn.simpleicons.org",
+    "font-src 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; '),
 };
+
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

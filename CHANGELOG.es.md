@@ -7,6 +7,32 @@ y este proyecto se rige por [Control Semántico de Versiones (SemVer)](https://s
 
 ---
 
+## [1.3.1] - 2026-09-07
+
+### Seguridad y Endurecimiento (Hardening)
+- **Cabecera Content-Security-Policy (CSP) (FIX-01):**
+  - Implementación de cabecera CSP estricta en todas las respuestas de activos estáticos del Cloudflare Worker para mitigar Cross-Site Scripting (XSS / VEC-06).
+  - Restricción de orígenes de scripts, fuentes, marcos y conexiones permitidas hacia CDNs de confianza (`cdn.simpleicons.org`).
+- **Limitación de Tasa Perimetral (Rate Limiting) en Endpoints Sensibles (FIX-02):**
+  - Integración del limitador de tasa nativo de Cloudflare Workers en `/api/auth/salt` y `/api/auth/register`.
+  - Respuesta `HTTP 429 Too Many Requests` con cabecera `Retry-After: 60` ante excesos de peticiones, mitigando ataques de enumeración de nombres de usuario y registros automatizados.
+  - Documentación de vinculación en `wrangler.toml.example`.
+- **Restricción de Origen CORS al Dominio Productivo (FIX-03):**
+  - Sustitución de CORS comodín permisivo (`*`) por una configuración dinámica que refleja `env.APP_DOMAIN` en entornos productivos.
+  - Degeneración controlada a comodín únicamente en entornos de desarrollo local no configurados.
+- **Rotación de Tokens de Sesión Deslizante (Sliding Session) en Sincronización (FIX-04):**
+  - Rotación automática de credenciales de sesión en sincronizaciones de bóveda (`GET /api/vault` y `PUT /api/vault`).
+  - El Worker emite la cabecera `X-New-Session-Token` con un nuevo hash criptográficamente aleatorio tras cada sincronización autenticada.
+  - El cliente (`syncEngine.ts`) intercepta la cabecera y actualiza el token en IndexedDB (`user_config`).
+  - Invalidación inmediata del hash de sesión anterior en Cloudflare D1, acotando drásticamente la ventana de exposición de tokens interceptados.
+  - Ampliación deslizante de la expiración de la sesión en cada petición válida.
+
+### Modificado
+- Incremento de versión a `v1.3.1` en `package.json` y `src/constants/version.ts`.
+- Ampliación de la suite de pruebas a **94 pruebas automatizadas** en 14 suites, validando cabeceras CSP, limitadores de tasa, CORS restringido y rotación de tokens de sesión.
+
+---
+
 ## [1.3.0] - 2026-09-07
 
 ### Añadido

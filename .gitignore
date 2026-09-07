@@ -61,3 +61,6 @@ Thumbs.db
 # Test Coverage
 coverage/
 .nyc_output/
+
+# Internal Reviews & Audits (not for public repo)
+revolt-pass-roadmap-review.md

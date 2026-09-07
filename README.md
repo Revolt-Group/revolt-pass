@@ -5,21 +5,22 @@
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.3.0](https://img.shields.io/badge/Version-v1.3.0-blue.svg)](./CHANGELOG.md)
+[![Version: v1.3.1](https://img.shields.io/badge/Version-v1.3.1-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 88/88](https://img.shields.io/badge/Tests-88%2F88_Passing-brightgreen.svg)](#)
+[![Tests: 94/94](https://img.shields.io/badge/Tests-94%2F94_Passing-brightgreen.svg)](#)
 
-> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), soporte de logos personalizados con compresión local, internacionalización bilingüe (ES/EN), diagnóstico preventivo de salud de la bóveda, detección de filtraciones k-Anonymity (HaveIBeenPwned) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
+> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), soporte de logos personalizados con compresión local, internacionalización bilingüe (ES/EN), diagnóstico preventivo de salud de la bóveda, detección de filtraciones k-Anonymity (HaveIBeenPwned), endurecimiento perimetral (CSP, Rate Limiting, rotación de sesiones) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
 
 ---
 
 ## 🌟 Características Principales
 
 * **Cifrado Zero-Knowledge en Cliente:** Cifrado simétrico autenticado **AES-GCM de 256 bits** con vector de inicialización (`IV`) fresco por guardado y derivación de clave maestra mediante **Argon2id / PBKDF2 (600,000 rondas)** en un Web Worker dedicado.
+* **Endurecimiento Perimetral y Seguridad en Capas (v1.3.1):** Cabeceras Content-Security-Policy (CSP) estrictas para mitigar XSS (VEC-06), limitador de tasa nativo en Cloudflare Workers para prevenir enumeración de usuarios y spam de registros, CORS restringido dinámicamente al dominio productivo (`APP_DOMAIN`) y rotación automática de tokens de sesión deslizantes (*sliding sessions*) en cada sincronización.
 * **Diagnóstico de Salud, Higiene y Brechas k-Anonymity (v1.3):** Auditoría local y preventiva de seguridad con Scorecard interactivo (0-100%), detección de secretos Base32 débiles (<80 bits), duplicados reutilizados entre cuentas, control de obsolescencia de backups (>30 días) y comprobador de filtraciones de HaveIBeenPwned con privacidad matemática absoluta (sólo 5 caracteres hexadecimales de SHA-1 viajan al proxy perimetral con padding anti-análisis).
 * **Infraestructura Serverless Edge (\$0 Costo Operativo):** Sincronización bidireccional ultrarrápida impulsada por **Cloudflare Workers** y la base de datos distribuida **Cloudflare D1 (SQLite Serverless)**, operando 100% dentro de la capa gratuita de Cloudflare.
 * **Internacionalización Bilingüe (i18n ES / EN):** Soporte integral de Español e Inglés sin llamadas a traductores en la nube ni fugas de privacidad, con diccionarios tipados compilados en el cliente y selector dinámico instantáneo.

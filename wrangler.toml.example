@@ -27,3 +27,13 @@ database_id = "<TU_DATABASE_ID_AQUI>"
 ENVIRONMENT = "production"
 APP_NAME = "Revolt Pass"
 APP_DOMAIN = "https://tu-dominio.com"
+
+# Rate Limiting nativo de Cloudflare Workers (Plan Gratuito: 10M req/mes)
+# FIX-02 (v1.3.1): Mitigación de enumeración de usuarios y abuso de registro
+# Descomentar si se desea activar rate limiting perimetral:
+# [[unsafe.bindings]]
+# name = "RATE_LIMITER"
+# type = "ratelimit"
+# namespace_id = "1001"
+# simple = { limit = 10, period = 60 }
+
