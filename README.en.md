@@ -5,20 +5,21 @@
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.4.0](https://img.shields.io/badge/Version-v1.4.0-blue.svg)](./CHANGELOG.md)
+[![Version: v1.4.1](https://img.shields.io/badge/Version-v1.4.1-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 111/111](https://img.shields.io/badge/Tests-111%2F111_Passing-brightgreen.svg)](#)
+[![Tests: 114/114](https://img.shields.io/badge/Tests-114%2F114_Passing-brightgreen.svg)](#)
 
-> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, universal cross-platform importers (Google Auth, Authy, Bitwarden, Aegis, 1Password, etc.), open vault exporters, physical YubiKey/FIDO2 roaming keys, proactive vault health diagnostics, k-Anonymity breach detection (HaveIBeenPwned), edge hardening (CSP, Rate Limiting, token rotation), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
+> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, universal individual account QR viewer, Google Authenticator batch QR migration carousel, universal cross-platform importers (Authy, Bitwarden, Aegis, 1Password, etc.), physical YubiKey/FIDO2 roaming keys, proactive vault health diagnostics, k-Anonymity breach detection (HaveIBeenPwned), edge hardening (CSP, Rate Limiting, token rotation), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
 
 ---
 
 ## 🌟 Key Features
 
+* **Multi-Account QR Carousel Exporter & Individual QR Viewer (v1.4.1):** Pure TypeScript Protocol Buffers encoder generating official `otpauth-migration://offline?data=...` migration URIs divided into optimal batches of 7 accounts per QR code with an interactive carousel to absorb your entire vault using Google Authenticator, Aegis, or 2FAS cameras. High-definition vector SVG QR viewer to transfer individual accounts with any mobile authenticator (`otpauth://`).
 * **Universal Importers & Open Vault Exporters (v1.4.0):** Frictionless zero-knowledge migration from Google Authenticator (pure TypeScript Protobuf decoder), Authy, Aegis, 2FAS, Bitwarden, 1Password, Proton Pass, Ente Auth, LastPass, and `otpauth://` URI lists. Interactive smart reconciliation engine with diff preview (*new, duplicate, conflict*) and selectable resolution strategies (*keep existing, overwrite, keep both*). Open export to Aegis JSON, Bitwarden CSV, and `otpauth://` list formats. WebAuthn support for physical hardware security keys (**YubiKey / FIDO2 Roaming**) and CSV/JSON security audit log export.
 * **Client-Side Zero-Knowledge Encryption:** Authenticated symmetric **256-bit AES-GCM** encryption with a fresh initialization vector (`IV`) per save operation, alongside master key derivation via **Argon2id / PBKDF2 (600,000 rounds)** running in a dedicated Web Worker.
 * **Edge Security Hardening & Defense-in-Depth (v1.3.1):** Strict Content-Security-Policy (CSP) headers mitigating XSS attacks (VEC-06), Cloudflare Workers native rate limiting preventing user enumeration and registration spam, domain-scoped CORS matching `APP_DOMAIN`, and automatic sliding session token rotation on every vault sync.

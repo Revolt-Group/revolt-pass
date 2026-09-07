@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.1] - 2026-09-07
+
+### Added
+- **Multi-Account QR Carousel Exporter (`src/lib/exporters/protobufEncoder.ts` & `QrCarouselModal.tsx`):**
+  - Pure TypeScript Protocol Buffers encoder generating official `otpauth-migration://offline?data=...` migration URIs.
+  - Automatic account batching (chunked into 7 accounts per QR) guaranteeing optimal optical contrast and instant smartphone camera scanning.
+  - Interactive multi-step carousel with step progress indicator ("Code 1 of 3"), segmented progress bar, keyboard arrow navigation (Left/Right), and raw migration URI copy.
+  - Integrated directly as an export method in `BackupModal.tsx` for zero-friction migration to Google Authenticator, Aegis, 2FAS, or another Revolt Pass instance.
+- **Individual Account QR Code Viewer (`AccountQrModal.tsx`):**
+  - High-contrast, sharp vector SVG QR code viewer for any individual vault account (`otpauth://totp/...`).
+  - Accessible directly via the "View QR" button in `EditAccountModal.tsx` and the contextual dropdown menu on every `TotpCard.tsx`.
+  - Displays issuer identity, account name, algorithm/digit badges, togglable Base32 secret viewer, and one-click URI copying.
+  - 100% universal: scannable by any mobile authenticator in the world (Google Authenticator, Microsoft Authenticator, Apple Passwords, Aegis, 2FAS, Bitwarden, 1Password, etc.).
+- **Vector SVG QR Rendering Utility (`src/lib/utils/qrRenderer.ts`):**
+  - Pure vector SVG rendering using ZXing with quiet zones and high-contrast white container styling for crisp display across all display resolutions.
+
+### Changed
+- Bumped project version to `v1.4.1` across `package.json` and `src/constants/version.ts`.
+- Expanded test suite from 111 to **114 automated tests** across 16 test suites, verifying Protobuf payload encoding, batch chunking, round-trip serialization/deserialization, and standard `otpauth://` generation.
+
+---
+
 ## [1.4.0] - 2026-09-07
 
 ### Added

@@ -5,20 +5,21 @@
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.4.0](https://img.shields.io/badge/Version-v1.4.0-blue.svg)](./CHANGELOG.md)
+[![Version: v1.4.1](https://img.shields.io/badge/Version-v1.4.1-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 111/111](https://img.shields.io/badge/Tests-111%2F111_Passing-brightgreen.svg)](#)
+[![Tests: 114/114](https://img.shields.io/badge/Tests-114%2F114_Passing-brightgreen.svg)](#)
 
-> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), importadores universales multiplataforma (Google Auth, Authy, Bitwarden, Aegis, 1Password, etc.), exportadores abiertos, soporte de llaves físicas YubiKey/FIDO2, diagnóstico preventivo de salud de la bóveda, detección de filtraciones k-Anonymity (HaveIBeenPwned), endurecimiento perimetral (CSP, Rate Limiting, rotación de sesiones) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
+> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), visor QR individual universal, carrusel de exportación masiva compatible con Google Authenticator, importadores universales multiplataforma (Authy, Bitwarden, Aegis, 1Password, etc.), soporte de llaves físicas YubiKey/FIDO2, diagnóstico preventivo de salud de la bóveda, detección de filtraciones k-Anonymity (HaveIBeenPwned), endurecimiento perimetral (CSP, Rate Limiting, rotación de sesiones) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
 
 ---
 
 ## 🌟 Características Principales
 
+* **Exportador Masivo por Carrusel de QRs y Visor QR Individual (v1.4.1):** Codificador binario nativo de Protocol Buffers en TypeScript puro para generar URIs de migración `otpauth-migration://offline?data=...` divididas en lotes de 7 cuentas con carrusel interactivo para absorber toda la bóveda con la cámara de Google Authenticator, Aegis o 2FAS. Visor vectorial SVG de alta definición para transferir cuentas individuales con cualquier app móvil (`otpauth://`).
 * **Importadores Universales y Exportadores Abiertos (v1.4.0):** Migración instantánea y sin fricción desde Google Authenticator (decodificador Protobuf en TypeScript puro), Authy, Aegis, 2FAS, Bitwarden, 1Password, Proton Pass, Ente Auth, LastPass y listas de URIs `otpauth://`. Motor de reconciliación inteligente con previsualización interactiva de diferencias (*nuevas, duplicadas, conflictos*) y resolución seleccionable (*conservar existentes, sobrescribir o conservar ambos*). Exportación abierta hacia formatos Aegis JSON, Bitwarden CSV y lista `otpauth://`. Soporte WebAuthn para llaves de seguridad físicas por hardware (**YubiKey / FIDO2 Roaming**) y exportación del historial de auditoría de seguridad en CSV/JSON.
 * **Cifrado Zero-Knowledge en Cliente:** Cifrado simétrico autenticado **AES-GCM de 256 bits** con vector de inicialización (`IV`) fresco por guardado y derivación de clave maestra mediante **Argon2id / PBKDF2 (600,000 rondas)** en un Web Worker dedicado.
 * **Endurecimiento Perimetral y Seguridad en Capas (v1.3.1):** Cabeceras Content-Security-Policy (CSP) estrictas para mitigar XSS (VEC-06), limitador de tasa nativo en Cloudflare Workers para prevenir enumeración de usuarios y spam de registros, CORS restringido dinámicamente al dominio productivo (`APP_DOMAIN`) y rotación automática de tokens de sesión deslizantes (*sliding sessions*) en cada sincronización.

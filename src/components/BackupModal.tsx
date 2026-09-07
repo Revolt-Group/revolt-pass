@@ -16,10 +16,12 @@ import {
   FileJson,
   AlertTriangle,
   Key,
+  QrCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { VaultItem } from '../types/vault';
+import { QrCarouselModal } from './QrCarouselModal';
 import {
   exportEncryptedBackup,
   exportPlaintextBackup,
@@ -76,6 +78,7 @@ export function BackupModal({
   const [parsedImport, setParsedImport] = useState<ImportResult | null>(null);
   const [reconciliation, setReconciliation] = useState<ReconciliationSummary | null>(null);
   const [strategy, setStrategy] = useState<ReconciliationStrategy>('keep_existing');
+  const [showQrCarousel, setShowQrCarousel] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -378,7 +381,30 @@ export function BackupModal({
                   </button>
                 </div>
 
-                {/* 2. Aegis Authenticator JSON */}
+                {/* 2. QR Code Carousel Migration (Google Auth / Universal) */}
+                <div className="p-3.5 rounded-xl bg-[#16181d]/50 border border-purple-500/20 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
+                      <QrCode className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-white">{t('backup.exportQrMigrationTitle')}</span>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {t('backup.exportQrMigrationDesc')}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowQrCarousel(true)}
+                    className="py-1.5 px-3 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-medium transition-all shrink-0 flex items-center gap-1.5"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>QR</span>
+                  </button>
+                </div>
+
+                {/* 3. Aegis Authenticator JSON */}
                 <div className="p-3.5 rounded-xl bg-[#16181d]/50 border border-white/[0.06] flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
@@ -800,6 +826,13 @@ export function BackupModal({
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+
+      {/* QR Code Batch Carousel Modal */}
+      <QrCarouselModal
+        isOpen={showQrCarousel}
+        onClose={() => setShowQrCarousel(false)}
+        items={items}
+      />
     </Dialog.Root>
   );
 }

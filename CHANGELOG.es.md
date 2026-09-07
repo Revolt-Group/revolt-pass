@@ -7,6 +7,28 @@ y este proyecto se rige por [Control Semántico de Versiones (SemVer)](https://s
 
 ---
 
+## [1.4.1] - 2026-09-07
+
+### Añadido
+- **Exportador Masivo de Cuentas en Carrusel de QRs (`src/lib/exporters/protobufEncoder.ts` & `QrCarouselModal.tsx`):**
+  - Codificador de Protocol Buffers en TypeScript puro para generar URIs oficiales de migración `otpauth-migration://offline?data=...`.
+  - Particionado inteligente de cuentas (lotes de 7 cuentas por QR) para garantizar máxima legibilidad óptica y escaneo ultra-rápido en cámaras móviles.
+  - Carrusel interactivo multi-código con barra de progreso segmentada, contador ("Código 1 de 3"), controles con flechas de teclado (Izquierda/Derecha) y copia de la URI del lote.
+  - Integración en `BackupModal.tsx` para transferir toda la bóveda directamente hacia Google Authenticator, Aegis, 2FAS u otra instancia de Revolt Pass sin cables ni archivos.
+- **Visor de Código QR para Cuentas Individuales (`AccountQrModal.tsx`):**
+  - Visor vectorial SVG de alto contraste para códigos QR estándar `otpauth://totp/...`.
+  - Accesible mediante el botón "Ver QR" en `EditAccountModal.tsx` y desde el menú contextual (`···`) de cada tarjeta en `TotpCard.tsx`.
+  - Muestra identidad del emisor, cuenta, insignias de algoritmo y dígitos, visualizador conmutable de secreto Base32 y botón de copiado directo.
+  - 100% universal: escaneable por cualquier app de autenticación del mercado (Google Authenticator, Microsoft Authenticator, Apple Passwords, Aegis, 2FAS, Bitwarden, etc.).
+- **Utilidad de Renderizado Vectorial SVG para QR (`src/lib/utils/qrRenderer.ts`):**
+  - Renderizado vectorial nítido con `@zxing/library` incorporando zona de silencio (*quiet zone*) y fondo blanco de alto contraste para visibilidad impecable en modo oscuro o pantallas retina.
+
+### Modificado
+- Incremento de versión a `v1.4.1` en `package.json` y `src/constants/version.ts`.
+- Ampliación de la suite de pruebas automatizadas a **114 pruebas** en 16 suites, validando serialización Protobuf, chunking en lotes, ida y vuelta (round-trip) y generación de URIs `otpauth://`.
+
+---
+
 ## [1.4.0] - 2026-09-07
 
 ### Añadido

@@ -14,10 +14,12 @@ import {
   Upload,
   Link,
   ImageIcon,
+  QrCode,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { BrandIcon } from './BrandIcon.tsx';
+import { AccountQrModal } from './AccountQrModal.tsx';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
 import { resizeImageFile } from '../lib/utils/image.ts';
 import { useTranslation } from '../i18n/index.ts';
@@ -48,6 +50,7 @@ export function EditAccountModal({
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -230,14 +233,25 @@ export function EditAccountModal({
                       </Dialog.Description>
                     </div>
                   </div>
-                  <Dialog.Close asChild>
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+                      onClick={() => setShowQrModal(true)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-200 border border-blue-500/20 transition-all"
+                      title={t('accountQr.viewButton') || 'Ver Código QR'}
                     >
-                      <X className="w-4 h-4" />
+                      <QrCode className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{t('accountQr.viewButton') || 'Ver QR'}</span>
                     </button>
-                  </Dialog.Close>
+                    <Dialog.Close asChild>
+                      <button
+                        type="button"
+                        className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </Dialog.Close>
+                  </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-5 space-y-4">
@@ -515,6 +529,12 @@ export function EditAccountModal({
           </Dialog.Portal>
         )}
       </AnimatePresence>
+
+      <AccountQrModal
+        isOpen={showQrModal}
+        onClose={() => setShowQrModal(false)}
+        item={item}
+      />
     </Dialog.Root>
   );
 }

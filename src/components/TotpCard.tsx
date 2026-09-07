@@ -12,11 +12,13 @@ import {
   ShieldAlert,
   Edit3,
   Plus,
+  QrCode,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { BrandIcon } from './BrandIcon.tsx';
+import { AccountQrModal } from './AccountQrModal.tsx';
 import { generateTotp, getTotpRemainingSeconds, getTotpProgress } from '../lib/crypto/totp.ts';
 import { getTimeDriftOffsetMs } from '../lib/sync/timeSync.ts';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard.ts';
@@ -50,6 +52,7 @@ export function TotpCard({
   const [showRecovery, setShowRecovery] = useState(false);
   const [revealCodes, setRevealCodes] = useState(false);
   const [copiedCodeIdx, setCopiedCodeIdx] = useState<number | null>(null);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   const period = item.period || 30;
 
@@ -160,6 +163,14 @@ export function TotpCard({
           </DropdownMenu.Item>
 
           <DropdownMenu.Item
+            onClick={() => setShowQrModal(true)}
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-white/[0.06] hover:text-white cursor-pointer outline-none transition-colors"
+          >
+            <QrCode className="w-3.5 h-3.5 text-blue-400" />
+            {t('accountQr.viewButton') || 'Ver Código QR'}
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Item
             onClick={handleCopyBase32}
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-white/[0.06] hover:text-white cursor-pointer outline-none transition-colors"
           >
@@ -186,90 +197,98 @@ export function TotpCard({
   // ---------------------------------------------------------------------------
   if (viewMode === 'list') {
     return (
-      <div
-        className={`group relative rounded-lg bg-[#0f1013] border ${
-          item.pinned ? 'border-white/20' : 'border-white/[0.08]'
-        } hairline-top px-3.5 py-2.5 hover:border-white/[0.16] transition-colors flex items-center justify-between gap-3`}
-      >
-        {/* Left: Brand + Identity */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <BrandIcon issuer={item.issuer} iconUrl={item.icon_url} size={32} className="shrink-0" />
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-xs text-white truncate">
-                {item.issuer}
-              </span>
-              {item.pinned && (
-                <span className="text-[10px] font-mono text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-1 py-0.2 rounded">
-                  PIN
+      <>
+        <div
+          className={`group relative rounded-lg bg-[#0f1013] border ${
+            item.pinned ? 'border-white/20' : 'border-white/[0.08]'
+          } hairline-top px-3.5 py-2.5 hover:border-white/[0.16] transition-colors flex items-center justify-between gap-3`}
+        >
+          {/* Left: Brand + Identity */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <BrandIcon issuer={item.issuer} iconUrl={item.icon_url} size={32} className="shrink-0" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-xs text-white truncate">
+                  {item.issuer}
                 </span>
-              )}
+                {item.pinned && (
+                  <span className="text-[10px] font-mono text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-1 py-0.2 rounded">
+                    PIN
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-400 truncate max-w-[200px]" title={item.account}>
+                {item.account}
+              </p>
             </div>
-            <p className="text-[11px] text-zinc-400 truncate max-w-[200px]" title={item.account}>
-              {item.account}
-            </p>
+          </div>
+
+          {/* Right: Code + Timer + Actions */}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Token Box */}
+            <button
+              type="button"
+              onClick={handleCopyToken}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#08090a] border border-white/[0.08] hover:border-white/20 transition-all active:scale-[0.99]"
+              title={t('totpCard.clickToCopy')}
+            >
+              <span className="font-mono text-sm md:text-base font-semibold tracking-wider text-white">
+                {formattedToken}
+              </span>
+              {isCopied ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
+              )}
+            </button>
+
+            {/* Mini Circular Timer */}
+            <div className="relative w-6 h-6 flex items-center justify-center">
+              <svg className="w-6 h-6 -rotate-90">
+                <circle cx="12" cy="12" r="10" fill="none" stroke="#27272a" strokeWidth="2" />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  fill="none"
+                  stroke={timerColor}
+                  strokeWidth="2"
+                  strokeDasharray={2 * Math.PI * 10}
+                  strokeDashoffset={2 * Math.PI * 10 * (1 - progress)}
+                  strokeLinecap="round"
+                  className="transition-[stroke-dashoffset] duration-500 ease-linear"
+                />
+              </svg>
+              <span className={`absolute font-mono text-[9px] font-semibold ${timerTextClass}`}>
+                {remaining}
+              </span>
+            </div>
+
+            {/* Pin Button */}
+            <button
+              type="button"
+              onClick={() => onTogglePin(item.id)}
+              className={`p-1 rounded-md transition-colors ${
+                item.pinned
+                  ? 'text-white bg-white/[0.08]'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
+              }`}
+              title={item.pinned ? t('totpCard.unpinAccount') : t('totpCard.pinAccount')}
+            >
+              <Pin className={`w-3.5 h-3.5 transition-transform ${item.pinned ? 'rotate-45' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {renderDropdown()}
           </div>
         </div>
 
-        {/* Right: Code + Timer + Actions */}
-        <div className="flex items-center gap-3 shrink-0">
-          {/* Token Box */}
-          <button
-            type="button"
-            onClick={handleCopyToken}
-            className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#08090a] border border-white/[0.08] hover:border-white/20 transition-all active:scale-[0.99]"
-            title={t('totpCard.clickToCopy')}
-          >
-            <span className="font-mono text-sm md:text-base font-semibold tracking-wider text-white">
-              {formattedToken}
-            </span>
-            {isCopied ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Copy className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
-            )}
-          </button>
-
-          {/* Mini Circular Timer */}
-          <div className="relative w-6 h-6 flex items-center justify-center">
-            <svg className="w-6 h-6 -rotate-90">
-              <circle cx="12" cy="12" r="10" fill="none" stroke="#27272a" strokeWidth="2" />
-              <circle
-                cx="12"
-                cy="12"
-                r="10"
-                fill="none"
-                stroke={timerColor}
-                strokeWidth="2"
-                strokeDasharray={2 * Math.PI * 10}
-                strokeDashoffset={2 * Math.PI * 10 * (1 - progress)}
-                strokeLinecap="round"
-                className="transition-[stroke-dashoffset] duration-500 ease-linear"
-              />
-            </svg>
-            <span className={`absolute font-mono text-[9px] font-semibold ${timerTextClass}`}>
-              {remaining}
-            </span>
-          </div>
-
-          {/* Pin Button */}
-          <button
-            type="button"
-            onClick={() => onTogglePin(item.id)}
-            className={`p-1 rounded-md transition-colors ${
-              item.pinned
-                ? 'text-white bg-white/[0.08]'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
-            }`}
-            title={item.pinned ? t('totpCard.unpinAccount') : t('totpCard.pinAccount')}
-          >
-            <Pin className={`w-3.5 h-3.5 transition-transform ${item.pinned ? 'rotate-45' : ''}`} />
-          </button>
-
-          {/* Dropdown Menu */}
-          {renderDropdown()}
-        </div>
-      </div>
+        <AccountQrModal
+          isOpen={showQrModal}
+          onClose={() => setShowQrModal(false)}
+          item={item}
+        />
+      </>
     );
   }
 
@@ -277,8 +296,9 @@ export function TotpCard({
   // STANDARD GRID CARD VIEW
   // ---------------------------------------------------------------------------
   return (
-    <motion.div
-      layout
+    <>
+      <motion.div
+        layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -515,5 +535,12 @@ export function TotpCard({
         </div>
       )}
     </motion.div>
+
+    <AccountQrModal
+      isOpen={showQrModal}
+      onClose={() => setShowQrModal(false)}
+      item={item}
+    />
+  </>
   );
 }
