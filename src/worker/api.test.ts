@@ -79,8 +79,9 @@ class MockD1Database {
               normalizedQuery.includes('from sessions where (token_hash = ? or prev_token_hash = ?)')
             ) {
               const hash = String(params[0]);
+              const checkRevoked0 = normalizedQuery.includes('is_revoked = 0');
               for (const s of db.sessions.values()) {
-                if ((s.token_hash === hash || s.prev_token_hash === hash) && s.is_revoked === 0) {
+                if ((s.token_hash === hash || s.prev_token_hash === hash) && (!checkRevoked0 || s.is_revoked === 0)) {
                   return {
                     id: s.id,
                     user_id: s.user_id,

@@ -12,7 +12,8 @@ import {
   updateSessionToken,
 } from '../storage/idb.ts';
 import { encryptVault, decryptVault } from '../crypto/vault.ts';
-import type { VaultItem, SyncStatus, EncryptedVaultPayload } from '../../types/vault.ts';
+import { sanitizeBase32 } from '../crypto/base32.ts';
+import type { VaultItem, SyncStatus, EncryptedVaultPayload, RecoveryCode } from '../../types/vault.ts';
 import type { ApiResponse } from '../../worker/types.ts';
 
 type SyncListener = (state: SyncStatus) => void;
@@ -42,51 +43,129 @@ function updateSyncState(newState: SyncStatus): void {
 }
 
 /**
+ * Merges two copies of the same account (e.g. from different devices or backup import).
+ * Retains recovery codes, notes, tags, pinned status, and newest modification timestamp.
+ */
+export function mergeTwoVaultItems(a: VaultItem, b: VaultItem): VaultItem {
+  const aTime = a.updated_at || 0;
+  const bTime = b.updated_at || 0;
+  const primary = aTime >= bTime ? a : b;
+  const secondary = aTime >= bTime ? b : a;
+
+  // Merge recovery codes: prioritize whichever has codes, or union them if both have codes
+  let mergedCodes = primary.recovery_codes;
+  if (!mergedCodes || mergedCodes.length === 0) {
+    mergedCodes = secondary.recovery_codes;
+  } else if (secondary.recovery_codes && secondary.recovery_codes.length > 0) {
+    const codeMap = new Map<string, RecoveryCode>();
+    for (const c of secondary.recovery_codes) {
+      if (c?.code) codeMap.set(c.code.trim().toUpperCase(), c);
+    }
+    for (const c of mergedCodes) {
+      if (c?.code) codeMap.set(c.code.trim().toUpperCase(), c);
+    }
+    mergedCodes = Array.from(codeMap.values());
+  }
+
+  // Merge tags
+  const tagsSet = new Set<string>();
+  if (primary.tags) primary.tags.forEach((t) => tagsSet.add(t));
+  if (secondary.tags) secondary.tags.forEach((t) => tagsSet.add(t));
+  const tags = tagsSet.size > 0 ? Array.from(tagsSet) : undefined;
+
+  // Keep ID of the item that has recovery codes if one does and the other doesn't
+  const idToKeep =
+    primary.recovery_codes && primary.recovery_codes.length > 0
+      ? primary.id
+      : secondary.recovery_codes && secondary.recovery_codes.length > 0
+      ? secondary.id
+      : primary.id;
+
+  return {
+    ...primary,
+    id: idToKeep,
+    recovery_codes: mergedCodes,
+    notes: primary.notes || secondary.notes,
+    tags,
+    pinned: primary.pinned || secondary.pinned,
+    icon_url: primary.icon_url || secondary.icon_url,
+    created_at: Math.min(primary.created_at || Date.now(), secondary.created_at || Date.now()),
+    updated_at: Math.max(aTime, bTime),
+  };
+}
+
+/**
+ * Deduplicates an array of VaultItems by ID, sanitized TOTP secret, or (issuer + account).
+ * Merges duplicate entries so no recovery codes, notes, or tags are lost.
+ */
+export function deduplicateVaultItems(items: VaultItem[]): VaultItem[] {
+  const result: VaultItem[] = [];
+
+  for (const item of items) {
+    const itemSecret = item.secret ? sanitizeBase32(item.secret) : '';
+    const itemKey = `${(item.issuer || '').trim().toLowerCase()}:::${(item.account || '').trim().toLowerCase()}`;
+
+    const existingIndex = result.findIndex((existing) => {
+      // 1. Direct ID match
+      if (existing.id === item.id) return true;
+      // 2. Exact TOTP secret match (must be at least 8 chars)
+      if (itemSecret && itemSecret.length >= 8 && existing.secret) {
+        if (sanitizeBase32(existing.secret) === itemSecret) return true;
+      }
+      // 3. Exact Issuer + Account match (if both non-empty)
+      const existingKey = `${(existing.issuer || '').trim().toLowerCase()}:::${(existing.account || '').trim().toLowerCase()}`;
+      if (itemKey !== ':::' && existingKey === itemKey) return true;
+      return false;
+    });
+
+    if (existingIndex === -1) {
+      result.push(item);
+    } else {
+      result[existingIndex] = mergeTwoVaultItems(result[existingIndex], item);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Item-level Last-Write-Wins reconciliation algorithm (3-Way Merge).
  * Resolves collisions between simultaneous edits on client and server.
- * 
- * @param localItems Decrypted items from local vault
- * @param remoteItems Decrypted items from remote vault
- * @returns Deduplicated unified list retaining the latest version of each account
+ * Deduplicates items by ID, secret, and account name to prevent cross-device duplicates.
  */
 export function reconcileVaultItems(
   localItems: VaultItem[],
   remoteItems: VaultItem[]
 ): VaultItem[] {
-  const itemMap = new Map<string, VaultItem>();
+  return deduplicateVaultItems([...localItems, ...remoteItems]);
+}
 
-  // 1. Load all remote items into map
-  for (const item of remoteItems) {
-    itemMap.set(item.id, item);
-  }
-
-  // 2. Compare against local items
-  for (const localItem of localItems) {
-    const remoteItem = itemMap.get(localItem.id);
-
-    if (!remoteItem) {
-      // Item exists only locally (added offline) -> Retain
-      itemMap.set(localItem.id, localItem);
-    } else {
-      // Item exists in both -> Retain the one with more recent updated_at timestamp
-      const keepLocal = localItem.updated_at >= remoteItem.updated_at;
-      const winner = keepLocal ? localItem : remoteItem;
-      const other = keepLocal ? remoteItem : localItem;
-
-      // Smart recovery codes merge: ensure recovery codes aren't dropped if present on either
-      const mergedRecoveryCodes =
-        winner.recovery_codes && winner.recovery_codes.length > 0
-          ? winner.recovery_codes
-          : other.recovery_codes;
-
-      itemMap.set(localItem.id, {
-        ...winner,
-        recovery_codes: mergedRecoveryCodes,
-      });
+async function attemptSessionRefresh(
+  baseUrl: string,
+  userId: string,
+  deviceName?: string,
+  customFetch = fetch
+): Promise<string | null> {
+  try {
+    const res = await customFetch(`${baseUrl}/api/auth/session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+      },
+      body: JSON.stringify({ user_id: userId, device_name: deviceName }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as ApiResponse<{ session_token: string }>;
+      if (data.success && data.data?.session_token) {
+        await updateSessionToken(data.data.session_token);
+        return data.data.session_token;
+      }
     }
+  } catch {
+    // Non-blocking
   }
-
-  return Array.from(itemMap.values());
+  return null;
 }
 
 function handleAuthStatus(status: number): void {
@@ -139,14 +218,29 @@ export async function pullRemoteVault(
       headers['If-None-Match'] = `"v${localVersion}"`;
     }
 
-    const response = await fetchFn(`${baseUrl}/api/vault`, {
+    let response = await fetchFn(`${baseUrl}/api/vault`, {
       method: 'GET',
       headers,
     });
 
     if (response.status === 401) {
-      handleAuthStatus(401);
-      throw new Error('SESSION_REVOKED');
+      // Clear rejected token to break any potential lockout loops
+      await updateSessionToken('');
+
+      // Attempt silent refresh before declaring revocation
+      const refreshedToken = await attemptSessionRefresh(baseUrl, userConfig.user_id, undefined, fetchFn);
+      if (refreshedToken) {
+        headers['X-Session-Token'] = refreshedToken;
+        response = await fetchFn(`${baseUrl}/api/vault`, {
+          method: 'GET',
+          headers,
+        });
+      }
+
+      if (response.status === 401) {
+        handleAuthStatus(401);
+        throw new Error('SESSION_REVOKED');
+      }
     }
 
     // FIX-04 (v1.3.1): Sliding session token rotation pickup
@@ -251,15 +345,28 @@ export async function pushLocalVault(
       headers['X-Session-Token'] = userConfig.session_token;
     }
 
-    const response = await customFetch(`${baseUrl}/api/vault`, {
+    let response = await customFetch(`${baseUrl}/api/vault`, {
       method: 'PUT',
       headers,
       body: JSON.stringify(payload),
     });
 
     if (response.status === 401) {
-      handleAuthStatus(401);
-      throw new Error('SESSION_REVOKED');
+      await updateSessionToken('');
+      const refreshedToken = await attemptSessionRefresh(baseUrl, userConfig.user_id, undefined, customFetch);
+      if (refreshedToken) {
+        headers['X-Session-Token'] = refreshedToken;
+        response = await customFetch(`${baseUrl}/api/vault`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (response.status === 401) {
+        handleAuthStatus(401);
+        throw new Error('SESSION_REVOKED');
+      }
     }
 
     // 200 OK: Synchronization successful
@@ -320,15 +427,27 @@ export async function resolveConflict(
     getHeaders['X-Session-Token'] = userConfig.session_token;
   }
 
-  const getRes = await customFetch(`${baseUrl}/api/vault`, {
+  let getRes = await customFetch(`${baseUrl}/api/vault`, {
     method: 'GET',
     headers: getHeaders,
   });
 
   if (getRes.status === 401) {
-    handleAuthStatus(401);
-    updateSyncState('error');
-    return false;
+    await updateSessionToken('');
+    const refreshedToken = await attemptSessionRefresh(baseUrl, userConfig.user_id, undefined, customFetch);
+    if (refreshedToken) {
+      getHeaders['X-Session-Token'] = refreshedToken;
+      getRes = await customFetch(`${baseUrl}/api/vault`, {
+        method: 'GET',
+        headers: getHeaders,
+      });
+    }
+
+    if (getRes.status === 401) {
+      handleAuthStatus(401);
+      updateSyncState('error');
+      return false;
+    }
   }
 
   if (!getRes.ok) {

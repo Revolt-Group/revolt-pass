@@ -8,6 +8,7 @@ import {
 } from './timeSync.ts';
 import {
   reconcileVaultItems,
+  deduplicateVaultItems,
   pullRemoteVault,
   pushLocalVault,
 } from './syncEngine.ts';
@@ -288,6 +289,97 @@ describe('Vault Synchronization and Reconciliation', () => {
       expect(reconciled[0].secret).toBe('LOCAL_SECRET');
       expect(reconciled[0].recovery_codes).toEqual([{ code: 'REC-1234', used: false }]);
     });
+
+    it('collapses duplicated accounts from different devices matching by TOTP secret and preserves recovery codes', () => {
+      const pcAccountWithCodes: VaultItem = {
+        id: 'id-pc-1',
+        type: 'totp',
+        issuer: 'Google',
+        account: 'user@example.com',
+        secret: 'JBSWY3DPEHPK3PXP',
+        digits: 6,
+        period: 30,
+        algorithm: 'SHA1',
+        recovery_codes: [
+          { code: 'REC-AAA-111', used: false },
+          { code: 'REC-BBB-222', used: true },
+        ],
+        notes: 'Personal account',
+        tags: ['Work', 'Email'],
+        created_at: 1000,
+        updated_at: 2000,
+      };
+
+      const mobileAccountWithoutCodes: VaultItem = {
+        id: 'id-mobile-1',
+        type: 'totp',
+        issuer: 'Google',
+        account: 'user@example.com',
+        secret: 'JBSWY3DPEHPK3PXP', // Exact same secret, different ID from import
+        digits: 6,
+        period: 30,
+        algorithm: 'SHA1',
+        recovery_codes: [], // Missing recovery codes from mobile import
+        created_at: 3000,
+        updated_at: 3500,
+      };
+
+      const deduplicated = deduplicateVaultItems([pcAccountWithCodes, mobileAccountWithoutCodes]);
+      expect(deduplicated).toHaveLength(1);
+      expect(deduplicated[0].id).toBe('id-pc-1');
+      expect(deduplicated[0].recovery_codes).toHaveLength(2);
+      expect(deduplicated[0].recovery_codes).toEqual([
+        { code: 'REC-AAA-111', used: false },
+        { code: 'REC-BBB-222', used: true },
+      ]);
+      expect(deduplicated[0].notes).toBe('Personal account');
+      expect(deduplicated[0].tags).toEqual(['Work', 'Email']);
+      expect(deduplicated[0].updated_at).toBe(3500);
+    });
+
+    it('unions recovery codes from both duplicates without repeating identical codes', () => {
+      const itemA: VaultItem = {
+        id: 'item-a',
+        type: 'totp',
+        issuer: 'GitHub',
+        account: 'octocat',
+        secret: 'KRSXG5CTMVRXEZLU',
+        digits: 6,
+        period: 30,
+        algorithm: 'SHA1',
+        recovery_codes: [
+          { code: 'CODE-1', used: false },
+          { code: 'CODE-2', used: false },
+        ],
+        created_at: 1000,
+        updated_at: 2000,
+      };
+
+      const itemB: VaultItem = {
+        id: 'item-b',
+        type: 'totp',
+        issuer: 'GitHub',
+        account: 'octocat',
+        secret: 'KRSXG5CTMVRXEZLU',
+        digits: 6,
+        period: 30,
+        algorithm: 'SHA1',
+        recovery_codes: [
+          { code: 'code-2', used: true },
+          { code: 'CODE-3', used: false },
+        ],
+        created_at: 1000,
+        updated_at: 2500,
+      };
+
+      const deduplicated = deduplicateVaultItems([itemA, itemB]);
+      expect(deduplicated).toHaveLength(1);
+      expect(deduplicated[0].recovery_codes).toHaveLength(3);
+      const codes = deduplicated[0].recovery_codes!.map((c) => c.code.toUpperCase());
+      expect(codes).toContain('CODE-1');
+      expect(codes).toContain('CODE-2');
+      expect(codes).toContain('CODE-3');
+    });
   });
 
   // =========================================================================
@@ -503,6 +595,55 @@ describe('Vault Synchronization and Reconciliation', () => {
       const vaultAfter = await getLocalVault();
       expect(vaultAfter?.version).toBe(4);
       expect(vaultAfter?.sync_status).toBe('synced');
+    });
+
+    it('Pull Sync: seamlessly refreshes session on 401 and retries request without throwing', async () => {
+      await saveUserConfig({
+        user_id: 'usr_refresh_test',
+        username: 'refresh_user',
+        kdf_salt: 'salt',
+        session_token: 'stale_token_123',
+        auto_lock_minutes: 5,
+        clipboard_clear_seconds: 45,
+      });
+
+      let vaultGetAttempts = 0;
+      let sessionPostAttempts = 0;
+
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init: RequestInit = {}) => {
+        const method = init.method || 'GET';
+
+        if (url.includes('/api/vault') && method === 'GET') {
+          vaultGetAttempts++;
+          if (vaultGetAttempts === 1) {
+            // First attempt with stale_token_123 returns 401
+            return new Response(
+              JSON.stringify({ success: false, error: { code: 'SESSION_REVOKED' } }),
+              { status: 401, headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+          // Second attempt with refreshed token returns 304 Not Modified
+          return new Response(null, { status: 304 });
+        }
+
+        if (url.includes('/api/auth/session') && method === 'POST') {
+          sessionPostAttempts++;
+          return new Response(
+            JSON.stringify({
+              success: true,
+              data: { session_token: 'new_fresh_token_456' },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response('Not Found', { status: 404 });
+      });
+
+      const res = await pullRemoteVault('', mockFetch as unknown as typeof fetch);
+      expect(vaultGetAttempts).toBe(2);
+      expect(sessionPostAttempts).toBe(1);
+      expect(res.pulled).toBe(false);
     });
   });
 });

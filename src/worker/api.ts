@@ -220,6 +220,7 @@ async function rotateSessionOnRequest(
     .first<{ id: string }>();
 
   if (!session) return null;
+
   return rotateSessionToken(session.id, env);
 }
 
@@ -591,15 +592,6 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
             );
           }
 
-          if (userAgent) {
-            batchStatements.push(
-              env.DB.prepare(
-                `UPDATE sessions SET is_revoked = 1 
-                 WHERE user_id = ? AND user_agent = ? AND id != ? AND is_revoked = 0`
-              ).bind(targetUserId, userAgent, existingSession.id)
-            );
-          }
-
           await env.DB.batch(batchStatements);
 
           return jsonResponse({
@@ -644,10 +636,6 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
                SET prev_token_hash = token_hash, token_hash = ?, last_active_at = unixepoch(), expires_at = ?, device_name = ?, ip_country = ?
                WHERE id = ?`
             ).bind(tokenHash, sessionExpiresAt, updatedDeviceName, ipCountry, existingDeviceSession.id),
-            env.DB.prepare(
-              `UPDATE sessions SET is_revoked = 1 
-               WHERE user_id = ? AND user_agent = ? AND id != ? AND is_revoked = 0`
-            ).bind(targetUserId, userAgent, existingDeviceSession.id),
           ];
 
           if (body.passkey_id) {

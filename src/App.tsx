@@ -34,6 +34,7 @@ import {
   saveLocalVault,
   getUserConfig,
   saveUserConfig,
+  updateSessionToken,
 } from './lib/storage/idb.ts';
 import { deriveMasterKey, generateSalt } from './lib/crypto/kdf.ts';
 import { encryptVault, decryptVault } from './lib/crypto/vault.ts';
@@ -51,6 +52,7 @@ import {
   pushLocalVault,
   onSyncStateChange,
   initNetworkSyncListeners,
+  deduplicateVaultItems,
 } from './lib/sync/syncEngine.ts';
 import { AutoLockManager } from './lib/security/autoLock.ts';
 
@@ -121,6 +123,8 @@ export function App() {
     const handleRevoked = () => {
       setMasterKey(null);
       setScreen('locked');
+      setUserConfig((prev) => (prev ? { ...prev, session_token: undefined } : prev));
+      updateSessionToken('').catch(() => {});
       toast.error(t('toasts.sessionRevokedTitle'), {
         description: t('toasts.sessionRevokedDesc'),
         duration: 8000,
@@ -149,7 +153,8 @@ export function App() {
     const handleVaultSynced = (e: Event) => {
       const custom = e as CustomEvent<{ version: number; items?: VaultItem[] }>;
       if (custom.detail?.items) {
-        setItems(custom.detail.items);
+        const cleanItems = deduplicateVaultItems(custom.detail.items);
+        setItems(cleanItems);
         if (custom.detail.version) {
           setVaultVersion(custom.detail.version);
         }
@@ -385,7 +390,8 @@ export function App() {
       if (document.visibilityState === 'visible') {
         pullRemoteVault('', masterKey).then((res) => {
           if (res.pulled && res.items) {
-            setItems(res.items);
+            const cleanRemote = deduplicateVaultItems(res.items);
+            setItems(cleanRemote);
             if (res.version) setVaultVersion(res.version);
           }
         }).catch(() => {});
@@ -557,9 +563,10 @@ export function App() {
         sync_status: 'synced',
       });
 
+      const cleanItems = deduplicateVaultItems(decryptedItems);
       setUserConfig(config);
       setMasterKey(key);
-      setItems(decryptedItems);
+      setItems(cleanItems);
       setVaultVersion(remoteVault.version);
       setLoginPassword('');
       setScreen('unlocked');
@@ -775,13 +782,32 @@ export function App() {
         key
       );
 
+      const cleanItems = deduplicateVaultItems(decryptedItems);
+
       setMasterKey(key);
-      setItems(decryptedItems);
+      setItems(cleanItems);
       setVaultVersion(localVault.version);
       setUnlockPassword('');
       setScreen('unlocked');
 
       toast.success(t('toasts.vaultUnlocked'));
+
+      // If duplicate accounts were pruned, persist and push the clean vault immediately
+      if (cleanItems.length !== decryptedItems.length) {
+        const nextVer = localVault.version + 1;
+        setVaultVersion(nextVer);
+        encryptVault(cleanItems, key, nextVer).then(async (enc) => {
+          await saveLocalVault({
+            user_id: userConfig.user_id,
+            encrypted_blob: enc.encryptedBlob,
+            iv: enc.iv,
+            version: nextVer,
+            updated_at: enc.updatedAt,
+            sync_status: 'dirty',
+          });
+          pushLocalVault('', key).catch(() => {});
+        }).catch(console.error);
+      }
 
       // 4. Refresh or touch active session in background without creating duplicates
       syncSessionAndDevice(userConfig).catch(() => {});
@@ -792,7 +818,8 @@ export function App() {
       // 5. Attempt remote synchronization in the background
       pullRemoteVault('', key).then((res) => {
         if (res.pulled && res.items) {
-          setItems(res.items);
+          const cleanRemote = deduplicateVaultItems(res.items);
+          setItems(cleanRemote);
           if (res.version) setVaultVersion(res.version);
         }
       }).catch(() => {});
@@ -838,12 +865,30 @@ export function App() {
         key
       );
 
+      const cleanItems = deduplicateVaultItems(decryptedItems);
+
       setMasterKey(key);
-      setItems(decryptedItems);
+      setItems(cleanItems);
       setVaultVersion(localVault.version);
       setScreen('unlocked');
 
       toast.success(t('toasts.passkeyUnlocked'));
+
+      if (cleanItems.length !== decryptedItems.length) {
+        const nextVer = localVault.version + 1;
+        setVaultVersion(nextVer);
+        encryptVault(cleanItems, key, nextVer).then(async (enc) => {
+          await saveLocalVault({
+            user_id: userConfig.user_id,
+            encrypted_blob: enc.encryptedBlob,
+            iv: enc.iv,
+            version: nextVer,
+            updated_at: enc.updatedAt,
+            sync_status: 'dirty',
+          });
+          pushLocalVault('', key).catch(() => {});
+        }).catch(console.error);
+      }
 
       // 3. Refresh or touch active session and record passkey usage timestamp
       syncSessionAndDevice(userConfig, { passkeyId: userConfig.webauthn_credential_id }).catch(() => {});
@@ -851,7 +896,8 @@ export function App() {
 
       pullRemoteVault('', key).then((res) => {
         if (res.pulled && res.items) {
-          setItems(res.items);
+          const cleanRemote = deduplicateVaultItems(res.items);
+          setItems(cleanRemote);
           if (res.version) setVaultVersion(res.version);
         }
       }).catch(() => {});
@@ -1020,10 +1066,16 @@ export function App() {
     setIsManualSyncing(true);
     toast.info(t('toasts.syncing'));
     try {
-      await pushLocalVault('', masterKey);
+      const cleanLocal = deduplicateVaultItems(items);
+      if (cleanLocal.length !== items.length) {
+        await persistVaultChanges(cleanLocal);
+      } else {
+        await pushLocalVault('', masterKey);
+      }
       const res = await pullRemoteVault('', masterKey);
       if (res.pulled && res.items) {
-        setItems(res.items);
+        const cleanRemote = deduplicateVaultItems(res.items);
+        setItems(cleanRemote);
         if (res.version) setVaultVersion(res.version);
         toast.success(t('toasts.syncSuccess'));
       } else {
@@ -1034,7 +1086,7 @@ export function App() {
     } finally {
       setIsManualSyncing(false);
     }
-  }, [masterKey, isManualSyncing, t]);
+  }, [masterKey, items, isManualSyncing, t]);
 
   // -------------------------------------------------------------------------
   // RENDER: INITIAL LOADING SCREEN
