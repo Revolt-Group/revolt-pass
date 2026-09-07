@@ -17,7 +17,9 @@ import {
   LogIn,
   UserPlus,
   ArrowLeft,
+  MoreVertical,
 } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { motion } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 
@@ -1462,19 +1464,19 @@ export function App() {
       <Toaster position="bottom-right" richColors theme="dark" />
 
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#08090a]/90 backdrop-blur-md px-4 md:px-6 py-2.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#08090a]/90 backdrop-blur-md px-3 sm:px-6 py-2.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
           {/* Logo and Branding */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 shrink-0">
             <div className="h-8 w-8 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top flex items-center justify-center text-white shrink-0">
               <Shield className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm text-white tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-semibold text-sm text-white tracking-tight truncate">
                   Revolt Pass
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-zinc-400">
+                <span className="text-[9px] sm:text-[10px] font-mono px-1 sm:px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-zinc-400 shrink-0">
                   {VERSION_NAME}
                 </span>
               </div>
@@ -1482,10 +1484,10 @@ export function App() {
           </div>
 
           {/* Top Actions and Sync Status */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Sync Status Pill */}
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono border ${
+              className={`flex items-center gap-1.5 px-2 py-1 sm:px-2.5 rounded-md text-[11px] font-mono border ${
                 syncStatus === 'synced'
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : syncStatus === 'syncing' || syncStatus === 'dirty'
@@ -1503,7 +1505,7 @@ export function App() {
                     : 'bg-rose-400'
                 }`}
               />
-              <span className="hidden md:inline capitalize font-sans">
+              <span className="hidden sm:inline capitalize font-sans text-xs">
                 {syncStatus === 'synced'
                   ? t('nav.synced')
                   : syncStatus === 'syncing'
@@ -1518,7 +1520,7 @@ export function App() {
             <button
               type="button"
               onClick={() => setIsCmdPaletteOpen(true)}
-              className="h-8 px-2.5 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] transition-colors flex items-center gap-1.5 text-xs"
+              className="h-8 px-2 sm:px-2.5 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] transition-colors flex items-center gap-1.5 text-xs"
               title={`${t('nav.quickSearch')} (Ctrl + K)`}
             >
               <Search className="w-3.5 h-3.5" />
@@ -1527,64 +1529,141 @@ export function App() {
               </kbd>
             </button>
 
-            {/* Password Generator Button */}
-            <button
-              type="button"
-              onClick={() => setIsGeneratorOpen(true)}
-              className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
-              title={t('nav.generator')}
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Backup & Migration Button */}
-            <button
-              type="button"
-              onClick={() => setIsBackupOpen(true)}
-              className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
-              title={t('nav.backup')}
-            >
-              <FolderArchive className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Security & Sessions Panel Button */}
-            <button
-              type="button"
-              onClick={() => setIsSecurityOpen(true)}
-              className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
-              title={t('nav.securityPanel')}
-            >
-              <Shield className="w-3.5 h-3.5 text-zinc-300" />
-            </button>
-
-            {/* PWA Installation Button */}
-            {installPrompt && (
+            {/* Desktop Only Actions (>= md) */}
+            <div className="hidden md:flex items-center gap-2">
+              {/* Password Generator Button */}
               <button
                 type="button"
-                onClick={handleInstallApp}
-                className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                title={t('nav.installApp')}
+                onClick={() => setIsGeneratorOpen(true)}
+                className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
+                title={t('nav.generator')}
               >
-                <Download className="w-3.5 h-3.5 text-zinc-300" />
-                <span className="hidden sm:inline">{t('nav.installApp')}</span>
+                <KeyRound className="w-3.5 h-3.5" />
               </button>
-            )}
 
-            {/* Setup Windows Hello if not yet configured */}
-            {hasPasskeySupport && !userConfig?.wrapped_master_key && (
+              {/* Backup & Migration Button */}
               <button
                 type="button"
-                onClick={handleSetupPasskey}
-                className="h-8 px-2.5 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                title={t('nav.linkPin')}
+                onClick={() => setIsBackupOpen(true)}
+                className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
+                title={t('nav.backup')}
               >
-                <Fingerprint className="w-3.5 h-3.5 text-zinc-300" />
-                <span className="hidden sm:inline">{t('nav.linkPin')}</span>
+                <FolderArchive className="w-3.5 h-3.5" />
               </button>
-            )}
 
-            {/* Language Switcher Pill */}
-            <LanguageSwitcher />
+              {/* Security & Sessions Panel Button */}
+              <button
+                type="button"
+                onClick={() => setIsSecurityOpen(true)}
+                className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
+                title={t('nav.securityPanel')}
+              >
+                <Shield className="w-3.5 h-3.5 text-zinc-300" />
+              </button>
+
+              {/* PWA Installation Button */}
+              {installPrompt && (
+                <button
+                  type="button"
+                  onClick={handleInstallApp}
+                  className="h-8 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                  title={t('nav.installApp')}
+                >
+                  <Download className="w-3.5 h-3.5 text-zinc-300" />
+                  <span>{t('nav.installApp')}</span>
+                </button>
+              )}
+
+              {/* Setup Windows Hello if not yet configured */}
+              {hasPasskeySupport && !userConfig?.wrapped_master_key && (
+                <button
+                  type="button"
+                  onClick={handleSetupPasskey}
+                  className="h-8 px-2.5 rounded-lg bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                  title={t('nav.linkPin')}
+                >
+                  <Fingerprint className="w-3.5 h-3.5 text-zinc-300" />
+                  <span>{t('nav.linkPin')}</span>
+                </button>
+              )}
+
+              {/* Language Switcher Pill */}
+              <LanguageSwitcher />
+            </div>
+
+            {/* Mobile "More Tools" Dropdown (< md) */}
+            <div className="md:hidden">
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    className="h-8 w-8 rounded-lg text-zinc-400 hover:text-white bg-[#16181d] hover:bg-[#1c1f24] border border-white/[0.08] flex items-center justify-center transition-colors"
+                    title="Menú de herramientas"
+                  >
+                    <MoreVertical className="w-3.5 h-3.5" />
+                  </button>
+                </DropdownMenu.Trigger>
+
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    sideOffset={6}
+                    className="w-56 p-1.5 bg-[#0f1013] border border-white/[0.12] rounded-xl shadow-2xl z-50 text-xs text-zinc-200 focus:outline-none animate-scale-in"
+                  >
+                    <DropdownMenu.Item
+                      onSelect={() => setIsGeneratorOpen(true)}
+                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.08] cursor-pointer outline-none transition-colors"
+                    >
+                      <KeyRound className="w-4 h-4 text-zinc-400" />
+                      <span>{t('nav.generator')}</span>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onSelect={() => setIsBackupOpen(true)}
+                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.08] cursor-pointer outline-none transition-colors"
+                    >
+                      <FolderArchive className="w-4 h-4 text-zinc-400" />
+                      <span>{t('nav.backup')}</span>
+                    </DropdownMenu.Item>
+
+                    <DropdownMenu.Item
+                      onSelect={() => setIsSecurityOpen(true)}
+                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.08] cursor-pointer outline-none transition-colors"
+                    >
+                      <Shield className="w-4 h-4 text-zinc-400" />
+                      <span>{t('nav.securityPanel')}</span>
+                    </DropdownMenu.Item>
+
+                    {hasPasskeySupport && !userConfig?.wrapped_master_key && (
+                      <DropdownMenu.Item
+                        onSelect={handleSetupPasskey}
+                        className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.08] cursor-pointer outline-none transition-colors text-blue-400"
+                      >
+                        <Fingerprint className="w-4 h-4" />
+                        <span>{t('nav.linkPin')}</span>
+                      </DropdownMenu.Item>
+                    )}
+
+                    {installPrompt && (
+                      <DropdownMenu.Item
+                        onSelect={handleInstallApp}
+                        className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.08] cursor-pointer outline-none transition-colors text-emerald-400"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>{t('nav.installApp')}</span>
+                      </DropdownMenu.Item>
+                    )}
+
+                    <DropdownMenu.Separator className="h-px bg-white/[0.08] my-1" />
+
+                    <div className="px-2.5 py-1.5 flex items-center justify-between">
+                      <span className="text-[11px] text-zinc-400 font-medium">Idioma</span>
+                      <LanguageSwitcher />
+                    </div>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </div>
 
             {/* Manual Lock Button */}
             <button
@@ -1600,7 +1679,7 @@ export function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 md:py-8 overflow-x-hidden">
         <VaultList
           items={items}
           onTogglePin={handleTogglePin}

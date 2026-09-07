@@ -127,7 +127,7 @@ export function VaultList({
 
       {/* Tag Filter Pills */}
       {allTags.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs select-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-xs select-none">
           <span className="text-zinc-500 flex items-center gap-1 px-1 text-[11px] font-mono uppercase">
             <Filter className="w-3 h-3" />
             {t('vault.filtersLabel')}
@@ -216,8 +216,8 @@ export function VaultList({
             ref={pinnedListRef}
             className={
               viewMode === 'grid'
-                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5'
-                : 'flex flex-col gap-2'
+                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 w-full max-w-full'
+                : 'flex flex-col gap-2 w-full max-w-full'
             }
           >
             {pinnedItems.map((item) => (
@@ -247,8 +247,8 @@ export function VaultList({
             ref={parentListRef}
             className={
               viewMode === 'grid'
-                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5'
-                : 'flex flex-col gap-2'
+                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 w-full max-w-full'
+                : 'flex flex-col gap-2 w-full max-w-full'
             }
           >
             {regularItems.map((item) => (

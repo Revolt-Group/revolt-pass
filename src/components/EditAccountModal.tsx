@@ -218,7 +218,7 @@ export function EditAccountModal({
                 exit={{ opacity: 0, scale: 0.96, y: 12 }}
                 transition={{ type: 'spring', stiffness: 450, damping: 32 }}
                 onPaste={handlePasteCapture}
-                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_68px_rgba(0,0,0,0.8)] rounded-xl p-6 z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none custom-scrollbar"
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-1.5rem)] sm:w-full max-w-xl bg-[#0f1013] border border-white/[0.08] hairline-top shadow-[0_24px_68px_rgba(0,0,0,0.8)] rounded-xl p-4 sm:p-6 z-50 text-zinc-100 max-h-[90vh] overflow-y-auto focus:outline-none custom-scrollbar"
               >
                 {/* Modal Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">

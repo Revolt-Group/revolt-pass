@@ -201,7 +201,7 @@ export function TotpCard({
         <div
           className={`group relative rounded-lg bg-[#0f1013] border ${
             item.pinned ? 'border-white/20' : 'border-white/[0.08]'
-          } hairline-top px-3.5 py-2.5 hover:border-white/[0.16] transition-colors flex items-center justify-between gap-3`}
+          } hairline-top px-3 sm:px-3.5 py-2.5 hover:border-white/[0.16] transition-colors flex items-center justify-between gap-2 sm:gap-3 w-full max-w-full`}
         >
           {/* Left: Brand + Identity */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -305,7 +305,7 @@ export function TotpCard({
       transition={{ type: 'spring', stiffness: 450, damping: 30 }}
       className={`group relative rounded-xl bg-[#0f1013] border ${
         item.pinned ? 'border-white/20 shadow-md' : 'border-white/[0.08]'
-      } hairline-top p-4 hover:border-white/[0.16] transition-all flex flex-col justify-between overflow-hidden`}
+      } hairline-top p-3.5 sm:p-4 hover:border-white/[0.16] transition-all flex flex-col justify-between overflow-hidden w-full max-w-full`}
     >
       {/* Card Header */}
       <div>
@@ -316,7 +316,7 @@ export function TotpCard({
               <h3 className="font-semibold text-sm text-white tracking-tight truncate">
                 {item.issuer}
               </h3>
-              <p className="text-xs text-zinc-400 truncate max-w-[170px]" title={item.account}>
+              <p className="text-xs text-zinc-400 truncate" title={item.account}>
                 {item.account}
               </p>
             </div>
@@ -346,8 +346,8 @@ export function TotpCard({
           className="group/code relative flex items-center justify-between p-3 rounded-lg bg-[#08090a] border border-white/[0.08] hover:border-white/20 cursor-pointer transition-colors active:scale-[0.99] select-none"
           title={t('totpCard.clickToCopy')}
         >
-          <div className="flex flex-col">
-            <span className="font-mono text-2xl font-bold tracking-wider text-white group-hover/code:text-zinc-200 transition-colors">
+          <div className="flex flex-col min-w-0 mr-2">
+            <span className="font-mono text-xl sm:text-2xl font-bold tracking-wider text-white group-hover/code:text-zinc-200 transition-colors truncate">
               {formattedToken}
             </span>
             <span className="text-[10px] text-zinc-500 flex items-center gap-1 mt-0.5 font-mono">

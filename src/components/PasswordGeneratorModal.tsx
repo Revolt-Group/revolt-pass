@@ -129,7 +129,7 @@ export function PasswordGeneratorModal({ isOpen, onClose }: PasswordGeneratorMod
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 10 }}
                 transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-[#0f1013] border border-white/[0.08] hairline-top rounded-xl p-6 shadow-[0_24px_68px_rgba(0,0,0,0.8)] z-50 text-zinc-100 focus:outline-none"
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-1.5rem)] sm:w-full max-w-lg bg-[#0f1013] border border-white/[0.08] hairline-top rounded-xl p-4 sm:p-6 shadow-[0_24px_68px_rgba(0,0,0,0.8)] z-50 text-zinc-100 focus:outline-none max-h-[90vh] overflow-y-auto"
               >
                 <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
                   <div className="flex items-center gap-2.5">
