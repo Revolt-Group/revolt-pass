@@ -20,6 +20,7 @@ import { BrowserQRCodeReader } from '@zxing/browser';
 import { toast } from 'sonner';
 import { parseOtpAuthUri } from '../lib/crypto/totp.ts';
 import { sanitizeBase32, isValidBase32 } from '../lib/crypto/base32.ts';
+import { parseGoogleAuthMigration } from '../lib/importers/index.ts';
 import { BrandIcon } from './BrandIcon.tsx';
 import { resizeImageFile } from '../lib/utils/image.ts';
 import { useTranslation } from '../i18n/index.ts';
@@ -103,6 +104,39 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
   }, [isOpen]);
 
   const handleParsedUri = useCallback((rawUri: string) => {
+    const trimmed = rawUri.trim();
+
+    // 1. Google Authenticator Migration QR code (otpauth-migration://offline?data=...)
+    if (trimmed.startsWith('otpauth-migration://offline')) {
+      const migrationRes = parseGoogleAuthMigration(trimmed);
+      if (migrationRes.accounts.length === 1) {
+        const acc = migrationRes.accounts[0];
+        if (acc.issuer) setIssuer(acc.issuer);
+        if (acc.name) setAccount(acc.name);
+        if (acc.secret) setSecret(sanitizeBase32(acc.secret));
+        if (acc.digits) setDigits(acc.digits === 8 ? 8 : 6);
+        if (acc.period) setPeriod(acc.period);
+        if (acc.algorithm) setAlgorithm(acc.algorithm === 'SHA256' ? 'SHA256' : 'SHA1');
+
+        setScanSuccess(true);
+        toast.success(`Google Authenticator: ${acc.issuer || 'Cuenta'} detectada`);
+        setActiveTab('manual');
+        return;
+      } else if (migrationRes.accounts.length > 1) {
+        toast.success(
+          `Google Authenticator: paquete de migración con ${migrationRes.accounts.length} cuentas detectado.`
+        );
+        window.dispatchEvent(
+          new CustomEvent('revolt:open-import-migration', {
+            detail: { rawPayload: trimmed },
+          })
+        );
+        onClose();
+        return;
+      }
+    }
+
+    // 2. Standard single otpauth:// URI
     try {
       const parsed = parseOtpAuthUri(rawUri);
       if (parsed.issuer) setIssuer(parsed.issuer);
@@ -118,7 +152,7 @@ export function QrModal({ isOpen, onClose, onSaveAccount }: QrModalProps) {
     } catch {
       toast.error('El código escaneado no es un URI de TOTP válido (otpauth://totp/...)');
     }
-  }, []);
+  }, [onClose]);
 
   // -------------------------------------------------------------------------
   // Live Camera Scanner with @zxing/browser

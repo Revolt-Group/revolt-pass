@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-09-07
+
+### Added
+- **Universal Importers Engine (`src/lib/importers/`):**
+  - Pure TypeScript zero-knowledge parsing engine supporting 10 industry-standard platforms and formats:
+    - **Google Authenticator:** Native Protobuf binary decoder for `otpauth-migration://offline?data=...` migration URLs.
+    - **Authy:** Community export and desktop token backup JSON format parser.
+    - **Aegis Authenticator:** Plaintext JSON parser with encrypted vault detection and user guidance.
+    - **2FAS:** Native `.2fas` JSON format parser.
+    - **Bitwarden:** JSON export and RFC 4180 CSV export parser (extracts `login_totp`).
+    - **1Password:** CSV export and 1PUX JSON format parser (extracts `one-time password` fields).
+    - **Proton Pass:** JSON export and CSV export parser (`totpUri` / `totp`).
+    - **Ente Auth:** JSON export parser.
+    - **LastPass Authenticator:** CSV export parser (`extra` / `totp`).
+    - **Plain URI Lists:** Multi-line `otpauth://totp/...` and `otpauth://hotp/...` URI list parser.
+  - Intelligent format auto-detection by file extension and payload structure heuristics.
+  - Interactive smart reconciliation engine (`reconcile.ts`):
+    - Categorizes incoming accounts into `new`, `duplicate`, and `conflict` (matching issuer/account with differing secrets or parameters).
+    - Configurable conflict resolution strategies: `keep_existing` (preserves existing vault items), `overwrite` (updates with imported secrets), and `keep_both` (imports duplicates with distinct identifiers).
+    - Interactive preview table displaying account badges, issuers, algorithm/digit parameters, and reconciliation status before applying.
+    - Drag-and-drop file upload, file browsing, and direct clipboard / URI paste mode.
+    - Camera QR scanner interop: scanning a Google Authenticator multi-account migration QR code automatically launches the reconciliation flow.
+- **Open Vault Exporters (`src/lib/exporters/`):**
+  - Open-standard export options alongside existing Revolt encrypted/plaintext backups:
+    - **Aegis Authenticator JSON:** Standard unencrypted Aegis backup JSON for easy migration to Android open-source authenticators.
+    - **Bitwarden CSV:** Standard Bitwarden-compatible vault CSV export.
+    - **Standard `otpauth://` List:** Plaintext multi-line list of standard OTP URIs.
+- **YubiKey & FIDO2 Roaming Security Keys (WebAuthn):**
+  - Cross-platform WebAuthn authenticator attachment (`cross-platform`) for physical FIDO2 hardware keys (YubiKey 5 Series, Feitian, SoloKeys, Nitrokey).
+  - Multi-transport authentication support (`usb`, `nfc`, `ble`, `internal`).
+  - Toggle between platform biometrics (Windows Hello, Touch ID, Face ID) and physical hardware security keys in the passkey enrollment interface.
+- **Security Audit Log Export:**
+  - One-click export of complete audit log history in **CSV** or **JSON** format directly from the Security Modal.
+- **Session Token Sliding Window & Concurrency Resilience:**
+  - Cloudflare D1 migration adding `prev_token_hash` column and index on `sessions` table.
+  - Grace-period sliding window allowing requests signed with the immediate previous token to succeed during concurrent background token rotations.
+  - Client-side proactive token re-sync via `getUserConfig()` on active sessions, passkeys, and audit log tabs.
+
+### Changed
+- Bumped project version to `v1.4.0` across `package.json` and `src/constants/version.ts`.
+- Expanded automated test suite from 94 to **111 tests** across 15 test suites, verifying Protobuf decoders, all 10 importer parsers, reconciliation strategies, and D1 sliding grace window.
+
+---
+
 ## [1.3.1] - 2026-09-07
 
 ### Security & Hardening

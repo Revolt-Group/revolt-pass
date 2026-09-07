@@ -127,6 +127,31 @@ export function App() {
     return () => window.removeEventListener('revolt:session-revoked', handleRevoked);
   }, [t]);
 
+  // Listen for session token rotation updates from sync engine
+  useEffect(() => {
+    const handleTokenUpdated = (e: Event) => {
+      const custom = e as CustomEvent<{ session_token: string }>;
+      if (custom.detail?.session_token) {
+        setUserConfig((prev) =>
+          prev ? { ...prev, session_token: custom.detail.session_token } : prev
+        );
+      }
+    };
+    window.addEventListener('revolt:session-token-updated', handleTokenUpdated);
+    return () => window.removeEventListener('revolt:session-token-updated', handleTokenUpdated);
+  }, []);
+
+  // Listen for multi-account migration QR scan event
+  useEffect(() => {
+    const handleOpenMigration = () => {
+      setIsQrModalOpen(false);
+      setIsBackupOpen(true);
+    };
+    window.addEventListener('revolt:open-import-migration', handleOpenMigration);
+    return () => window.removeEventListener('revolt:open-import-migration', handleOpenMigration);
+  }, []);
+
+
   // Listen for PWA installation event (beforeinstallprompt)
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {

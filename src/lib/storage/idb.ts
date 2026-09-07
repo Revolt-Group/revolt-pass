@@ -148,7 +148,15 @@ export async function updateSessionToken(newToken: string): Promise<void> {
     config.session_token = newToken;
     await db.put('user_config', config, 'profile');
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('revolt:session-token-updated', {
+        detail: { session_token: newToken },
+      })
+    );
+  }
 }
+
 
 
 // =========================================================================

@@ -179,8 +179,8 @@ async function applyRateLimit(
 }
 
 /**
- * FIX-04 (v1.3.1): Rotates session token — generates a new token_hash,
- * updates D1, and returns the new plaintext token.
+ * FIX-04 (v1.3.1 / v1.4.0): Rotates session token — preserves previous token hash in prev_token_hash,
+ * generates a new token_hash, updates D1, and returns the new plaintext token.
  * The caller adds it to the response as X-New-Session-Token.
  */
 async function rotateSessionToken(sessionId: string, env: Env): Promise<string | null> {
@@ -189,7 +189,7 @@ async function rotateSessionToken(sessionId: string, env: Env): Promise<string |
     const newTokenHash = await hashToken(newToken);
     const newExpiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // sliding 30d
     await env.DB.prepare(
-      'UPDATE sessions SET token_hash = ?, expires_at = ?, last_active_at = unixepoch() WHERE id = ?'
+      'UPDATE sessions SET prev_token_hash = token_hash, token_hash = ?, expires_at = ?, last_active_at = unixepoch() WHERE id = ?'
     )
       .bind(newTokenHash, newExpiresAt, sessionId)
       .run();
@@ -201,8 +201,8 @@ async function rotateSessionToken(sessionId: string, env: Env): Promise<string |
 }
 
 /**
- * FIX-04 (v1.3.1): If a valid session token is provided, rotates it
- * and returns the new plaintext token string to be sent in X-New-Session-Token.
+ * FIX-04 (v1.3.1 / v1.4.0): If a valid session token is provided, throttles and rotates it,
+ * returning the new plaintext token string to be sent in X-New-Session-Token.
  */
 async function rotateSessionOnRequest(
   request: Request,
@@ -214,9 +214,9 @@ async function rotateSessionOnRequest(
 
   const tokenHash = await hashToken(sessionToken);
   const session = await env.DB.prepare(
-    'SELECT id FROM sessions WHERE token_hash = ? AND user_id = ? AND is_revoked = 0'
+    'SELECT id FROM sessions WHERE (token_hash = ? OR prev_token_hash = ?) AND user_id = ? AND is_revoked = 0'
   )
-    .bind(tokenHash, userId)
+    .bind(tokenHash, tokenHash, userId)
     .first<{ id: string }>();
 
   if (!session) return null;
@@ -226,6 +226,7 @@ async function rotateSessionOnRequest(
 
 /**
  * Validates the provided session token if present.
+ * Accepts both current token_hash and prev_token_hash (grace window during sliding rotation).
  * If revoked or expired, returns an HTTP 401 error response.
  * Also applies sliding session logic: updates last_active_at and extends expires_at by 30 days.
  */
@@ -241,9 +242,9 @@ async function checkSessionValidity(
 
   const tokenHash = await hashToken(sessionToken);
   const session = await env.DB.prepare(
-    'SELECT id, user_id, is_revoked, expires_at FROM sessions WHERE token_hash = ?'
+    'SELECT id, user_id, is_revoked, expires_at FROM sessions WHERE (token_hash = ? OR prev_token_hash = ?)'
   )
-    .bind(tokenHash)
+    .bind(tokenHash, tokenHash)
     .first<{ id: string; user_id: string; is_revoked: number; expires_at: number }>();
 
   if (!session || session.is_revoked === 1 || session.user_id !== userId) {
@@ -566,9 +567,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         const existingSession = await env.DB.prepare(
           `SELECT id, user_id, device_name, user_agent, ip_country, last_active_at, created_at, expires_at, is_revoked
            FROM sessions 
-           WHERE token_hash = ? AND user_id = ? AND is_revoked = 0 AND expires_at > unixepoch()`
+           WHERE (token_hash = ? OR prev_token_hash = ?) AND user_id = ? AND is_revoked = 0 AND expires_at > unixepoch()`
         )
-          .bind(tokenHash, targetUserId)
+          .bind(tokenHash, tokenHash, targetUserId)
           .first<SessionItem>();
 
         if (existingSession) {
@@ -640,7 +641,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
           const batchStatements = [
             env.DB.prepare(
               `UPDATE sessions 
-               SET token_hash = ?, last_active_at = unixepoch(), expires_at = ?, device_name = ?, ip_country = ?
+               SET prev_token_hash = token_hash, token_hash = ?, last_active_at = unixepoch(), expires_at = ?, device_name = ?, ip_country = ?
                WHERE id = ?`
             ).bind(tokenHash, sessionExpiresAt, updatedDeviceName, ipCountry, existingDeviceSession.id),
             env.DB.prepare(
@@ -749,8 +750,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       const sessionToken = request.headers.get('X-Session-Token');
       if (sessionToken) {
         const tokenHash = await hashToken(sessionToken);
-        const cur = await env.DB.prepare('SELECT id FROM sessions WHERE token_hash = ?')
-          .bind(tokenHash)
+        const cur = await env.DB.prepare('SELECT id FROM sessions WHERE (token_hash = ? OR prev_token_hash = ?)')
+          .bind(tokenHash, tokenHash)
           .first<{ id: string }>();
         if (cur) currentSessionId = cur.id;
       }
@@ -774,14 +775,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         }
       }
 
-      // Clean up stale duplicates in background
+      // Automatically clean up stale duplicate sessions in background
       if (staleDuplicateIds.length > 0) {
-        for (const staleId of staleDuplicateIds) {
-          env.DB.prepare('UPDATE sessions SET is_revoked = 1 WHERE id = ?')
-            .bind(staleId)
-            .run()
-            .catch(() => {});
-        }
+        const cleanupBatches = staleDuplicateIds.map((id) =>
+          env.DB.prepare('UPDATE sessions SET is_revoked = 1 WHERE id = ?').bind(id)
+        );
+        await env.DB.batch(cleanupBatches);
       }
 
       return jsonResponse({
@@ -809,11 +808,20 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       if (sessionError) return sessionError;
 
       const currentHash = await hashToken(sessionToken);
+      const currentSession = await env.DB.prepare(
+        'SELECT id FROM sessions WHERE (token_hash = ? OR prev_token_hash = ?) AND user_id = ? AND is_revoked = 0'
+      )
+        .bind(currentHash, currentHash, userId)
+        .first<{ id: string }>();
+
+      if (!currentSession) {
+        return errorResponse('SESSION_REVOKED', 'Sesión inválida', 401);
+      }
 
       await env.DB.batch([
         env.DB.prepare(
-          'UPDATE sessions SET is_revoked = 1 WHERE user_id = ? AND token_hash != ? AND is_revoked = 0'
-        ).bind(userId, currentHash),
+          'UPDATE sessions SET is_revoked = 1 WHERE user_id = ? AND id != ? AND is_revoked = 0'
+        ).bind(userId, currentSession.id),
         env.DB.prepare(
           `INSERT INTO audit_logs (user_id, event_type, metadata, created_at)
            VALUES (?, 'REVOKE_OTHER_SESSIONS', ?, unixepoch())`
@@ -1171,8 +1179,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       const sessionToken = request.headers.get('X-Session-Token');
       if (sessionToken) {
         const tokenHash = await hashToken(sessionToken);
-        const cur = await env.DB.prepare('SELECT device_name FROM sessions WHERE token_hash = ?')
-          .bind(tokenHash)
+        const cur = await env.DB.prepare('SELECT device_name FROM sessions WHERE (token_hash = ? OR prev_token_hash = ?)')
+          .bind(tokenHash, tokenHash)
           .first<{ device_name: string }>();
         if (cur?.device_name) callerDeviceName = cur.device_name;
       }

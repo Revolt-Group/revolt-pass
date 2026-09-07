@@ -7,6 +7,50 @@ y este proyecto se rige por [Control Semántico de Versiones (SemVer)](https://s
 
 ---
 
+## [1.4.0] - 2026-09-07
+
+### Añadido
+- **Motor de Importadores Universales (`src/lib/importers/`):**
+  - Motor de análisis zero-knowledge en TypeScript puro compatible con 10 plataformas y formatos estándar del sector:
+    - **Google Authenticator:** Decodificador binario Protobuf nativo para URLs de migración `otpauth-migration://offline?data=...`.
+    - **Authy:** Analizador de exportaciones de la comunidad y copias de seguridad JSON de tokens.
+    - **Aegis Authenticator:** Analizador de JSON en texto plano con detección inteligente de bóvedas cifradas por contraseña y advertencia explicativa.
+    - **2FAS:** Analizador nativo para el formato de exportación JSON `.2fas`.
+    - **Bitwarden:** Analizador de copias de seguridad en JSON y CSV RFC 4180 (extracción automática de campos `login_totp`).
+    - **1Password:** Analizador para CSV y archivos 1PUX JSON (extracción de secciones `one-time password`).
+    - **Proton Pass:** Analizador de copias de seguridad JSON y CSV (`totpUri` / `totp`).
+    - **Ente Auth:** Analizador de exportaciones JSON.
+    - **LastPass Authenticator:** Analizador de CSV (`extra` / `totp`).
+    - **Listas de URIs Planas:** Analizador multilínea de URIs estándar `otpauth://totp/...` y `otpauth://hotp/...`.
+  - Detección automática de formato mediante extensión de archivo y análisis heurístico de estructura.
+  - Motor interactivo de reconciliación inteligente y cálculo de diferencias (`reconcile.ts`):
+    - Clasificación de cuentas entrantes en `nuevas`, `duplicadas` y `conflictos` (mismo emisor/cuenta pero con secretos o parámetros dispares).
+    - Estrategias de resolución configurables por el usuario: `conservar_existente` (mantiene secretos actuales de la bóveda), `sobrescribir` (actualiza con los secretos importados) y `conservar_ambos` (importa duplicados asignando identificadores únicos).
+    - Tabla interactiva de previsualización con insignias de estado, logos de emisores, algoritmos, dígitos y parámetros antes de aplicar a la bóveda.
+    - Soporte para arrastrar y soltar (drag-and-drop), explorador de archivos y modo de pegado directo de texto o URIs de migración.
+    - Integración con el escáner QR de la cámara: escanear un QR de migración de Google Authenticator con múltiples cuentas abre directamente el flujo de reconciliación.
+- **Exportadores Abiertos de Bóveda (`src/lib/exporters/`):**
+  - Formatos abiertos de exportación además de las copias de seguridad nativas cifradas y en texto plano de Revolt:
+    - **Aegis Authenticator JSON:** Copia JSON en formato estándar de Aegis para migración directa a autenticadores open source de Android.
+    - **Bitwarden CSV:** Exportación en formato CSV compatible con la importación de Bitwarden.
+    - **Lista Estándar `otpauth://`:** Lista de texto plano multilínea con URIs OTP estándar.
+- **Soporte para Llaves Físicas YubiKey y FIDO2 Roaming (WebAuthn):**
+  - Soporte de adjunto `cross-platform` en WebAuthn para llaves de seguridad físicas por hardware (YubiKey 5 Series, Feitian, SoloKeys, Nitrokey).
+  - Compatibilidad multitransporte (`usb`, `nfc`, `ble`, `internal`).
+  - Selector conmutable entre biometría de plataforma (Windows Hello, Touch ID, Face ID) y llaves de seguridad físicas durante el registro de passkeys en el Panel de Seguridad.
+- **Exportación del Historial de Auditoría de Seguridad:**
+  - Descarga en un solo clic del historial completo de eventos de seguridad en formato **CSV** o **JSON** desde el Panel de Seguridad.
+- **Ventana Deslizante y Resiliencia en Tokens de Sesión:**
+  - Migración en Cloudflare D1 agregando la columna `prev_token_hash` e índice asociado en la tabla `sessions`.
+  - Ventana de gracia de 1 generación que permite a peticiones firmadas con el token inmediatamente anterior tener éxito ante rotaciones concurrentes en segundo plano.
+  - Consulta reactiva y fresca del token en IndexedDB (`getUserConfig()`) para evitar errores en las pestañas de sesiones activas, passkeys e historial de seguridad.
+
+### Modificado
+- Incremento de versión a `v1.4.0` en `package.json` y `src/constants/version.ts`.
+- Ampliación de la suite de pruebas automatizadas de 94 a **111 pruebas** en 15 suites, validando decodificadores Protobuf, los 10 importadores, estrategias de reconciliación y ventana de gracia deslizante en D1.
+
+---
+
 ## [1.3.1] - 2026-09-07
 
 ### Seguridad y Endurecimiento (Hardening)

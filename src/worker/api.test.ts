@@ -30,7 +30,7 @@ class MockD1Database {
     updated_at: number;
   }>();
 
-  public sessions = new Map<string, SessionItem & { token_hash: string }>();
+  public sessions = new Map<string, SessionItem & { token_hash: string; prev_token_hash?: string }>();
   public passkeys = new Map<string, PasskeyRecord>();
   public auditLogs: AuditLogRecord[] = [];
   public syncLogs: Array<{
@@ -73,11 +73,14 @@ class MockD1Database {
               return (u ? { id: u.id, username: u.username, passkey_credential_id: u.passkey_credential_id } : null) as unknown as T;
             }
 
-            // SELECT id, user_id, is_revoked, expires_at FROM sessions WHERE token_hash = ?
-            if (normalizedQuery.includes('from sessions where token_hash =')) {
+            // SELECT id, user_id, is_revoked, expires_at FROM sessions WHERE (token_hash = ? OR prev_token_hash = ?)
+            if (
+              normalizedQuery.includes('from sessions where token_hash =') ||
+              normalizedQuery.includes('from sessions where (token_hash = ? or prev_token_hash = ?)')
+            ) {
               const hash = String(params[0]);
               for (const s of db.sessions.values()) {
-                if (s.token_hash === hash && s.is_revoked === 0) {
+                if ((s.token_hash === hash || s.prev_token_hash === hash) && s.is_revoked === 0) {
                   return {
                     id: s.id,
                     user_id: s.user_id,
@@ -203,13 +206,17 @@ class MockD1Database {
           async run(): Promise<D1Response> {
             const normalizedQuery = query.toLowerCase().replace(/\s+/g, ' ');
 
-            // UPDATE sessions SET token_hash = ?, expires_at = ?, last_active_at = unixepoch() WHERE id = ?
-            if (normalizedQuery.includes('update sessions set token_hash =')) {
+            // UPDATE sessions SET prev_token_hash = token_hash, token_hash = ?, expires_at = ?, last_active_at = unixepoch() WHERE id = ?
+            if (
+              normalizedQuery.includes('update sessions set token_hash =') ||
+              normalizedQuery.includes('update sessions set prev_token_hash = token_hash, token_hash =')
+            ) {
               const tokenHash = String(params[0]);
               const expiresAt = Number(params[1]);
               const sessionId = String(params[2]);
               const s = db.sessions.get(sessionId);
               if (s) {
+                s.prev_token_hash = s.token_hash;
                 s.token_hash = tokenHash;
                 s.expires_at = expiresAt;
                 s.last_active_at = Math.floor(Date.now() / 1000);
@@ -357,10 +364,11 @@ class MockD1Database {
               session.ip_country = country;
               session.last_active_at = Math.floor(Date.now() / 1000);
             }
-          } else if (q.includes('update sessions set token_hash =')) {
+          } else if (q.includes('update sessions set token_hash =') || q.includes('update sessions set prev_token_hash = token_hash, token_hash =')) {
             const [tokenHash, expAt, devName, country, id] = s.params as [string, number, string, string, string];
             const session = db.sessions.get(id);
             if (session) {
+              session.prev_token_hash = session.token_hash;
               session.token_hash = tokenHash;
               session.expires_at = expAt;
               session.device_name = devName;
@@ -384,6 +392,13 @@ class MockD1Database {
             const [user_id, currentHash] = s.params as [string, string];
             for (const session of db.sessions.values()) {
               if (session.user_id === user_id && session.token_hash !== currentHash) {
+                session.is_revoked = 1;
+              }
+            }
+          } else if (q.includes('update sessions set is_revoked = 1 where user_id = ? and id != ?')) {
+            const [user_id, keepId] = s.params as [string, string];
+            for (const session of db.sessions.values()) {
+              if (session.user_id === user_id && session.id !== keepId) {
                 session.is_revoked = 1;
               }
             }
@@ -1437,6 +1452,74 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
       expect(resReplay.status).toBe(401);
       const replayJson = (await resReplay.json()) as ApiResponse;
       expect(replayJson.error?.code).toBe('SESSION_REVOKED');
+    });
+
+    it('prev_token_hash sliding grace window allows GET /api/sessions, /api/passkeys, and /api/audit right after rotation', async () => {
+      // 1. Register
+      const reqReg = new Request('https://pass.example.com/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'gracetest_user',
+          kdf_salt: 'salt_grace',
+          encrypted_blob: 'blob_grace',
+          iv: 'iv_grace',
+        }),
+      });
+      const resReg = await handleApiRequest(reqReg, env);
+      expect(resReg.status).toBe(201);
+      const regData = (await resReg.json()) as ApiResponse<{ user_id: string; session_token: string }>;
+      const userId = regData.data!.user_id;
+      const token1 = regData.data!.session_token;
+
+      // 2. Perform sync which rotates token1 -> token2
+      const reqSync = new Request('https://pass.example.com/api/vault', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': token1,
+        },
+      });
+      const resSync = await handleApiRequest(reqSync, env);
+      expect(resSync.status).toBe(200);
+      const token2 = resSync.headers.get('X-New-Session-Token');
+      expect(token2).toBeTruthy();
+
+      // 3. Query /api/sessions with old token1 -> MUST SUCCEED because token1 is in prev_token_hash grace window!
+      const reqSessions = new Request('https://pass.example.com/api/sessions', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': token1,
+        },
+      });
+      const resSessions = await handleApiRequest(reqSessions, env);
+      expect(resSessions.status).toBe(200);
+      const sessionsJson = (await resSessions.json()) as ApiResponse<{ sessions: Array<{ id: string; is_current: boolean }> }>;
+      expect(sessionsJson.success).toBe(true);
+      expect(sessionsJson.data?.sessions.length).toBeGreaterThan(0);
+
+      // 4. Query /api/passkeys with old token1 -> MUST SUCCEED
+      const reqPasskeys = new Request('https://pass.example.com/api/passkeys', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': token1,
+        },
+      });
+      const resPasskeys = await handleApiRequest(reqPasskeys, env);
+      expect(resPasskeys.status).toBe(200);
+
+      // 5. Query /api/audit with old token1 -> MUST SUCCEED
+      const reqAudit = new Request('https://pass.example.com/api/audit', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': token1,
+        },
+      });
+      const resAudit = await handleApiRequest(reqAudit, env);
+      expect(resAudit.status).toBe(200);
     });
   });
 });

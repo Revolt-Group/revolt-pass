@@ -36,16 +36,25 @@ export interface RegisterPasskeyResult {
 }
 
 /**
- * Enrolls the current device using the operating system's platform authenticator.
- * Prompts for Windows Hello PIN on Windows; fingerprint or Face ID on smartphones.
+ * Registers a WebAuthn credential (Passkey or YubiKey/FIDO2 Roaming Key).
+ * 
+ * @param userId Unique user identifier
+ * @param username Human-readable account label
+ * @param attachment 'platform' for device biometrics/Windows Hello, or 'cross-platform' for physical security keys (YubiKey, etc.)
+ * @returns Object with Base64URL credential ID and raw ID
  */
-export async function registerPlatformPasskey(
+export async function registerPasskey(
   userId: string,
-  username: string
-): Promise<RegisterPasskeyResult> {
+  username: string,
+  attachment: 'platform' | 'cross-platform' = 'platform'
+): Promise<{ credentialId: string; rawId: string }> {
   const support = await checkWebAuthnSupport();
-  if (!support.isSupported || !support.hasPlatformAuthenticator) {
-    throw new Error('Platform authenticator (Windows Hello / Biometrics) is not available on this device.');
+  if (!support.isSupported) {
+    throw new Error('WebAuthn is not supported in this browser environment.');
+  }
+
+  if (attachment === 'platform' && !support.hasPlatformAuthenticator) {
+    throw new Error('Platform authenticator is not available on this device.');
   }
 
   const challenge = new Uint8Array(32);
@@ -68,10 +77,11 @@ export async function registerPlatformPasskey(
     pubKeyCredParams: [
       { alg: -7, type: 'public-key' }, // ES256 (NIST P-256)
       { alg: -257, type: 'public-key' }, // RS256
+      { alg: -8, type: 'public-key' }, // Ed25519 / EdDSA
     ],
     authenticatorSelection: {
-      authenticatorAttachment: 'platform', // Enforce local hardware authenticator
-      userVerification: 'required', // Enforce Windows Hello PIN or biometrics
+      authenticatorAttachment: attachment,
+      userVerification: attachment === 'cross-platform' ? 'preferred' : 'required',
       residentKey: 'preferred',
     },
     timeout: 60000,
@@ -83,7 +93,7 @@ export async function registerPlatformPasskey(
   })) as PublicKeyCredential;
 
   if (!credential) {
-    throw new Error('Failed to register platform credential');
+    throw new Error('Failed to register credential');
   }
 
   const rawIdBytes = new Uint8Array(credential.rawId);
@@ -96,7 +106,11 @@ export async function registerPlatformPasskey(
 }
 
 /**
- * Performs a WebAuthn assertion requesting Windows Hello PIN or biometrics.
+ * Backward compatibility alias for platform passkeys (Windows Hello, Touch ID).
+ */
+export const registerPlatformPasskey = (userId: string, username: string) =>
+  registerPasskey(userId, username, 'platform');
+
 /**
  * Safely converts Base64 or Base64URL strings into Uint8Array.
  */
@@ -109,15 +123,15 @@ function safeBase64ToBytes(input: string): Uint8Array {
 }
 
 /**
- * Performs a WebAuthn assertion requesting Windows Hello PIN or biometrics.
+ * Performs a WebAuthn assertion requesting Windows Hello PIN, biometrics, or YubiKey touch.
  * 
  * @param credentialId Pre-registered credential ID (Base64 or Base64URL)
  * @returns boolean indicating whether hardware verification succeeded
  */
 export async function verifyPlatformPasskey(credentialId: string): Promise<boolean> {
   const support = await checkWebAuthnSupport();
-  if (!support.isSupported || !support.hasPlatformAuthenticator) {
-    throw new Error('Platform authenticator is not available.');
+  if (!support.isSupported) {
+    throw new Error('WebAuthn is not supported in this browser.');
   }
 
   const challenge = new Uint8Array(32);
@@ -132,10 +146,10 @@ export async function verifyPlatformPasskey(credentialId: string): Promise<boole
       {
         id: credentialIdBytes as unknown as ArrayBuffer,
         type: 'public-key',
-        transports: ['internal'],
+        transports: ['internal', 'usb', 'nfc', 'ble'],
       },
     ],
-    userVerification: 'required',
+    userVerification: 'preferred',
     timeout: 60000,
   };
 

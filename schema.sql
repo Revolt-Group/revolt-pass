@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,                       -- Prefix 'ses_' + UUID v4
     user_id TEXT NOT NULL,
     token_hash TEXT NOT NULL UNIQUE,           -- SHA-256 hash of client session token
+    prev_token_hash TEXT,                      -- Previous token hash allowed during sliding rotation window
     device_name TEXT NOT NULL,                 -- e.g. "Windows 11 · Chrome", "iPhone · Safari"
     user_agent TEXT,
     ip_country TEXT,                           -- Derived from cf.country
@@ -71,6 +72,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, is_revoked, expires_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_sessions_prev_token_hash ON sessions(prev_token_hash);
+
 
 -- Passkeys Registry Table
 CREATE TABLE IF NOT EXISTS passkeys (

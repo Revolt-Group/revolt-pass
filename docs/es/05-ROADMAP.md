@@ -190,30 +190,23 @@ Las siguientes fases iniciales representan la base estructural que se encuentra 
 
 ---
 
-## 3. Bloque II: Horizontes de Evolución Técnica y Producto
-
-Los siguientes hitos marcan el camino de desarrollo futuro. Cada hito se abordará de forma secuencial y se promoverá a producción únicamente tras alcanzar el 100% de sus criterios de calidad y seguridad:
+### FASE 14: Ingesta Masiva, Importadores Universales, Exportadores Abiertos y Llaves Físicas (v1.4.0)
+* **Objetivo:** Eliminar la fricción de migración desde 10 plataformas estándar de la industria, habilitar exportaciones abiertas en formatos estándar, incorporar soporte para llaves físicas de seguridad (YubiKey / FIDO2 Roaming) y exportar registros de auditoría.
+* **Definition of Done (DoD) - Fase 14:**
+  - [x] Decodificador Protobuf en TypeScript puro para URIs de migración `otpauth-migration://offline?data=...` de Google Authenticator.
+  - [x] Analizadores de importación validados con pruebas unitarias para Authy JSON, Aegis JSON, 2FAS JSON, Bitwarden JSON/CSV, 1Password CSV/1PUX, Proton Pass JSON/CSV, Ente Auth JSON, LastPass CSV y listas de URIs `otpauth://`.
+  - [x] Diálogo de conciliación inteligente interactivo con análisis de diferencias (`nuevas`, `duplicadas`, `conflictos`) y selección de estrategia (`conservar existentes`, `sobrescribir`, `conservar ambos`).
+  - [x] Exportadores abiertos de bóveda en Aegis JSON, Bitwarden CSV y listas `otpauth://`.
+  - [x] Soporte para llaves físicas de seguridad por hardware (YubiKey 5, Feitian, SoloKeys, Nitrokey) vía WebAuthn `cross-platform` con transportes USB, NFC y BLE.
+  - [x] Descarga del historial de auditoría de seguridad en formato CSV y JSON desde el panel de seguridad.
+  - [x] Resiliencia de concurrencia y ventana deslizante con `prev_token_hash` en Cloudflare D1 y refresco activo en el cliente IndexedDB.
+  - [x] Suite de pruebas unitarias expandida a 111 pruebas pasando al 100% en Vitest y 0 errores de compilación (`tsc -b`).
 
 ---
 
-### 📍 Hito v1.4: Ingesta Masiva & Importadores Universales
-* **Objetivo:** Eliminar cualquier barrera de entrada permitiendo una migración fluida desde las principales herramientas de autenticación del mercado.
-* **Entregables Clave:**
-  1. **Lector de Códigos de Migración de Google Authenticator:**
-     - Parser binario nativo de Protocol Buffers (`MigrationPayload`) implementado en TypeScript puro sin dependencias pesadas.
-     - Decodificación instantánea de URLs `otpauth-migration://offline?data=...`.
-  2. **Importadores Multi-Formato:**
-     - Soporte para archivos `.json` de Aegis Authenticator (cifrados con Scrypt/AES-GCM o texto plano).
-     - Parser para respaldos `.2fas` de 2FAS Authenticator.
-     - Importador de archivos CSV / JSON exportados desde Bitwarden y 1Password.
-     - Importador de listas de enlaces planos `otpauth://`.
-  3. **Modal Interactivo de Conciliación de Duplicados:**
-     - Previsualización estructurada previa a la escritura en IndexedDB/D1.
-     - Detección de cuentas coincidentes (`issuer` + `account`) con opciones: *Sobrescribir*, *Conservar ambos* u *Omitir*.
-* **Definition of Done (DoD) - v1.4:**
-  - [ ] Pruebas unitarias de importación validadas contra archivos de prueba reales de Google Auth, Aegis, 2FAS y Bitwarden.
-  - [ ] La descompresión de Protobuf se ejecuta en memoria volátil sin persistir datos en texto plano.
-  - [ ] El diálogo de conciliación previene de forma determinista la pérdida accidental de secretos existentes.
+## 3. Bloque II: Horizontes de Evolución Técnica y Producto
+
+Los siguientes hitos marcan el camino de desarrollo futuro. Cada hito se abordará de forma secuencial y se promoverá a producción únicamente tras alcanzar el 100% de sus criterios de calidad y seguridad:
 
 ---
 

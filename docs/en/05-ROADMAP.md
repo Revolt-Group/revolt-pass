@@ -190,30 +190,23 @@ The following foundational phases represent the architectural baseline that is *
 
 ---
 
-## 3. Block II: Technical Evolution & Product Horizons
-
-The following milestones define the future product evolution. Each milestone will be implemented sequentially and promoted to production strictly upon reaching 100% of its technical quality gates:
+### PHASE 14: Universal Importers, Open Vault Exporters & Physical Roaming Keys (v1.4.0)
+* **Objective:** Remove switching friction by enabling smooth zero-knowledge migration from 10 industry-standard platforms, provide open-standard export formats, support physical roaming security keys (YubiKey / FIDO2), and export security audit logs.
+* **Definition of Done (DoD) - Phase 14:**
+  - [x] Pure TypeScript Protobuf binary decoder for Google Authenticator `otpauth-migration://offline?data=...` migration payloads.
+  - [x] Multi-platform unit-tested parsers for Authy JSON, Aegis JSON, 2FAS JSON, Bitwarden JSON/CSV, 1Password CSV/1PUX, Proton Pass JSON/CSV, Ente Auth JSON, LastPass CSV, and `otpauth://` URI lists.
+  - [x] Interactive smart reconciliation engine with diff preview (`new`, `duplicate`, `conflict`) and user-selectable resolution strategies (`keep existing`, `overwrite`, `keep both`).
+  - [x] Open vault exporters for Aegis JSON, Bitwarden CSV, and plain `otpauth://` lists.
+  - [x] WebAuthn `cross-platform` attachment support for hardware roaming security keys (YubiKey 5 Series, Feitian, SoloKeys, Nitrokey) with USB, NFC, and BLE transport handling.
+  - [x] Security audit trail export to CSV and JSON directly from the Security Modal.
+  - [x] Sliding session token concurrency resilience with D1 `prev_token_hash` grace window and IndexedDB client re-sync.
+  - [x] Test suite expanded to 111 tests passing at 100% in Vitest with 0 TypeScript compilation errors (`tsc -b`).
 
 ---
 
-### 📍 Milestone v1.4: Universal Importers & Mass Onboarding
-* **Objective:** Remove all switching friction by enabling smooth, zero-knowledge migration from major proprietary and open-source authenticators.
-* **Key Deliverables:**
-  1. **Google Authenticator Migration Decoder:**
-     - Pure TypeScript binary Protocol Buffers (`MigrationPayload`) parser without heavy runtime libraries.
-     - Instant decoding of `otpauth-migration://offline?data=...` QR payloads.
-  2. **Multi-Format Parsers:**
-     - Support for Aegis Authenticator `.json` files (plain or Scrypt/AES-GCM encrypted).
-     - Parser for 2FAS Authenticator `.2fas` backup files.
-     - Importers for Bitwarden and 1Password CSV / JSON export files.
-     - Parser for plain text lists of `otpauth://` URIs.
-  3. **Interactive Duplicate Resolution Modal:**
-     - Structured preview prior to committing writes to IndexedDB/D1.
-     - Identification of conflicting accounts (`issuer` + `account`) with options: *Overwrite*, *Keep both*, or *Skip*.
-* **Definition of Done (DoD) - v1.4:**
-  - [ ] Automated import test suite validated against real-world sample exports from Google Auth, Aegis, 2FAS, and Bitwarden.
-  - [ ] Protobuf extraction takes place in volatile memory without persisting plaintext records to disk.
-  - [ ] Conflict resolution dialog deterministically prevents accidental loss of existing credentials.
+## 3. Block II: Technical Evolution & Product Horizons
+
+The following milestones define the future product evolution. Each milestone will be implemented sequentially and promoted to production strictly upon reaching 100% of its technical quality gates:
 
 ---
 

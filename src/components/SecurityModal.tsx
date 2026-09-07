@@ -21,6 +21,9 @@ import {
   AlertOctagon,
   Sparkles,
   Database,
+  Usb,
+  FileSpreadsheet,
+  FileJson,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from '../i18n/index.ts';
@@ -28,11 +31,11 @@ import { useTranslation } from '../i18n/index.ts';
 import type { LocalUserConfig, SessionInfo, PasskeyInfo, AuditLogItem, VaultItem } from '../types/vault';
 import type { ApiResponse } from '../worker/types';
 import {
-  registerPlatformPasskey,
+  registerPasskey,
   wrapMasterKey,
   checkWebAuthnSupport,
 } from '../lib/crypto/webauthn';
-import { saveUserConfig } from '../lib/storage/idb';
+import { saveUserConfig, getUserConfig, updateSessionToken } from '../lib/storage/idb';
 import { evaluateVaultHygiene } from '../lib/security/vaultHygiene';
 import { checkPasswordPwned } from '../lib/security/pwnedCheck';
 
@@ -118,6 +121,7 @@ export function SecurityModal({
   const [isLoadingPasskeys, setIsLoadingPasskeys] = useState(false);
   const [isEnrollingPasskey, setIsEnrollingPasskey] = useState(false);
   const [showEnrollForm, setShowEnrollForm] = useState(false);
+  const [enrollAttachment, setEnrollAttachment] = useState<'platform' | 'cross-platform'>('platform');
   const [newPasskeyName, setNewPasskeyName] = useState('');
   const [editingPasskeyId, setEditingPasskeyId] = useState<string | null>(null);
   const [editingPasskeyName, setEditingPasskeyName] = useState('');
@@ -127,6 +131,16 @@ export function SecurityModal({
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState(false);
 
+  // Helper to reliably obtain the latest session token from IndexedDB (or fallback to prop)
+  const getActiveToken = useCallback(async (): Promise<string | undefined> => {
+    try {
+      const cfg = await getUserConfig();
+      return cfg?.session_token || sessionToken;
+    } catch {
+      return sessionToken;
+    }
+  }, [sessionToken]);
+
   // ---------------------------------------------------------------------------
   // Data Fetching: Sessions
   // ---------------------------------------------------------------------------
@@ -134,15 +148,26 @@ export function SecurityModal({
     if (!userId) return;
     setIsLoadingSessions(true);
     try {
+      const activeToken = await getActiveToken();
       const headers: Record<string, string> = {
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch('/api/sessions', { headers });
-      if (!res.ok) throw new Error('Error al consultar sesiones activas');
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) {
+        await updateSessionToken(newTok);
+      }
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Sesión no autorizada o revocada en el servidor');
+        }
+        throw new Error('Error al consultar sesiones activas');
+      }
 
       const data = (await res.json()) as ApiResponse<{ sessions: SessionInfo[] }>;
       if (data.success && data.data?.sessions) {
@@ -154,7 +179,7 @@ export function SecurityModal({
     } finally {
       setIsLoadingSessions(false);
     }
-  }, [userId, sessionToken]);
+  }, [userId, getActiveToken]);
 
   // ---------------------------------------------------------------------------
   // Data Fetching: Passkeys
@@ -163,15 +188,26 @@ export function SecurityModal({
     if (!userId) return;
     setIsLoadingPasskeys(true);
     try {
+      const activeToken = await getActiveToken();
       const headers: Record<string, string> = {
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch('/api/passkeys', { headers });
-      if (!res.ok) throw new Error('Error al consultar passkeys vinculadas');
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) {
+        await updateSessionToken(newTok);
+      }
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Sesión no autorizada o revocada');
+        }
+        throw new Error('Error al consultar passkeys vinculadas');
+      }
 
       const data = (await res.json()) as ApiResponse<{ passkeys: PasskeyInfo[] }>;
       if (data.success && data.data?.passkeys) {
@@ -202,7 +238,7 @@ export function SecurityModal({
               headers: {
                 'Content-Type': 'application/json',
                 'X-User-Id': userId,
-                ...(sessionToken ? { 'X-Session-Token': sessionToken } : {}),
+                ...(activeToken ? { 'X-Session-Token': activeToken } : {}),
               },
               body: JSON.stringify({
                 credential_id: localCredId,
@@ -220,7 +256,7 @@ export function SecurityModal({
     } finally {
       setIsLoadingPasskeys(false);
     }
-  }, [userId, sessionToken, userConfig]);
+  }, [userId, getActiveToken, userConfig]);
 
   // ---------------------------------------------------------------------------
   // Data Fetching: Audit Logs
@@ -229,15 +265,26 @@ export function SecurityModal({
     if (!userId) return;
     setIsLoadingAudit(true);
     try {
+      const activeToken = await getActiveToken();
       const headers: Record<string, string> = {
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch('/api/audit', { headers });
-      if (!res.ok) throw new Error('Error al consultar historial de seguridad');
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) {
+        await updateSessionToken(newTok);
+      }
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Sesión no autorizada o expirada');
+        }
+        throw new Error('Error al consultar historial de seguridad');
+      }
 
       const data = (await res.json()) as ApiResponse<{ audit_logs: AuditLogItem[] }>;
       if (data.success && data.data?.audit_logs) {
@@ -249,7 +296,7 @@ export function SecurityModal({
     } finally {
       setIsLoadingAudit(false);
     }
-  }, [userId, sessionToken]);
+  }, [userId, getActiveToken]);
 
   // Trigger loads on modal open or tab change
   useEffect(() => {
@@ -285,12 +332,13 @@ export function SecurityModal({
 
     setIsSavingSessionName(true);
     try {
+      const activeToken = await getActiveToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
@@ -298,6 +346,9 @@ export function SecurityModal({
         headers,
         body: JSON.stringify({ device_name: trimmed }),
       });
+
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
 
       if (!res.ok) throw new Error('No se pudo actualizar el nombre del dispositivo');
 
@@ -323,17 +374,21 @@ export function SecurityModal({
 
   const handleRevokeSession = async (sessionId: string) => {
     try {
+      const activeToken = await getActiveToken();
       const headers: Record<string, string> = {
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE',
         headers,
       });
+
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
 
       if (!res.ok) throw new Error('No se pudo revocar la sesión remota');
 
@@ -346,7 +401,8 @@ export function SecurityModal({
   };
 
   const handleRevokeOtherSessions = async () => {
-    if (!sessionToken) {
+    const activeToken = await getActiveToken();
+    if (!activeToken) {
       toast.error('Token de sesión no disponible en este cliente');
       return;
     }
@@ -357,13 +413,16 @@ export function SecurityModal({
         method: 'POST',
         headers: {
           'X-User-Id': userId,
-          'X-Session-Token': sessionToken,
+          'X-Session-Token': activeToken,
         },
       });
 
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
+
       if (!res.ok) throw new Error('No se pudieron revocar las otras sesiones');
 
-      toast.success('Todas las demás sesiones fueron revocadas.');
+      toast.success(t('toasts.allOtherSessionsRevoked') || 'Todas las demás sesiones fueron revocadas.');
       await fetchSessions();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al revocar otras sesiones';
@@ -395,12 +454,13 @@ export function SecurityModal({
 
     setIsSavingPasskeyName(true);
     try {
+      const activeToken = await getActiveToken();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch(`/api/passkeys/${encodeURIComponent(passkeyId)}`, {
@@ -408,6 +468,9 @@ export function SecurityModal({
         headers,
         body: JSON.stringify({ name: trimmed }),
       });
+
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
 
       if (!res.ok) throw new Error('No se pudo actualizar el nombre de la passkey');
 
@@ -432,17 +495,21 @@ export function SecurityModal({
 
   const handleRevokePasskey = async (passkeyId: string) => {
     try {
+      const activeToken = await getActiveToken();
       const headers: Record<string, string> = {
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch(`/api/passkeys/${encodeURIComponent(passkeyId)}`, {
         method: 'DELETE',
         headers,
       });
+
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
 
       if (!res.ok) throw new Error('No se pudo revocar la passkey');
 
@@ -465,32 +532,47 @@ export function SecurityModal({
     }
   };
 
-  const handleEnrollPasskey = async (customName?: string) => {
+  const handleEnrollPasskey = async (
+    customName?: string,
+    attachment: 'platform' | 'cross-platform' = enrollAttachment
+  ) => {
     if (!masterKey || !userConfig) {
       toast.error('La bóveda debe estar desbloqueada para registrar una nueva passkey');
       return;
     }
 
-    const assignedName = (customName || '').trim() || 'Windows Hello / Este dispositivo';
+    const defaultName =
+      attachment === 'cross-platform'
+        ? 'Llave Física YubiKey / FIDO2'
+        : 'Windows Hello / Este dispositivo';
+    const assignedName = (customName || '').trim() || defaultName;
 
     setIsEnrollingPasskey(true);
     try {
       const support = await checkWebAuthnSupport();
-      if (!support.isSupported || !support.hasPlatformAuthenticator) {
-        throw new Error('Tu navegador o dispositivo no soporta autenticación biométrica/PIN de plataforma.');
+      if (!support.isSupported) {
+        throw new Error('Tu navegador o dispositivo no soporta WebAuthn.');
+      }
+      if (attachment === 'platform' && !support.hasPlatformAuthenticator) {
+        throw new Error('Autenticador de plataforma (Windows Hello / Biometría) no disponible.');
       }
 
-      toast.info('Interactúa con la ventana del sistema operativo...');
-      const reg = await registerPlatformPasskey(userConfig.user_id, userConfig.username);
+      toast.info(
+        attachment === 'cross-platform'
+          ? 'Inserta tu llave de seguridad USB/NFC y tócala...'
+          : 'Interactúa con la ventana del sistema operativo...'
+      );
+      const reg = await registerPasskey(userConfig.user_id, userConfig.username, attachment);
       const wrappedPkg = await wrapMasterKey(masterKey, reg.credentialId);
 
+      const activeToken = await getActiveToken();
       // Register passkey in remote database
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'X-User-Id': userId,
       };
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
+      if (activeToken) {
+        headers['X-Session-Token'] = activeToken;
       }
 
       const res = await fetch('/api/passkeys', {
@@ -502,6 +584,9 @@ export function SecurityModal({
         }),
       });
 
+      const newTok = res.headers.get('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
+
       if (!res.ok) {
         console.warn('Could not register passkey on server; saving locally.');
       }
@@ -510,12 +595,17 @@ export function SecurityModal({
         ...userConfig,
         webauthn_credential_id: reg.credentialId,
         wrapped_master_key: JSON.stringify(wrappedPkg),
+        passkey_name: assignedName,
       };
 
       await saveUserConfig(updatedConfig);
       onConfigUpdated(updatedConfig);
 
-      toast.success('Passkey / Windows Hello vinculada correctamente');
+      toast.success(
+        attachment === 'cross-platform'
+          ? 'Llave física de seguridad (YubiKey) vinculada exitosamente'
+          : 'Passkey / Windows Hello vinculada correctamente'
+      );
       setShowEnrollForm(false);
       setNewPasskeyName('');
       await fetchPasskeys();
@@ -525,6 +615,51 @@ export function SecurityModal({
     } finally {
       setIsEnrollingPasskey(false);
     }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Export Handlers: Audit Logs
+  // ---------------------------------------------------------------------------
+  const handleExportAuditCsv = () => {
+    if (auditLogs.length === 0) return;
+    const escapeCsv = (val: string | number | undefined) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+    const headers = ['id', 'user_id', 'event_type', 'device_name', 'ip_country', 'metadata', 'timestamp'];
+    const rows = [headers.join(',')];
+
+    for (const log of auditLogs) {
+      rows.push(
+        [
+          escapeCsv(log.id),
+          escapeCsv(log.user_id),
+          escapeCsv(log.event_type),
+          escapeCsv(log.device_name || ''),
+          escapeCsv(log.ip_country || ''),
+          escapeCsv(log.metadata || ''),
+          escapeCsv(new Date(log.created_at * 1000).toISOString()),
+        ].join(',')
+      );
+    }
+
+    const blob = new Blob([rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `revolt-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Historial de seguridad exportado en CSV');
+  };
+
+  const handleExportAuditJson = () => {
+    if (auditLogs.length === 0) return;
+    const blob = new Blob([JSON.stringify(auditLogs, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `revolt-audit-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Historial de seguridad exportado en JSON');
   };
 
   // ---------------------------------------------------------------------------
@@ -1084,9 +1219,11 @@ export function SecurityModal({
 
                 {/* Inline Enrollment Card */}
                 {showEnrollForm && (
-                  <div className="p-3 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top space-y-2.5">
+                  <div className="p-3 rounded-lg bg-[#16181d] border border-white/[0.1] hairline-top space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-xs text-white">{t('security.newPasskeyNameLabel')}</span>
+                      <span className="font-medium text-xs text-white">
+                        {enrollAttachment === 'cross-platform' ? 'Vincular Llave Física de Seguridad' : t('security.newPasskeyNameLabel')}
+                      </span>
                       <button
                         type="button"
                         onClick={() => setShowEnrollForm(false)}
@@ -1095,21 +1232,60 @@ export function SecurityModal({
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
+
+                    {/* Selector: Platform (Windows Hello) vs Cross-Platform (YubiKey) */}
+                    <div className="grid grid-cols-2 gap-1.5 p-1 rounded-lg bg-[#08090a] border border-white/[0.06]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEnrollAttachment('platform');
+                          setNewPasskeyName('Windows Hello / Este dispositivo');
+                        }}
+                        className={`py-1 px-2 rounded-md text-[11px] font-medium flex items-center justify-center gap-1.5 transition-all ${
+                          enrollAttachment === 'platform'
+                            ? 'bg-white/[0.1] text-white shadow-sm'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <Fingerprint className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Windows Hello / Biometría</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEnrollAttachment('cross-platform');
+                          setNewPasskeyName('YubiKey / Llave Física');
+                        }}
+                        className={`py-1 px-2 rounded-md text-[11px] font-medium flex items-center justify-center gap-1.5 transition-all ${
+                          enrollAttachment === 'cross-platform'
+                            ? 'bg-white/[0.1] text-white shadow-sm'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <Usb className="w-3.5 h-3.5 text-sky-400" />
+                        <span>YubiKey / FIDO2 Roaming</span>
+                      </button>
+                    </div>
+
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        placeholder={t('security.newPasskeyPlaceholder')}
+                        placeholder={
+                          enrollAttachment === 'cross-platform'
+                            ? 'Nombre de la llave (ej. YubiKey 5C NFC)'
+                            : t('security.newPasskeyPlaceholder')
+                        }
                         value={newPasskeyName}
                         onChange={(e) => setNewPasskeyName(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleEnrollPasskey(newPasskeyName);
+                          if (e.key === 'Enter') handleEnrollPasskey(newPasskeyName, enrollAttachment);
                         }}
                         className="flex-1 bg-[#08090a] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30"
                         autoFocus
                       />
                       <button
                         type="button"
-                        onClick={() => handleEnrollPasskey(newPasskeyName)}
+                        onClick={() => handleEnrollPasskey(newPasskeyName, enrollAttachment)}
                         disabled={isEnrollingPasskey}
                         className="px-3 py-1.5 bg-white text-black font-medium text-xs rounded-lg hover:bg-zinc-200 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0"
                       >
@@ -1230,11 +1406,35 @@ export function SecurityModal({
             {/* TAB 3: AUDIT LOGS */}
             {activeTab === 'audit' && (
               <div className="space-y-4">
-                <div>
-                  <h4 className="text-xs font-semibold text-zinc-200">{t('security.auditTitle')}</h4>
-                  <p className="text-[11px] text-zinc-400">
-                    {t('security.auditSubtitle')}
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-semibold text-zinc-200">{t('security.auditTitle')}</h4>
+                    <p className="text-[11px] text-zinc-400">
+                      {t('security.auditSubtitle')}
+                    </p>
+                  </div>
+                  {auditLogs.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleExportAuditCsv}
+                        className="py-1 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 border border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+                        title="Exportar como hoja de cálculo CSV"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>CSV</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleExportAuditJson}
+                        className="py-1 px-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 border border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+                        title="Exportar como JSON estructurado"
+                      >
+                        <FileJson className="w-3.5 h-3.5 text-sky-400" />
+                        <span>JSON</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {isLoadingAudit ? (
