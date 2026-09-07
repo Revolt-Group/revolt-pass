@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, QrCode, Copy, Check, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { BrandIcon } from './BrandIcon';
+import { QrCodeView } from './QrCodeView';
 import { buildOtpAuthUri } from '../lib/exporters/protobufEncoder';
-import { renderQrCodeToDom } from '../lib/utils/qrRenderer';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard';
 import { useTranslation } from '../i18n/index';
 import type { VaultItem } from '../types/vault';
@@ -17,20 +17,17 @@ interface AccountQrModalProps {
 
 export function AccountQrModal({ item, isOpen, onClose }: AccountQrModalProps) {
   const { t } = useTranslation();
-  const qrContainerRef = useRef<HTMLDivElement | null>(null);
   const [copiedUri, setCopiedUri] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [revealSecret, setRevealSecret] = useState(false);
 
   useEffect(() => {
-    if (isOpen && item && qrContainerRef.current) {
-      const uri = buildOtpAuthUri(item);
-      renderQrCodeToDom(qrContainerRef.current, uri, 250);
+    if (isOpen) {
       setCopiedUri(false);
       setCopiedSecret(false);
       setRevealSecret(false);
     }
-  }, [isOpen, item]);
+  }, [isOpen]);
 
   if (!item) return null;
 
@@ -108,9 +105,11 @@ export function AccountQrModal({ item, isOpen, onClose }: AccountQrModalProps) {
 
           {/* QR Code Canvas / SVG Wrapper */}
           <div className="mt-4 flex flex-col items-center justify-center p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800/60">
-            <div
-              ref={qrContainerRef}
-              className="w-full flex items-center justify-center min-h-[250px]"
+            <QrCodeView
+              value={uri}
+              size={250}
+              margin={3}
+              alt={`Código QR ${item.issuer} ${item.account}`}
             />
             <p className="mt-3 text-[11px] text-zinc-400 text-center flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

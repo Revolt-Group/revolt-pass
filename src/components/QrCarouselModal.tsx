@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   X,
@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BrandIcon } from './BrandIcon';
+import { QrCodeView } from './QrCodeView';
 import {
   encodeMigrationPayload,
   chunkAccountsForMigration,
 } from '../lib/exporters/protobufEncoder';
-import { renderQrCodeToDom } from '../lib/utils/qrRenderer';
 import { copyToClipboardSecurely } from '../lib/security/clipboardGuard';
 import { useTranslation } from '../i18n/index';
 import type { VaultItem } from '../types/vault';
@@ -33,7 +33,6 @@ export function QrCarouselModal({ isOpen, onClose, items }: QrCarouselModalProps
   const { t } = useTranslation();
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
   const [copiedUri, setCopiedUri] = useState(false);
-  const qrRef = useRef<HTMLDivElement | null>(null);
 
   // Stable batch ID per modal open session
   const batchId = useMemo(() => Math.floor(Math.random() * 1000000), [isOpen]);
@@ -56,14 +55,6 @@ export function QrCarouselModal({ isOpen, onClose, items }: QrCarouselModalProps
     if (!isOpen || activeBatch.length === 0) return '';
     return encodeMigrationPayload(activeBatch, currentBatchIndex, totalBatches, batchId);
   }, [isOpen, activeBatch, currentBatchIndex, totalBatches, batchId]);
-
-  // Render SVG QR whenever currentMigrationUri changes
-  useEffect(() => {
-    if (isOpen && currentMigrationUri && qrRef.current) {
-      renderQrCodeToDom(qrRef.current, currentMigrationUri, 260);
-      setCopiedUri(false);
-    }
-  }, [isOpen, currentMigrationUri]);
 
   // Keyboard navigation (ArrowLeft, ArrowRight)
   useEffect(() => {
@@ -178,8 +169,13 @@ export function QrCarouselModal({ isOpen, onClose, items }: QrCarouselModalProps
               </button>
             )}
 
-            <div className="flex flex-col items-center">
-              <div ref={qrRef} className="w-full flex items-center justify-center min-h-[260px]" />
+            <div className="flex flex-col items-center justify-center w-full min-h-[270px]">
+              <QrCodeView
+                value={currentMigrationUri}
+                size={260}
+                margin={3}
+                alt={`Código QR lote ${currentBatchIndex + 1} de ${totalBatches}`}
+              />
               <div className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
                 <Smartphone className="w-4 h-4 text-emerald-400" />
                 <span>
