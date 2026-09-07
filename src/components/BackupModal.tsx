@@ -74,6 +74,8 @@ export function BackupModal({
         `revolt-pass-encrypted-${dateStr}.json`,
         'application/json'
       );
+      localStorage.setItem('revolt_last_backup', Date.now().toString());
+      window.dispatchEvent(new Event('revolt:backup-updated'));
       toast.success('Copia de seguridad cifrada (AES-256-GCM) descargada');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al exportar';
@@ -97,6 +99,8 @@ export function BackupModal({
         `revolt-pass-plaintext-${dateStr}.json`,
         'application/json'
       );
+      localStorage.setItem('revolt_last_backup', Date.now().toString());
+      window.dispatchEvent(new Event('revolt:backup-updated'));
       toast.warning('Archivo en texto plano descargado. Guárdalo en un medio seguro.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al exportar';

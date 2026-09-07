@@ -217,6 +217,63 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // -----------------------------------------------------------------------
+    // GET /api/pwned-check: k-Anonymity edge proxy for HaveIBeenPwned
+    // -----------------------------------------------------------------------
+    if (request.method === 'GET' && (path === '/api/pwned-check' || path === '/api/v1/pwned-check')) {
+      const prefix = url.searchParams.get('prefix')?.trim().toUpperCase();
+
+      if (!prefix || !/^[0-9A-F]{5}$/.test(prefix)) {
+        return errorResponse(
+          'INVALID_PREFIX',
+          'El parámetro prefix es obligatorio y debe contener exactamente 5 caracteres hexadecimales (SHA-1)',
+          400
+        );
+      }
+
+      try {
+        const hibpUrl = `https://api.pwnedpasswords.com/range/${prefix}`;
+        const hibpResponse = await fetch(hibpUrl, {
+          headers: {
+            'User-Agent': 'RevoltPass-SecurityScanner/1.3',
+            'Add-Padding': 'true',
+          },
+        });
+
+        if (!hibpResponse.ok) {
+          return errorResponse(
+            'UPSTREAM_SERVICE_ERROR',
+            'Error al consultar el servicio de verificación de filtraciones HaveIBeenPwned',
+            502
+          );
+        }
+
+        const rangeData = await hibpResponse.text();
+
+        return jsonResponse(
+          {
+            success: true,
+            data: {
+              prefix,
+              range: rangeData,
+            },
+            timestamp: Date.now(),
+          },
+          200,
+          {
+            'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=43200',
+          }
+        );
+      } catch (err: unknown) {
+        return errorResponse(
+          'UPSTREAM_FETCH_FAILED',
+          'No se pudo conectar con el servicio HaveIBeenPwned',
+          502,
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
+
+    // -----------------------------------------------------------------------
     // POST /api/auth/register: Atomic initial registration of user and vault
     // -----------------------------------------------------------------------
     if (request.method === 'POST' && (path === '/api/auth/register' || path === '/api/v1/auth/register')) {

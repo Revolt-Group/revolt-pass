@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-RDM-005` |
-| **Versión Actual** | `1.2.1-PROD` (En Producción / Live) |
+| **Versión Actual** | `1.3.0-PROD` (En Producción / Live) |
 | **Estado** | Aprobado / Plan de Evolución Basado en Hitos de Calidad |
 | **Repositorio Remoto** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Principal** | `main` |
@@ -21,20 +21,20 @@ Cada hito o versión del proyecto se estructura en torno a una **Definición de 
 
 ```mermaid
 flowchart TD
-    subgraph COMPLETADAS ["Cimientos Fundacionales en Producción (v1.0 a v1.2.1)"]
+    subgraph COMPLETADAS ["Cimientos Fundacionales en Producción (v1.0 a v1.3.0)"]
         v10["Fases 1 a 8: Núcleo Criptográfico & PWA<br/>AES-256-GCM, PBKDF2 600k en Web Worker, Cloudflare D1 Edge, WebAuthn, AutoLock"]
         v11["Fase 9: Multidispositivo & Auditoría (v1.1)<br/>Sesiones D1, Revocación remota granular, Passkeys FIDO2, Audit Logs"]
         v12["Fases 10 y 11: i18n, Backups & Apertura Open Source (v1.2.1)<br/>Internacionalización ES/EN, Backups cifrados, Modo Instancia Privada, AGPLv3"]
-        v10 --> v11 --> v12
+        v13["Fase 12: Higiene & HaveIBeenPwned (v1.3.0)<br/>k-Anonymity SHA-1, Alertas de entropía Base32, Scorecard visual"]
+        v10 --> v11 --> v12 --> v13
     end
 
     subgraph PROXIMAS ["Horizontes de Evolución Técnica (Próximas Versiones)"]
-        v13["Hito v1.3: Diagnóstico de Higiene & HaveIBeenPwned<br/>k-Anonymity SHA-1, Alertas de entropía Base32, Scorecard visual"]
         v14["Hito v1.4: Ingesta Masiva & Importadores Universales<br/>Parser Protobuf Google Auth, Importadores Aegis, 2FAS, Bitwarden, 1Pass"]
         v20["Hito v2.0: Suite Integral de Secretos & Bóveda Completa<br/>Contraseñas, Tarjetas de pago, Notas Markdown, Claves SSH, Papelera 30d"]
         v21["Hito v2.1: Extensión para Navegadores (Manifest V3)<br/>Autofill contextual por dominio eTLD+1, Inyección inline de tokens 2FA"]
         v22["Hito v2.2: Aplicación de Escritorio Nativa (Tauri v2 + Rust)<br/>Binario liviano <10MB, Windows Hello / Touch ID OS, Atajo flotante global"]
-        v12 -.-> v13 --> v14 --> v20 --> v21 --> v22
+        v13 -.-> v14 --> v20 --> v21 --> v22
     end
 
     style COMPLETADAS fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
@@ -42,7 +42,7 @@ flowchart TD
     style v10 fill:#1e293b,stroke:#3b82f6,color:#fff
     style v11 fill:#1e293b,stroke:#3b82f6,color:#fff
     style v12 fill:#166534,stroke:#22c55e,color:#fff
-    style v13 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v13 fill:#166534,stroke:#22c55e,color:#fff
     style v14 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v20 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v21 fill:#1e1b4b,stroke:#818cf8,color:#fff
@@ -51,7 +51,7 @@ flowchart TD
 
 ---
 
-## 2. Bloque I: Cimientos Fundacionales Desplegados (v1.0 — v1.2.1)
+## 2. Bloque I: Cimientos Fundacionales Desplegados (v1.0 — v1.3.0)
 
 Las siguientes fases iniciales representan la base estructural que se encuentra **100% implementada, auditada y en producción**:
 
@@ -163,31 +163,20 @@ Las siguientes fases iniciales representan la base estructural que se encuentra 
 
 ---
 
-## 3. Bloque II: Horizontes de Evolución Técnica y Producto
-
-Los siguientes hitos marcan el camino de desarrollo futuro. Cada hito se abordará de forma secuencial y se promoverá a producción únicamente tras alcanzar el 100% de sus criterios de calidad y seguridad:
+### FASE 12: Diagnóstico de Higiene, Scorecard & HaveIBeenPwned k-Anonymity (v1.3.0)
+* **Objetivo:** Dotar a la aplicación de capacidades de auditoría preventiva y telemetría de salud de contraseñas bajo un estricto modelo Zero-Knowledge con k-Anonymity.
+* **Definition of Done (DoD) - Fase 12:**
+  - [x] Ningún secreto, contraseña completa ni hash SHA-1 de más de 5 caracteres sale jamás del navegador del usuario (blindaje k-Anonymity con padding anti-análisis y proxy Cloudflare).
+  - [x] Motor de diagnóstico de higiene en cliente detecta duplicados, secretos con baja entropía (<80b), ausencia de códigos de respaldo y obsolescencia de backups (>30d).
+  - [x] Scorecard visual e interactivo de salud con acciones directas de remediación y medidor porcentual en tiempo real.
+  - [x] Comprobador interactivo de filtraciones de datos (HaveIBeenPwned) con explicación transparente de la garantía Zero-Knowledge.
+  - [x] Suite de 88 pruebas unitarias pasando al 100% en Vitest con 0 errores de compilación estricta en TypeScript (`tsc -b`).
 
 ---
 
-### 📍 Hito v1.3: Diagnóstico de Higiene & HaveIBeenPwned (k-Anonymity)
-* **Objetivo:** Dotar a la aplicación de capacidades de auditoría preventiva y telemetría de salud de contraseñas bajo un estricto modelo Zero-Knowledge.
-* **Entregables Clave:**
-  1. **Integración con HaveIBeenPwned vía k-Anonymity:**
-     - Cálculo local del hash SHA-1 de las contraseñas.
-     - Envío exclusivo de los primeros 5 caracteres hexadecimales del hash hacia un proxy edge en Cloudflare Worker (`/api/pwned-check?prefix=XXXXX`).
-     - Caché perimetral de respuestas HIBP durante 24 horas para enmascarar la dirección IP del usuario.
-     - Comparación de los 35 caracteres restantes ejecutada 100% en el cliente mediante un Web Worker.
-  2. **Diagnóstico de Higiene de la Bóveda:**
-     - Detección de secretos Base32 con baja entropía (<80 bits).
-     - Identificación de secretos TOTP duplicados en múltiples servicios.
-     - Advertencia de uso de algoritmos obsoletos (SHA-1 en servicios que admiten SHA-256).
-     - Alerta visual preventiva si no se ha realizado un respaldo cifrado en los últimos 30 días.
-  3. **Scorecard de Seguridad Visual:**
-     - Puntuación porcentual (0 a 100%) visible en el panel de seguridad con recomendaciones directas de remediación.
-* **Definition of Done (DoD) - v1.3:**
-  - [ ] Ningún secreto, contraseña completa ni hash SHA-1 de más de 5 caracteres sale jamás del navegador del usuario.
-  - [ ] Las consultas a HIBP se realizan en segundo plano sin degradar la tasa de cuadros (60 FPS) de la interfaz.
-  - [ ] El Scorecard refleja con precisión métricas cuantitativas reproducibles en pruebas unitarias.
+## 3. Bloque II: Horizontes de Evolución Técnica y Producto
+
+Los siguientes hitos marcan el camino de desarrollo futuro. Cada hito se abordará de forma secuencial y se promoverá a producción únicamente tras alcanzar el 100% de sus criterios de calidad y seguridad:
 
 ---
 

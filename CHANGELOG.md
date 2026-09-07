@@ -1,0 +1,103 @@
+# Changelog
+
+All notable changes to **Revolt Pass** will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.3.0] - 2026-09-07
+
+### Added
+- **Vault Health & Hygiene Diagnostic Engine (`vaultHygiene.ts`):**
+  - Real-time client-side analysis of vault accounts, evaluating cryptographic entropy, secret duplication, and recovery readiness.
+  - Identification of reused TOTP secrets across services.
+  - Detection of low-entropy Base32 secrets (<16 chars / <80 bits) susceptible to brute-force attacks.
+  - Verification of missing or exhausted one-time recovery codes.
+  - Tracking of backup freshness with alerts when no backup has been exported in over 30 days.
+  - Weighted health score calculation (0–100%) and grading scale (*Excellent*, *Good*, *Needs Improvement*, *Critical*).
+- **Zero-Knowledge Breach Detection via k-Anonymity (`pwnedCheck.ts`):**
+  - Verification of credential exposure against HaveIBeenPwned's database of over 800 million breached records.
+  - Client-side SHA-1 hashing using Web Crypto API.
+  - Strict k-Anonymity model: only the first 5 hexadecimal characters of the SHA-1 hash are sent to the edge proxy.
+  - Full suffix matching (remaining 35 characters) executed entirely inside the user's browser.
+  - Cloudflare Worker edge proxy (`GET /api/pwned-check`) with 24-hour edge caching (`Cache-Control: public, max-age=86400`) and `Add-Padding: true` to prevent response length side-channel attacks.
+- **Visual Health Scorecard & Diagnostics Tab (`SecurityModal.tsx`):**
+  - Dedicated "Health & Diagnostics" tab in the Security Panel featuring a radial score indicator, category pills, and quick metric tiles.
+  - Actionable issue resolution cards with direct shortcuts to export backups or review specific accounts.
+  - Interactive HaveIBeenPwned leak checker with instant feedback and zero-knowledge privacy guarantee explanations.
+- **Automated Backup Timestamp Tracking:**
+  - Automated timestamp recording on encrypted and plaintext backup exports (`revolt_last_backup`).
+  - Real-time reactive updates via custom DOM events (`revolt:backup-updated`).
+
+### Changed
+- Bumped project version to `v1.3.0` across `package.json` and `version.ts`.
+- Expanded automated test suite to 88 tests across 14 test suites, covering k-Anonymity edge proxies, SHA-1 range parsing, and vault hygiene score calculations.
+- Updated technical roadmaps (`docs/es/05-ROADMAP.md` and `docs/en/05-ROADMAP.md`) marking Milestone v1.3 as completed and deployed.
+
+---
+
+## [1.2.1] - 2026-09-06
+
+### Added
+- **Open-Source Repository Decoupling & Private Instance Mode:**
+  - Configurable `VITE_PRIVATE_INSTANCE` environment variable allowing public self-hosting without private access restrictions.
+  - Protected author instance overlay screen with subtle authentication shortcuts (`Ctrl + Alt + U`, `Ctrl + Shift + U`, and triple-click shield trigger).
+  - Remote Cloudflare D1 SQLite database `BEFORE INSERT` trigger preventing unauthorized registrations as a defense-in-depth measure.
+- **Comprehensive Open-Source Licensing & Brand Protection:**
+  - **GNU Affero General Public License v3 (AGPL-3.0-only)** adopted with Section 7(e) **Trademark & Brand Assets Policy**.
+  - Bilingual security policies ([`SECURITY.md`](./SECURITY.md) and [`SECURITY.es.md`](./SECURITY.es.md)) integrated with GitHub Private Vulnerability Reporting.
+- **Documentation Overhaul:**
+  - Structured PRD, Architecture, Threat Model, ADRs, and Quality-Driven Technical Roadmap in both English and Spanish (`docs/en/` and `docs/es/`).
+
+---
+
+## [1.2.0] - 2026-09-05
+
+### Added
+- **Full Bilingual Internationalization (i18n):**
+  - Complete zero-knowledge, client-side translation engine in Spanish (`es`) and English (`en`).
+  - Compile-time type safety via TypeScript `TranslationSchema` and recursive `TranslationPath`.
+  - Automatic browser language detection with local preference persistence in `localStorage`.
+  - Seamless in-app language switcher component in navigation headers and authentication screens.
+
+### Changed
+- Refactored all UI components, dialogs, command palettes, toasts, and error messages to use semantic translation keys.
+
+---
+
+## [1.1.0] - 2026-09-04
+
+### Added
+- **Multi-Device Session & Access Control (`SecurityModal.tsx`):**
+  - Remote session tracking with device type detection, location origin, and last-active timestamps stored in Cloudflare D1.
+  - Granular single-session revocation and one-click "Log out all other devices" functionality.
+  - Device friendly renaming with client-side synchronization.
+- **FIDO2 / WebAuthn Biometric & Passkey Management:**
+  - Enrollment, renaming, and remote revocation of hardware Passkeys and Windows Hello credentials.
+  - Wrapped master key storage for instant local biometric unlocking.
+- **Immutable Security Event Audit Log:**
+  - Tamper-evident logging of critical authentication events, session revocations, and passkey lifecycle operations.
+
+---
+
+## [1.0.0] - 2026-09-03
+
+### Added
+- **Zero-Knowledge Core Architecture:**
+  - Client-side master key derivation using PBKDF2 (600,000 iterations, SHA-256) running in an isolated background Web Worker.
+  - Authenticated symmetric encryption using AES-256-GCM for all vault secrets, accounts, and emergency recovery codes.
+  - Cloudflare Workers and Cloudflare D1 edge persistence: server only stores ciphertext and verification verifiers.
+- **Offline-First Persistence & Synchronization:**
+  - Local persistence powered by IndexedDB with deterministic clock drift compensation (`/api/time`).
+  - Automatic background synchronization on connectivity changes (`online` event listener).
+- **Hardened Security Features:**
+  - Configurable inactivity AutoLock with instant RAM memory wiping (CryptoKey zeroization).
+  - Clipboard Guard with automated 45-second memory purge.
+- **Modern User Experience:**
+  - Dark-Mode First interface inspired by Linear and Raycast.
+  - Universal Quick Command Palette (`Ctrl + K`).
+  - QR Code scanner via device camera, drag-and-drop file upload, or clipboard paste (`Ctrl + V`).
+  - Encrypted JSON vault backup export and import.
+  - Full Progressive Web App (PWA) offline installation with Service Worker precaching.

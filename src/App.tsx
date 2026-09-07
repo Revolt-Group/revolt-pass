@@ -1628,6 +1628,16 @@ export function App() {
           userConfig={userConfig}
           masterKey={masterKey}
           onConfigUpdated={(cfg) => setUserConfig(cfg)}
+          items={items}
+          onOpenBackup={() => {
+            setIsSecurityOpen(false);
+            setIsBackupOpen(true);
+          }}
+          onSelectAccount={(account) => {
+            setIsSecurityOpen(false);
+            setEditingItem(account);
+            setIsEditModalOpen(true);
+          }}
         />
       )}
 

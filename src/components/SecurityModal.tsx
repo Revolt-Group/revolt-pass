@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   Shield,
@@ -16,11 +16,16 @@ import {
   Fingerprint,
   Pencil,
   Check,
+  Activity,
+  AlertTriangle,
+  AlertOctagon,
+  Sparkles,
+  Database,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from '../i18n/index.ts';
 
-import type { LocalUserConfig, SessionInfo, PasskeyInfo, AuditLogItem } from '../types/vault';
+import type { LocalUserConfig, SessionInfo, PasskeyInfo, AuditLogItem, VaultItem } from '../types/vault';
 import type { ApiResponse } from '../worker/types';
 import {
   registerPlatformPasskey,
@@ -28,6 +33,8 @@ import {
   checkWebAuthnSupport,
 } from '../lib/crypto/webauthn';
 import { saveUserConfig } from '../lib/storage/idb';
+import { evaluateVaultHygiene } from '../lib/security/vaultHygiene';
+import { checkPasswordPwned } from '../lib/security/pwnedCheck';
 
 interface SecurityModalProps {
   isOpen: boolean;
@@ -37,6 +44,9 @@ interface SecurityModalProps {
   userConfig: LocalUserConfig | null;
   masterKey: CryptoKey | null;
   onConfigUpdated: (config: LocalUserConfig) => void;
+  items?: VaultItem[];
+  onOpenBackup?: () => void;
+  onSelectAccount?: (item: VaultItem) => void;
 }
 
 export function SecurityModal({
@@ -47,9 +57,53 @@ export function SecurityModal({
   userConfig,
   masterKey,
   onConfigUpdated,
+  items = [],
+  onOpenBackup,
+  onSelectAccount,
 }: SecurityModalProps) {
   const { t, lang } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'sessions' | 'passkeys' | 'audit'>('sessions');
+  const [activeTab, setActiveTab] = useState<'health' | 'sessions' | 'passkeys' | 'audit'>('health');
+
+  // Vault Hygiene & Diagnostics
+  const [lastBackupAt, setLastBackupAt] = useState<number | null>(() => {
+    const stored = localStorage.getItem('revolt_last_backup');
+    return stored ? parseInt(stored, 10) : null;
+  });
+
+  useEffect(() => {
+    const handleBackupUpdated = () => {
+      const stored = localStorage.getItem('revolt_last_backup');
+      setLastBackupAt(stored ? parseInt(stored, 10) : null);
+    };
+    window.addEventListener('revolt:backup-updated', handleBackupUpdated);
+    return () => window.removeEventListener('revolt:backup-updated', handleBackupUpdated);
+  }, []);
+
+  const healthScore = useMemo(() => {
+    return evaluateVaultHygiene(items, lastBackupAt);
+  }, [items, lastBackupAt]);
+
+  // Leak checker state (HaveIBeenPwned via k-Anonymity)
+  const [leakInput, setLeakInput] = useState('');
+  const [isCheckingLeak, setIsCheckingLeak] = useState(false);
+  const [leakResult, setLeakResult] = useState<{ checked: boolean; compromised: boolean; count: number } | null>(null);
+
+  const handleCheckLeak = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const query = leakInput.trim();
+    if (!query) return;
+    setIsCheckingLeak(true);
+    setLeakResult(null);
+    try {
+      const res = await checkPasswordPwned(query);
+      setLeakResult({ checked: true, compromised: res.compromised, count: res.count });
+    } catch (err) {
+      console.error('Failed to query pwned check:', err);
+      toast.error(t('toasts.leakCheckError'));
+    } finally {
+      setIsCheckingLeak(false);
+    }
+  };
 
   // Sessions state
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -570,6 +624,18 @@ export function SecurityModal({
           <div className="flex bg-[#08090a] border border-white/[0.06] p-1 rounded-lg my-4 text-xs shrink-0">
             <button
               type="button"
+              onClick={() => setActiveTab('health')}
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
+                activeTab === 'health'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{t('security.tabHealth')}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('sessions')}
               className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'sessions'
@@ -608,6 +674,262 @@ export function SecurityModal({
 
           {/* Tab Content Container */}
           <div className="flex-1 overflow-y-auto pr-1 space-y-4 text-xs custom-scrollbar">
+            {/* TAB 0: HEALTH & HYGIENE */}
+            {activeTab === 'health' && (
+              <div className="space-y-4">
+                {/* Scorecard Hero Banner */}
+                <div className="p-4 rounded-xl bg-gradient-to-br from-[#12141a] to-[#181a22] border border-white/[0.08] hairline-top flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    {/* Radial Score Gauge Badge */}
+                    <div
+                      className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center border font-bold shrink-0 ${
+                        healthScore.grade === 'excellent'
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          : healthScore.grade === 'good'
+                          ? 'bg-sky-500/10 border-sky-500/30 text-sky-400'
+                          : healthScore.grade === 'warning'
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                          : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                      }`}
+                    >
+                      <span className="text-lg leading-none">{healthScore.score}%</span>
+                      <span className="text-[9px] uppercase tracking-wider font-medium opacity-80 mt-0.5">
+                        {healthScore.grade === 'excellent'
+                          ? t('hygiene.scoreGradeExcellent')
+                          : healthScore.grade === 'good'
+                          ? t('hygiene.scoreGradeGood')
+                          : healthScore.grade === 'warning'
+                          ? t('hygiene.scoreGradeWarning')
+                          : t('hygiene.scoreGradeCritical')}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-semibold text-white tracking-tight flex items-center gap-2">
+                        {t('hygiene.scoreTitle')}
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                            healthScore.grade === 'excellent'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : healthScore.grade === 'good'
+                              ? 'bg-sky-500/20 text-sky-300'
+                              : healthScore.grade === 'warning'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : 'bg-rose-500/20 text-rose-300'
+                          }`}
+                        >
+                          {healthScore.score >= 80 ? 'Segura' : 'Atención requerida'}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {t('hygiene.scoreSubtitle')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Backup Quick Action if needed */}
+                  {onOpenBackup && (
+                    <button
+                      type="button"
+                      onClick={onOpenBackup}
+                      className="py-1.5 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] text-xs font-medium transition-all shrink-0 flex items-center gap-1.5"
+                    >
+                      <Database className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>{t('hygiene.actionBackup')}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick Metric Tiles */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-2.5 rounded-lg bg-[#16181d]/50 border border-white/[0.06]">
+                    <div className="text-[10px] text-zinc-400">{t('hygiene.statAccounts')}</div>
+                    <div className="text-base font-semibold text-zinc-100 mt-0.5">
+                      {healthScore.totalAccounts}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#16181d]/50 border border-white/[0.06]">
+                    <div className="text-[10px] text-zinc-400">{t('hygiene.statDuplicates')}</div>
+                    <div className={`text-base font-semibold mt-0.5 ${healthScore.stats.duplicateSecretsCount > 0 ? 'text-amber-400' : 'text-zinc-100'}`}>
+                      {healthScore.stats.duplicateSecretsCount}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#16181d]/50 border border-white/[0.06]">
+                    <div className="text-[10px] text-zinc-400">{t('hygiene.statWeak')}</div>
+                    <div className={`text-base font-semibold mt-0.5 ${healthScore.stats.weakSecretsCount > 0 ? 'text-rose-400' : 'text-zinc-100'}`}>
+                      {healthScore.stats.weakSecretsCount}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#16181d]/50 border border-white/[0.06]">
+                    <div className="text-[10px] text-zinc-400">{t('hygiene.statLastBackup')}</div>
+                    <div className="text-xs font-semibold text-zinc-200 mt-1 truncate">
+                      {lastBackupAt
+                        ? Math.floor((Date.now() - lastBackupAt) / (1000 * 60 * 60 * 24)) === 0
+                          ? t('hygiene.backupToday')
+                          : t('hygiene.backupDaysAgo', { days: Math.floor((Date.now() - lastBackupAt) / (1000 * 60 * 60 * 24)) })
+                        : t('hygiene.backupNever')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Findings & Recommendations Section */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{t('hygiene.issuesTitle')}</span>
+                    <span className="text-[10px] text-zinc-500 font-normal">
+                      ({healthScore.issues.length})
+                    </span>
+                  </h4>
+
+                  {healthScore.issues.length === 0 ? (
+                    <div className="p-4 rounded-lg bg-emerald-500/[0.06] border border-emerald-500/20 flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold text-emerald-300">
+                          {t('hygiene.allGoodTitle')}
+                        </div>
+                        <div className="text-[11px] text-emerald-400/80">
+                          {t('hygiene.allGoodDesc')}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {healthScore.issues.map((issue) => {
+                        const title = t(issue.titleKey, issue.descParams);
+                        const desc = t(issue.descKey, issue.descParams);
+
+                        return (
+                          <div
+                            key={issue.id}
+                            className="p-3 rounded-lg bg-[#16181d]/60 border border-white/[0.06] flex items-start justify-between gap-3 text-[11px]"
+                          >
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-[9px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider ${
+                                    issue.severity === 'critical'
+                                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                      : issue.severity === 'warning'
+                                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                      : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                                  }`}
+                                >
+                                  {issue.severity === 'critical'
+                                    ? t('hygiene.severityCritical')
+                                    : issue.severity === 'warning'
+                                    ? t('hygiene.severityWarning')
+                                    : t('hygiene.severitySuggestion')}
+                                </span>
+                                <span className="font-semibold text-zinc-200 truncate">{title}</span>
+                              </div>
+                              <p className="text-zinc-400 text-[11px] leading-relaxed">{desc}</p>
+                            </div>
+
+                            {issue.actionType === 'open_backup' && onOpenBackup && (
+                              <button
+                                type="button"
+                                onClick={onOpenBackup}
+                                className="py-1 px-2.5 rounded-md bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1] text-[11px] font-medium transition-all shrink-0 self-center"
+                              >
+                                {t('hygiene.actionBackup')}
+                              </button>
+                            )}
+
+                            {issue.actionType === 'open_item' && issue.itemId && onSelectAccount && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const it = items.find((i) => i.id === issue.itemId);
+                                  if (it) {
+                                    onClose();
+                                    onSelectAccount(it);
+                                  }
+                                }}
+                                className="py-1 px-2.5 rounded-md bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1] text-[11px] font-medium transition-all shrink-0 self-center"
+                              >
+                                {t('hygiene.actionViewAccount')}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* k-Anonymity Leak Checker (HaveIBeenPwned) */}
+                <div className="p-3.5 rounded-xl bg-[#08090a] border border-white/[0.08] space-y-3">
+                  <div>
+                    <h4 className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-sky-400" />
+                      <span>{t('hygiene.leakCheckerTitle')}</span>
+                    </h4>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      {t('hygiene.leakCheckerSubtitle')}
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleCheckLeak} className="flex gap-2">
+                    <input
+                      type="password"
+                      value={leakInput}
+                      onChange={(e) => {
+                        setLeakInput(e.target.value);
+                        if (leakResult) setLeakResult(null);
+                      }}
+                      placeholder={t('hygiene.leakInputPlaceholder')}
+                      className="flex-1 bg-[#16181d] border border-white/[0.1] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-sky-500/50"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isCheckingLeak || !leakInput.trim()}
+                      className="py-1.5 px-3.5 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 font-medium text-xs hover:bg-sky-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {isCheckingLeak ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>{t('hygiene.leakChecking')}</span>
+                        </>
+                      ) : (
+                        <span>{t('hygiene.leakButtonCheck')}</span>
+                      )}
+                    </button>
+                  </form>
+
+                  {/* Leak Result Feedback */}
+                  {leakResult && (
+                    <div
+                      className={`p-2.5 rounded-lg border text-xs flex items-center gap-2.5 ${
+                        leakResult.compromised
+                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      }`}
+                    >
+                      {leakResult.compromised ? (
+                        <AlertOctagon className="w-4 h-4 shrink-0 text-rose-400" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                      )}
+                      <div className="flex-1 text-[11px]">
+                        {leakResult.compromised
+                          ? t('hygiene.leakResultCompromised', { count: leakResult.count.toLocaleString() })
+                          : t('hygiene.leakResultSafe')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Zero-Knowledge guarantee disclaimer */}
+                  <div className="text-[10px] text-zinc-500 leading-relaxed bg-[#16181d]/30 p-2 rounded border border-white/[0.04]">
+                    {t('hygiene.leakNotice')}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* TAB 1: SESSIONS */}
             {activeTab === 'sessions' && (
               <div className="space-y-4">

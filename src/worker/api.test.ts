@@ -1178,4 +1178,76 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     const inDb = mockDb.passkeys.get(passkeyId);
     expect(inDb?.name).toBe('Mi Windows Hello Personal');
   });
+
+  describe('HaveIBeenPwned k-Anonymity Edge Proxy (GET /api/pwned-check)', () => {
+    it('returns 400 when prefix is missing or has invalid format', async () => {
+      const invalidPrefixes = ['', '123', '123456', 'GGGGG', 'XYZ12'];
+
+      for (const prefix of invalidPrefixes) {
+        const req = new Request(`https://pass.example.com/api/pwned-check?prefix=${prefix}`, {
+          method: 'GET',
+        });
+        const res = await handleApiRequest(req, env);
+        expect(res.status).toBe(400);
+
+        const json = (await res.json()) as ApiResponse;
+        expect(json.success).toBe(false);
+        expect(json.error?.code).toBe('INVALID_PREFIX');
+      }
+    });
+
+    it('successfully proxies valid 5-character hex prefix to HIBP API and returns range', async () => {
+      const originalFetch = globalThis.fetch;
+      try {
+        const mockHibpData = '0018A45C4D1DEF81644B54AB7F969B88D65:1\n00D4F6E8FA6EEC340B4FBCED30C1DD02E39:2';
+        globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+          const urlStr = typeof input === 'string' ? input : input.toString();
+          if (urlStr.includes('api.pwnedpasswords.com/range/21BD8')) {
+            return new Response(mockHibpData, {
+              status: 200,
+              headers: { 'Content-Type': 'text/plain' },
+            });
+          }
+          return originalFetch(input, init);
+        };
+
+        const req = new Request('https://pass.example.com/api/pwned-check?prefix=21bd8', {
+          method: 'GET',
+        });
+        const res = await handleApiRequest(req, env);
+
+        expect(res.status).toBe(200);
+        expect(res.headers.get('Cache-Control')).toContain('public');
+        expect(res.headers.get('Cache-Control')).toContain('max-age=86400');
+
+        const json = (await res.json()) as ApiResponse<{ prefix: string; range: string }>;
+        expect(json.success).toBe(true);
+        expect(json.data?.prefix).toBe('21BD8');
+        expect(json.data?.range).toContain('0018A45C4D1DEF81644B54AB7F969B88D65:1');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it('returns 502 if upstream HIBP returns non-200 status', async () => {
+      const originalFetch = globalThis.fetch;
+      try {
+        globalThis.fetch = async () => {
+          return new Response('Rate limited', { status: 429 });
+        };
+
+        const req = new Request('https://pass.example.com/api/pwned-check?prefix=A1B2C', {
+          method: 'GET',
+        });
+        const res = await handleApiRequest(req, env);
+
+        expect(res.status).toBe(502);
+        const json = (await res.json()) as ApiResponse;
+        expect(json.success).toBe(false);
+        expect(json.error?.code).toBe('UPSTREAM_SERVICE_ERROR');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  });
 });
