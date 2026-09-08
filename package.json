@@ -1,16 +1,25 @@
 {
   "name": "revolt-pass",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Zero-Knowledge Password, 2FA & Secrets Manager",
   "license": "AGPL-3.0-only",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "test": "vitest run",
-    "preview": "vite preview"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "preview": "vite preview",
+    "icons": "node scripts/generate-icons.js",
+    "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.10.0",
@@ -36,6 +45,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/coverage-v8": "^5.0.0",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.14.0",
     "oxlint": "^1.79.0",

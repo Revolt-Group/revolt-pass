@@ -7,6 +7,44 @@ y este proyecto se rige por [Control Semántico de Versiones (SemVer)](https://s
 
 ---
 
+## [2.0.1] - 2026-09-08
+
+### Añadido
+- **Infraestructura de Comunidad y Salud Open Source en GitHub:**
+  - Flujo de Integración Continua (CI) automatizado (`.github/workflows/ci.yml`) que ejecuta validación de linter, suite completa de pruebas unitarias y compilación de producción en cada push y pull request a `main`.
+  - Configuración automatizada de actualización de dependencias con Dependabot semanal (`.github/dependabot.yml`).
+  - Plantillas de incidencias estructuradas en YAML (`.github/ISSUE_TEMPLATE/`) para reportes de error y solicitudes de características con consideraciones de seguridad Zero-Knowledge, deshabilitando incidencias en blanco (`config.yml`).
+  - Plantilla de contribución para Pull Requests (`.github/PULL_REQUEST_TEMPLATE.md`) con lista de verificación estricta de calidad, pruebas y seguridad criptográfica.
+  - Configuración de patrocinio del proyecto (`.github/FUNDING.yml`) para GitHub Sponsors.
+  - Código de Conducta Contributor Covenant v2.1 en español (`CODE_OF_CONDUCT.md`) e inglés (`CODE_OF_CONDUCT.en.md`).
+- **Expansión Exhaustiva de la Suite de Pruebas (175/175 pruebas aprobadas):**
+  - Adición de 32 pruebas unitarias e integración en 7 módulos críticos:
+    - Exportadores: Formato Aegis JSON (`aegisExport.test.ts`), URI otpauth en texto plano (`otpauthExport.test.ts`) y Bitwarden CSV (`bitwardenExport.test.ts`).
+    - Importadores: Decodificación de cargas de migración de Google Authenticator (`googleAuth.test.ts`), motor de reconciliación y resolución de conflictos (`reconcile.test.ts`) y detector automático de formatos (`detector.test.ts`).
+    - Motor de sincronización: pruebas integradas de flujo pull/push y resolución de concurrencia (`syncEngine.test.ts`).
+- **Proveedor de Cobertura de Código y Umbrales de Calidad (`vitest.config.ts`):**
+  - Integración de `@vitest/coverage-v8` con umbrales estrictos en módulos críticos:
+    - Núcleo criptográfico (`src/lib/crypto/**`): 75% líneas / 80% funciones / 65% ramas.
+    - Núcleo de seguridad (`src/lib/security/**`): 80% líneas / 80% funciones.
+    - Motor de sincronización (`src/lib/sync/**`): 75% líneas / 75% funciones.
+  - Nuevos comandos npm: `pnpm test:coverage` y `pnpm test:watch`.
+- **Metadatos Open Graph y Vista Previa Social:**
+  - Banner Open Graph de alta resolución de 1200x630px (`public/og-image.png`) con emblema de escudo y distintivos de producto generado vía `scripts/generate-og-image.js`.
+  - Etiquetas completas Open Graph y Twitter Card en `index.html` con interpolación dinámica de `%VITE_APP_DOMAIN%` y fallback en `vite.config.ts`.
+  - Documentación de variable `VITE_APP_DOMAIN` en `.env.example`.
+
+### Modificado
+- **Pulido de Herramientas y Paquete:**
+  - Especificación de requisitos en `engines` (`node >=20.0.0`, `pnpm >=9.0.0`) en `package.json`.
+  - Incorporación de scripts de conveniencia en `package.json`: `lint:fix`, `typecheck` e `icons`.
+  - Fortalecimiento de reglas de seguridad en Oxlint (`.oxlintrc.json`) prohibiendo `eval`, `implied-eval` y `new-func`, habilitando reglas TypeScript y variables globales de Node/Worker.
+  - Actualización de insignias dinámicas en `README.md` y `README.en.md` para estado de CI, versión de API y tests aprobados.
+- **Limpieza de Andamiaje y Correcciones:**
+  - Eliminación de recursos de plantilla sin uso (`src/assets/react.svg` y `src/assets/vite.svg`).
+  - Corrección de orden incondicional de React Hooks en `src/components/PolymorphicItemCard.tsx`.
+
+---
+
 ## [2.0.0] - 2026-09-08
 
 ### Añadido

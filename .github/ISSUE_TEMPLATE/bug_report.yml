@@ -1,0 +1,68 @@
+﻿name: Bug Report
+description: Reportar un error o comportamiento inesperado
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportar este bug. Por favor completá todos los campos para ayudarnos a reproducirlo.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del problema
+      description: ¿Qué ocurrió? ¿Qué esperabas que ocurriera?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      placeholder: |
+        1. Ir a '...'
+        2. Hacer clic en '...'
+        3. Ver error
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión de Revolt Pass
+      placeholder: v2.0.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Navegador / Plataforma
+      options:
+        - Chrome / Chromium
+        - Firefox
+        - Safari
+        - Edge
+        - PWA instalada (escritorio)
+        - PWA instalada (móvil)
+        - Otro
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs de consola (si aplica)
+      description: Pegá el output de DevTools → Console si hay errores relevantes
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: Verifiqué que este bug no está reportado en los issues existentes
+          required: true
+        - label: Este no es un reporte de vulnerabilidad de seguridad (para eso usar GitHub Private Vulnerability Reporting)
+          required: true

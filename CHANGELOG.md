@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.1] - 2026-09-08
+
+### Added
+- **GitHub Community & Open Source Health Infrastructure:**
+  - Automated CI workflow (`.github/workflows/ci.yml`) executing linting, full test suite execution, and production build validation on push and pull requests to `main`.
+  - Automated weekly dependency update configuration via Dependabot (`.github/dependabot.yml`).
+  - GitHub issue templates (`.github/ISSUE_TEMPLATE/`): structured YAML forms for Bug Reports and Feature Requests with Zero-Knowledge security considerations, plus blank issue disabling in `config.yml`.
+  - Pull Request contribution template (`.github/PULL_REQUEST_TEMPLATE.md`) enforcing cryptographic integrity checks, test coverage, and documentation verification.
+  - Project funding configuration (`.github/FUNDING.yml`) for GitHub Sponsors.
+  - Contributor Covenant Code of Conduct v2.1 in English (`CODE_OF_CONDUCT.en.md`) and Spanish (`CODE_OF_CONDUCT.md`).
+- **Comprehensive Test Suite Expansion (175/175 passing tests):**
+  - Added 32 new unit and integration tests across 7 previously uncovered modules:
+    - Exporters: Aegis JSON (`aegisExport.test.ts`), otpauth URI text (`otpauthExport.test.ts`), and Bitwarden CSV (`bitwardenExport.test.ts`).
+    - Importers: Google Authenticator migration payload parser (`googleAuth.test.ts`), multi-vault merge/reconciliation engine (`reconcile.test.ts`), and format auto-detector (`detector.test.ts`).
+    - Sync engine: client synchronization, conflict handling, and pull/push workflows (`syncEngine.test.ts`).
+- **Test Coverage Provider & Quality Gates (`vitest.config.ts`):**
+  - Integrated `@vitest/coverage-v8` with strict threshold enforcement across critical modules:
+    - Crypto core (`src/lib/crypto/**`): 75% lines / 80% functions / 65% branches.
+    - Security core (`src/lib/security/**`): 80% lines / 80% functions.
+    - Sync engine (`src/lib/sync/**`): 75% lines / 75% functions.
+  - Added `pnpm test:coverage` and `pnpm test:watch` npm scripts.
+- **Social Sharing & Open Graph Metadata:**
+  - Added 1200x630px high-resolution Open Graph banner (`public/og-image.png`) with branded shield emblem and feature highlights generated via `scripts/generate-og-image.js`.
+  - Complete Open Graph and Twitter Card tags in `index.html` with dynamic `%VITE_APP_DOMAIN%` interpolation fallback in `vite.config.ts`.
+  - Documented `VITE_APP_DOMAIN` in `.env.example`.
+
+### Changed
+- **Package & Tooling Polish:**
+  - Added `engines` requirements (`node >=20.0.0`, `pnpm >=9.0.0`) in `package.json`.
+  - Added developer convenience scripts: `lint:fix`, `typecheck`, and `icons`.
+  - Upgraded Oxlint configuration (`.oxlintrc.json`) with strict security rules (`no-eval`, `no-implied-eval`, `no-new-func`), TypeScript rules, and Node/Worker environment globals.
+  - Updated dynamic badges in `README.md` and `README.en.md` for live GitHub Actions CI status, package version API, and passing tests.
+- **Scaffold Cleanup & Fixes:**
+  - Removed unused template assets (`src/assets/react.svg` and `src/assets/vite.svg`).
+  - Fixed React Hook ordering violation in `src/components/PolymorphicItemCard.tsx`.
+
+---
+
 ## [2.0.0] - 2026-09-08
 
 ### Added

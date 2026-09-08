@@ -1,0 +1,16 @@
+﻿version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Argentina/Mendoza
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    ignore:
+      # Ignorar major bumps de TypeScript — se revisan manualmente
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]

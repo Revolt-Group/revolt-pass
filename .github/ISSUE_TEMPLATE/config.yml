@@ -1,0 +1,8 @@
+﻿blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Vulnerabilidad de Seguridad
+    url: https://github.com/Revolt-Group/revolt-pass/security/advisories/new
+    about: Para reportar vulnerabilidades usá GitHub Private Vulnerability Reporting — nunca abras un issue público
+  - name: 📖 Documentación
+    url: https://github.com/Revolt-Group/revolt-pass/tree/main/docs/es
+    about: Consultá la documentación técnica completa antes de abrir un issue

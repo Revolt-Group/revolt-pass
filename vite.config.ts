@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -8,6 +8,17 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: 'html-env-fallback',
+      enforce: 'pre',
+      transformIndexHtml: {
+        order: 'pre',
+        handler(html) {
+          const domain = process.env.VITE_APP_DOMAIN || '';
+          return html.replace(/%VITE_APP_DOMAIN%/g, domain);
+        },
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [
@@ -21,7 +32,7 @@ export default defineConfig({
       manifest: {
         name: 'Revolt Pass',
         short_name: 'RevoltPass',
-        description: 'Zero-Knowledge 2FA Authenticator & Security Vault',
+        description: 'Zero-Knowledge Password, 2FA & Secrets Manager. Self-hosted, $0/mes.',
         theme_color: '#090a0f',
         background_color: '#090a0f',
         display: 'standalone',
@@ -100,6 +111,40 @@ export default defineConfig({
           ) {
             return 'vendor-ui';
           }
+        },
+      },
+    },
+  },
+  test: {
+    environment: 'happy-dom',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov', 'html'],
+      exclude: [
+        'node_modules/**',
+        'src/main.tsx',
+        'src/App.tsx',
+        'src/i18n/**',
+        'src/types/**',
+        'src/constants/**',
+        '**/*.test.ts',
+        'scripts/**',
+        'functions/**',
+        'public/**',
+      ],
+      thresholds: {
+        'src/lib/crypto/**': {
+          lines: 75,
+          functions: 80,
+          branches: 65,
+        },
+        'src/lib/security/**': {
+          lines: 80,
+          functions: 80,
+        },
+        'src/lib/sync/**': {
+          lines: 75,
+          functions: 75,
         },
       },
     },

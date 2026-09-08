@@ -1,0 +1,38 @@
+﻿name: Feature Request
+description: Sugerir una nueva funcionalidad o mejora
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de abrir este issue, revisá el [Roadmap público](./docs/es/05-ROADMAP.md) para ver si la feature ya está planificada.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: ¿Qué problema resuelve esta funcionalidad?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solución propuesta
+      description: ¿Cómo imaginás que debería funcionar?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: ¿Hay otras formas de resolver el mismo problema?
+
+  - type: checkboxes
+    id: zk
+    attributes:
+      label: Consideración Zero-Knowledge
+      options:
+        - label: Esta feature preserva el modelo Zero-Knowledge (el servidor no ve secretos en texto plano)

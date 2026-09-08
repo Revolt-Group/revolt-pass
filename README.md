@@ -5,13 +5,11 @@
 # Revolt Pass — Zero-Knowledge Password, 2FA & Secrets Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v2.0.0](https://img.shields.io/badge/Version-v2.0.0-blue.svg)](./CHANGELOG.md)
-[![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
-[![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
-[![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
-[![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
-[![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 143/143](https://img.shields.io/badge/Tests-143%2F143_Passing-brightgreen.svg)](#)
+[![Version](https://img.shields.io/github/package-json/v/Revolt-Group/revolt-pass)](./CHANGELOG.md)
+[![CI](https://github.com/Revolt-Group/revolt-pass/actions/workflows/ci.yml/badge.svg)](https://github.com/Revolt-Group/revolt-pass/actions/workflows/ci.yml)
+[![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6.svg)](./tsconfig.app.json)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](./docs/es/02-ARCHITECTURE.md)
+[![Tests passing](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)](./CHANGELOG.md)
 
 > Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de contraseñas, factores de autenticación (TOTP - RFC 6238), tarjetas de pago, notas seguras, claves SSH/servidor e identidades personales. Cuenta con cifrado de sobre por elemento (`item_key`), snapshots automáticos en Cloudflare D1 con rollback optimista, papelera con purga automática a los 30 días, Emergency Kit físico imprimible, derivación de clave con **Argon2id WASM (64 MB)**, alertas proactivas **Web Push RFC 8291/8292** y correo **BYOK (Resend / Cloudflare)**, importadores/exportadores universales, soporte YubiKey/FIDO2 y desbloqueo biométrico nativo (Windows Hello / Passkeys).
 

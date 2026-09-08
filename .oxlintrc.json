@@ -3,6 +3,29 @@
   "plugins": ["react", "typescript", "oxc"],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+
+    "no-eval": "error",
+    "no-new-func": "error",
+    "no-implied-eval": "error",
+
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+
+    "no-unused-vars": "warn",
+    "no-undef": "error",
+
+    "typescript/no-explicit-any": "warn",
+    "typescript/no-non-null-assertion": "warn",
+    "typescript/consistent-type-imports": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2022": true,
+    "node": true,
+    "worker": true
+  },
+  "globals": {
+    "Buffer": "readonly",
+    "clients": "readonly"
   }
 }

@@ -5,13 +5,11 @@
 # Revolt Pass — Zero-Knowledge Password, 2FA & Secrets Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v2.0.0](https://img.shields.io/badge/Version-v2.0.0-blue.svg)](./CHANGELOG.md)
-[![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
-[![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
-[![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
-[![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
-[![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 143/143](https://img.shields.io/badge/Tests-143%2F143_Passing-brightgreen.svg)](#)
+[![Version](https://img.shields.io/github/package-json/v/Revolt-Group/revolt-pass)](./CHANGELOG.md)
+[![CI](https://github.com/Revolt-Group/revolt-pass/actions/workflows/ci.yml/badge.svg)](https://github.com/Revolt-Group/revolt-pass/actions/workflows/ci.yml)
+[![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6.svg)](./tsconfig.app.json)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](./docs/en/02-ARCHITECTURE.md)
+[![Tests passing](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)](./CHANGELOG.md)
 
 > Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of passwords, two-factor authentication (TOTP - RFC 6238), payment cards, secure notes, SSH/server keys, and personal identities. Features per-item envelope encryption (`item_key`), automatic rolling snapshots on Cloudflare D1 with optimistic rollback, 30-day soft-delete trash bin with cryptographic auto-purge, 100% client-side printable physical Emergency Kit, **Argon2id WASM (64 MB)** memory-hard key derivation, proactive **Web Push RFC 8291/8292** and **BYOK Email (Resend / Cloudflare)** security alerts, universal cross-platform importers/exporters, YubiKey/FIDO2 hardware key support, and native biometric hardware unlock (Windows Hello / Passkeys).
 

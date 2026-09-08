@@ -60,20 +60,6 @@ export function PolymorphicItemCard({
 
   const isTrash = typeof item.deleted_at === 'number';
 
-  // If item is TOTP and not in trash, delegate directly to TotpCard for full timer & recovery codes
-  if (item.type === 'totp' && !isTrash) {
-    return (
-      <TotpCard
-        item={item}
-        viewMode={viewMode}
-        onTogglePin={onTogglePin}
-        onDelete={onDelete}
-        onToggleRecoveryCode={onToggleRecoveryCode || (() => {})}
-        onEdit={onEdit}
-      />
-    );
-  }
-
   // Update inline TOTP code if present
   const totpSeed = item.login_data?.totp_seed || item.secret;
   const updateInlineTotp = useCallback(async () => {
@@ -100,6 +86,20 @@ export function PolymorphicItemCard({
       return () => clearInterval(interval);
     }
   }, [totpSeed, item.type, isTrash, updateInlineTotp]);
+
+  // If item is TOTP and not in trash, delegate directly to TotpCard for full timer & recovery codes
+  if (item.type === 'totp' && !isTrash) {
+    return (
+      <TotpCard
+        item={item}
+        viewMode={viewMode}
+        onTogglePin={onTogglePin}
+        onDelete={onDelete}
+        onToggleRecoveryCode={onToggleRecoveryCode || (() => {})}
+        onEdit={onEdit}
+      />
+    );
+  }
 
   const copyValue = async (value: string, fieldName: string, message: string) => {
     if (!value) return;

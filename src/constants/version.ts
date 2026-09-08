@@ -5,7 +5,7 @@
  * MINOR: New core capability modules (e.g. Session Control, FIDO2 Passkeys).
  * PATCH: Incremental enhancements, naming, UI polish, and bug fixes.
  */
-export const APP_VERSION = '2.0.0';
-export const VERSION_NAME = 'v2.0.0';
+export const APP_VERSION = '2.0.1';
+export const VERSION_NAME = 'v2.0.1';
 
 
