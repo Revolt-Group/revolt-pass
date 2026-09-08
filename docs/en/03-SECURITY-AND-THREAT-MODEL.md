@@ -4,9 +4,9 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-SEC-003` |
-| **Version** | `1.4.4-PROD (v2.5 Design)` |
+| **Version** | `1.5.0-PROD` |
 | **Status** | Approved / Cryptographic Grade Security Specification |
-| **Frameworks & Standards** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
+| **Frameworks & Standards** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, RFC 9106 (Argon2), RFC 8291, RFC 8292, W3C WebAuthn Level 3 |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
 | **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
 
@@ -14,25 +14,31 @@
 
 ## 1. Formal Cryptographic Specification
 
-Revolt Pass adheres to the **Zero-Knowledge** cryptographic paradigm. All operations including entropy generation, key derivation, symmetric encryption, and integrity verification occur exclusively within the client execution environment via the **Web Crypto API** (`window.crypto.subtle`), a native component compiled in C++ / Rust inside the browser engine and protected against user-space tampering.
+Revolt Pass adheres to the **Zero-Knowledge** cryptographic paradigm. All operations including entropy generation, key derivation, symmetric encryption, and integrity verification occur exclusively within the client execution environment via the **Web Crypto API** (`window.crypto.subtle`) and sandboxed WebAssembly modules, ensuring user-space cryptographic computation remains tamper-proof.
 
 ### 1.1 Master Key Derivation (Key Derivation Function - KDF)
-Deriving the master key from the user's password is governed by the following immutable parameters:
+
+Starting with **v1.5.0**, Revolt Pass mandates **Argon2id** (RFC 9106) as the default Key Derivation Function for all newly registered vaults, while retaining backward compatibility for legacy **PBKDF2-HMAC-SHA256** accounts through a transparent, atomic silent auto-upgrade pipeline.
+
+#### 1.1.1 Canonical Argon2id Parameters (Default)
+Executed via high-performance WebAssembly (`hash-wasm`) isolated inside a dedicated **Web Worker** (`src/lib/crypto/kdf.worker.ts`) to avoid dropping frames on the main UI thread:
 
 | Parameter | Canonical Value | Engineering Rationale / Standard |
 | :--- | :--- | :--- |
-| **Base Algorithm** | `PBKDF2` (Password-Based Key Derivation Function 2) | RFC 8018, industry standard natively supported in Web Crypto without external dependencies. |
-| **Pseudorandom Function (PRF)** | `HMAC-SHA256` | Provides superior collision resistance compared to SHA-1 and mitigates length extension attacks. |
-| **Iterations** | **$600,000$ rounds** | Exceeds the OWASP Password Storage Cheat Sheet threshold (minimum recommended: 600,000 for PBKDF2-HMAC-SHA256), enforcing a massive computational cost against GPU/ASIC clusters. |
+| **Base Algorithm** | `Argon2id` (RFC 9106) | Winner of the Password Hashing Competition (PHC). Delivers balanced, state-of-the-art resistance against side-channel cache-timing attacks (Argon2i) and GPU/ASIC parallel brute-force (Argon2d). |
+| **Memory Cost ($m$)** | **$64 \text{ MB}$ ($65,536 \text{ KiB}$)** | Strictly conforms to OWASP 2024 Password Storage Cheat Sheet recommendations. Forces massive per-guess physical memory allocation, neutralizing distributed GPU/ASIC cracking arrays. |
+| **Time Iterations ($t$)** | **$3$ rounds** | Optimal trade-off between cryptographic work factor and client unlock latency (~200-400 ms in WebAssembly on mobile and desktop). |
+| **Parallelism ($p$)** | **$1$ thread (lane)** | Tailored for predictable execution and deterministic resource limits within browser Web Worker contexts. |
 | **Salt (Salting)** | $128 \text{ bits}$ ($16 \text{ bytes}$) random | Cryptographically generated via `crypto.getRandomValues(new Uint8Array(16))`. Unique per user, preventing rainbow table attacks. |
 | **Derived Key Length** | $256 \text{ bits}$ ($32 \text{ bytes}$) | Exactly matches the length required for the symmetric `AES-GCM-256` key. |
-| **Key Exportability** | `extractable: false` | The `CryptoKey` generated in RAM is marked non-extractable by JavaScript, preventing arbitrary extraction via object inspection. |
+| **Key Exportability** | `extractable: false` | The `CryptoKey` created in volatile RAM is imported as non-extractable by JavaScript. |
 
-#### Mathematical Derivation Process:
-$$\text{BaseKey} = \text{importKey}(\text{"raw"}, \text{encode}(\text{MasterPassword}), \text{"PBKDF2"})$$
-$$\text{MasterKey} = \text{deriveKey}(\text{PBKDF2-HMAC-SHA256}, \text{BaseKey}, \text{Salt}, 600000, \text{"AES-GCM"}, 256)$$
+#### 1.1.2 Legacy Algorithm and Silent Auto-Upgrade (PBKDF2)
+For accounts provisioned prior to v1.5.0, the platform preserves support for **PBKDF2-HMAC-SHA256** at **600,000 rounds** (RFC 8018).
 
-To avoid blocking the main UI thread during the ~300-800 ms calculation of 600,000 iterations, this process is offloaded to an isolated **Web Worker** (`src/lib/crypto/kdf.worker.ts`).
+* **Seamless Silent Auto-Upgrade:** The moment a user with a legacy PBKDF2 account unlocks their vault or logs in, the client detects the legacy KDF metadata, immediately derives the new master key using **Argon2id (64 MB, 3 rounds)** with a newly generated cryptographic salt, re-encrypts the vault ciphertext and any enrolled WebAuthn passkeys, and commits the upgrade atomically via `POST /api/auth/upgrade-kdf`. The user experiences immediate hardening with zero prompts or friction.
+
+To prevent blocking the main DOM thread, all KDF derivations (both Argon2id and PBKDF2) run exclusively off-thread in the isolated **Web Worker**.
 
 ---
 
@@ -168,9 +174,26 @@ flowchart TD
    $$\text{WrappingKey} = \text{HKDF-Expand}(\text{PRK}, \text{"revolt-pass-shared-item-v1"}, 256 \text{ bits})$$
 5. **Secret Encapsulation (Key Wrapping):**
    The item's symmetric key (`ItemKey`, AES-256-GCM) is wrapped using the derived `WrappingKey`:
-   $$\text{EncryptedKey}, \text{KeyTag} = \text{AES-GCM-256-Wrap}(\text{WrappingKey}, \text{ItemKey}, \text{KeyIV})$$
-   The item content is encrypted with the `ItemKey`:
-   $$\text{EncryptedItem}, \text{ItemTag} = \text{AES-GCM-256-Encrypt}(\text{ItemKey}, \text{ItemJSON}, \text{ItemIV})$$
+    $$\text{EncryptedKey}, \text{KeyTag} = \text{AES-GCM-256-Wrap}(\text{WrappingKey}, \text{ItemKey}, \text{KeyIV})$$
+    The item content is encrypted with the `ItemKey`:
+    $$\text{EncryptedItem}, \text{ItemTag} = \text{AES-GCM-256-Encrypt}(\text{ItemKey}, \text{ItemJSON}, \text{ItemIV})$$
+
+---
+
+### 1.6 Proactive Zero-Knowledge Alerts: Web Push (RFC 8291/8292) and BYOK Email
+
+To alert users immediately upon suspicious access patterns or session modifications without breaching confidentiality or incurring infrastructure costs:
+
+#### 1.6.1 Native Web Push & Payload Encryption (RFC 8291 / RFC 8292)
+1. **Client Subscription:** The browser registers a Push subscription bound to the instance's public VAPID key, exporting two cryptographic values: `p256dh` (user-agent public key on NIST P-256) and `auth` (16-byte shared authentication secret).
+2. **Application Server Identification (VAPID - RFC 8292):** Cloudflare Workers generates an authorization JWT signed via ECDSA on NIST P-256 with SHA-256 (`ES256`), enabling direct push dispatch to operating system push backends (Google FCM, Apple APNs, Mozilla Push) without third-party push aggregators (Pusher, OneSignal).
+3. **End-to-End Message Encryption (RFC 8291):** The notification payload is encrypted using `aes128gcm` with keys derived via ephemeral ECDH (P-256) and HKDF. Intermediary OS push relays act strictly as blind relays, mathematically incapable of reading notification plaintext.
+4. **Content Hygiene:** Push notifications never include vault secrets, TOTP codes, or account labels. They strictly deliver operational security auditing events (e.g. *"New session initiated from Spain"* or *"Session revoked remotely"*).
+
+#### 1.6.2 BYOK (Bring Your Own Key) Email
+For users preferring email security notifications, Revolt Pass implements a zero-cost **BYOK** model:
+- Users optionally provide their personal free-tier Resend API key (3,000 free emails/month for life) or the instance leverages Cloudflare Email Workers (`send_email`).
+- The project maintains zero paid centralized SMTP infrastructure, never collecting or marketing user email addresses.
 
 ---
 
@@ -191,11 +214,11 @@ quadrantChart
     "Clipboard Sniffing": [0.85, 0.70]
     "Unattended Desktop (Physical)": [0.75, 0.85]
     "Man-in-the-Middle (Network)": [0.20, 0.80]
-    "Brute Force Master Password": [0.40, 0.90]
+    "Brute Force Master Password": [0.30, 0.95]
     "Clock Desync (Time Drift)": [0.80, 0.40]
     "ECDH Key Substitution": [0.30, 0.85]
     "Shared Item Replay": [0.25, 0.60]
-    "Recipient Enumeration": [0.60, 0.35]
+    "Push Relay Tampering": [0.20, 0.30]
 ```
 
 ### Detailed Attack Vector Matrix and Mitigations
@@ -206,9 +229,10 @@ quadrantChart
 | **VEC-02** | *Tampering* | **Data Tampering in Transit or Rest:** Malicious modification of bytes in `encrypted_blob` inside D1 to induce anomalous client behavior. | Nil (Immediate Rejection) | **GCM Authentication Tag:** AES-GCM verifies the 128-bit Authentication Tag. Modifying a single bit causes `crypto.subtle.decrypt` to throw an immutable error, immediately locking the app without processing corrupt data. |
 | **VEC-03** | *Information Disclosure* | **Physical Access to Unattended Workstation:** The operator leaves their desk with the PWA unlocked in foreground. | Critical | **Inactivity & Background Auto-Lock:** RAM timer purges keys after 5 minutes of keyboard/mouse inactivity. Additionally, the `visibilitychange` event locks the vault if the tab remains hidden. |
 | **VEC-04** | *Information Disclosure* | **Clipboard Sniffing:** Background applications or unprivileged malware monitoring the OS clipboard to capture TOTP or Recovery Codes. | High | **Scheduled Auto-Clear:** Routine with strict 45-second timer overwriting clipboard with empty text. Compares previous content to avoid clearing legitimate data if user copied something else in between. |
-| **VEC-05** | *Information Disclosure* | **Offline Brute Force on Master Password:** Attacker steals salt and encrypted blob, attempting dictionary and hash-cracking attacks. | High | **High Work Factor (PBKDF2 600,000 rounds):** 600,000 iterations with SHA-256 force massive CPU/energy consumption per attempt, making brute force infeasible against strong passwords. |
+| **VEC-05** | *Information Disclosure* | **Offline Brute Force on Master Password:** Attacker steals salt and encrypted blob, attempting dictionary and hash-cracking attacks. | High (Infeasible) | **Argon2id Memory-Hardness (64 MB, 3 rounds) & PBKDF2 600k:** Argon2id demands 64 MB of physical memory per guess, saturating memory bandwidth of ASICs and GPU clusters and nullifying distributed cracking. Legacy PBKDF2 accounts are automatically upgraded upon unlock. |
 | **VEC-06** | *Elevation of Privilege* | **Cross-Site Scripting (XSS) Attacks:** JavaScript injection to inspect browser memory or intercept keystrokes. | Critical | **Strict Isolation & CSP:** Content Security Policy blocking `unsafe-inline`, `unsafe-eval` and restricting external resource loading strictly to `self` and `cdn.simpleicons.org`. Zero runtime CDN dependencies. |
 | **VEC-07** | *Denial of Service* | **Sync Failure Due to Connectivity Loss:** User travels on an airplane or encounters outages and needs access to corporate accounts. | High | **Absolute Offline Availability (100%):** Entire state remains encrypted in IndexedDB and assets precached in Service Worker. Operates indefinitely in airplane mode. |
+| **VEC-08** | *Information Disclosure / Spoofing* | **Web Push Notification Interception or Tampering:** Network adversary intercepts or attempts to forge push notifications directed to user devices. | Nil | **RFC 8291 Payload Encryption (ECDH P-256 + AES-128-GCM):** All push payloads are encrypted end-to-end to the browser's key pair. Notifications never contain vault secrets or master credentials. |
 | **VEC-NEW-01** | *Spoofing / Tampering* | **Malicious ECDH Public Key Substitution (Key Substitution Attack):** An attacker compromising Cloudflare D1 replaces a user's public key with their own to intercept and decrypt shared items addressed to that recipient. | Critical | **Out-of-Band Visual Fingerprint Verification:** The UI computes and presents the SHA-256 fingerprint of the recipient's public key (`SHA-256(spki)` in grouped hex or emoji-hash format). Users verify this fingerprint via an independent secure channel (Signal, voice call) before sharing sensitive secrets. |
 | **VEC-NEW-02** | *Tampering / Replay* | **Replay or Insertion of Stale Shared Ciphertext:** An attacker replays an old shared ciphertext to overwrite an updated item or reverse a revocation. | Medium | **D1 Uniqueness Constraints & Monotonic Versions:** Database constraint `UNIQUE(owner_user_id, recipient_user_id, source_item_id)`, version monotonicity, and strict session authentication preventing third parties from injecting or modifying rows in `shared_items`. |
 | **VEC-NEW-03** | *Information Disclosure* | **Mass Recipient Enumeration:** Automated scraping of the public key endpoint to identify registered usernames on the platform. | Low | **Edge Defense-in-Depth:** Requires an active authenticated session (`Authorization: Bearer <token>`) to query `/api/users/:username/public-key` and enforces Cloudflare Workers edge rate limiting against brute-force queries per IP. |

@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-PRD-001` |
-| **Version** | `1.4.4-PROD (v2.5 Scope Ready)` |
+| **Version** | `1.5.0-PROD (v2.5 Scope Ready)` |
 | **Status** | Approved / Canonical Specification |
 | **Organization** | Revolt Group |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
@@ -44,9 +44,10 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 
 ## 3. Product Scope Management
 
-### 3.1 In-Scope (Committed Scope for MVP v1.0)
+### 3.1 In-Scope (Committed Scope for MVP v1.0 — v1.5.0)
 * **TOTP Cryptographic Engine:** Full RFC 6238 support with HMAC-SHA1 and HMAC-SHA256, configurable digits (6 or 8), rotation intervals (default 30s), and pure RFC 4648 Base32 decoder without deprecated external dependencies.
-* **Symmetric Encryption and KDF:** Key derivation via PBKDF2-SHA256 (600,000 iterations recommended by OWASP) and authenticated encryption of the entire vault via AES-256-GCM.
+* **Symmetric Encryption and KDF:** Key derivation via **Argon2id (64 MB RAM, 3 rounds recommended by OWASP 2024)** with backward support and transparent auto-upgrade for legacy **PBKDF2-SHA256 (600,000 iterations)**, and authenticated encryption of the entire vault via AES-256-GCM.
+* **Proactive Zero-Knowledge Alerts:** Real-time native push notifications via Web Push (RFC 8291/8292 with VAPID) and BYOK email alerts (Resend / Cloudflare).
 * **Biometric / Platform Authentication (WebAuthn / FIDO2):**
   * Native support for **Windows Hello** (using Windows PIN on machines without fingerprint readers).
   * Support for **Mobile Biometrics** (Touch ID, Face ID, Android fingerprint biometrics).
@@ -113,7 +114,7 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 ### FR-03: Key Derivation and Zero-Knowledge Encryption
 * **FR-03.1:** The user defines a high-entropy Master Password.
 * **FR-03.2:** The system generates a cryptographically secure `kdf_salt` of at least 16 bytes (128 bits) using `crypto.getRandomValues`.
-* **FR-03.3:** The symmetric encryption key is derived exclusively on the client using **PBKDF2 with HMAC-SHA256**, applying **600,000 iterations**.
+* **FR-03.3:** The symmetric encryption key is derived exclusively on the client using **Argon2id with 64 MB memory and 3 rounds** (with transparent auto-upgrade from legacy **PBKDF2-HMAC-SHA256 with 600,000 iterations**).
 * **FR-03.4:** The entire vault payload (all `VaultItem` serialized in JSON) is encrypted using **256-bit AES-GCM** with a unique random 12-byte initialization vector (`IV`) for each save operation.
 * **FR-03.5:** Storing the master password or derived key in plaintext in any persistent storage mechanism (`localStorage`, `sessionStorage`, `IndexedDB`, `cookies`) is strictly forbidden.
 
@@ -206,7 +207,7 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 
 ### NFR-01: Performance and Latency
 * **TOTP Code Computation:** Execution time under **5 milliseconds** on any modern CPU.
-* **KDF Derivation (PBKDF2 600k):** Derivation time under **800 milliseconds** on standard desktop hardware. To avoid freezing user interface frame rates (FPS), heavy derivation must execute in a dedicated **Web Worker**.
+* **KDF Derivation (Argon2id 64MB / PBKDF2 600k):** Derivation time under **400-800 milliseconds** on standard desktop hardware. To avoid freezing user interface frame rates (FPS), heavy derivation must execute in a dedicated **Web Worker**.
 * **Startup Time (First Contentful Paint):** Under **1.2 seconds** on simulated 3G connections due to Service Worker precached assets.
 
 ### NFR-02: Availability and Offline Mode
@@ -254,6 +255,8 @@ Revolt Pass is uniquely positioned in the marketplace as the **only free, open-s
 | Comparison Vector | Revolt Pass | Bitwarden | 1Password | Aegis Authenticator | Google Authenticator |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Cryptographic Paradigm** | **Native Zero-Knowledge** (Web Crypto API) | Zero-Knowledge | Zero-Knowledge | Local Zero-Knowledge | Optional cloud sync (no strict E2EE) |
+| **Default KDF** | **Argon2id WASM (64 MB)** | PBKDF2 / Argon2id | PBKDF2 / Argon2id | Argon2id / scrypt | PBKDF2 |
+| **Proactive Alerts ($0)** | **Web Push RFC 8291 + BYOK** | Paid / Requires Plan | Paid / Requires Plan | Not available | Not available |
 | **Cross-Account Secure Sharing** | **Yes** (v2.5 ECDH P-384 native) | Yes (Paid Organization required) | Yes (Paid commercial) | No (Manual file export only) | No (Mass QR export only) |
 | **User Operational Cost** | **$0 / Always Free** (Cloudflare Free Tier) | $3 - $4 / user / month to share | $3 - $8 / user / month | Free (Local only) | Free |
 | **Windows Hello PIN Unlock** | **Yes** (WebAuthn Level 3) | Requires desktop app | Requires desktop app | Not applicable (Android only) | Not applicable |

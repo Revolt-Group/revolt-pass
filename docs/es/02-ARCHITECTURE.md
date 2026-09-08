@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-ARCH-002` |
-| **Versión** | `1.4.4-PROD (v2.5 Architecture)` |
+| **Versión** | `1.5.0-PROD (v2.5 Architecture)` |
 | **Estado** | Aprobado / Especificación de Arquitectura |
 | **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Pila Tecnológica** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
@@ -14,7 +14,7 @@
 
 ## 1. Visión General de la Arquitectura
 
-Revolt Pass implementa una arquitectura desacoplada y distribuida basada en el paradigma **Zero-Knowledge Client-Side Computing**. El procesamiento criptográfico sensible se ejecuta íntegramente en el dispositivo del usuario utilizando la aceleración de hardware de la **Web Crypto API**. La infraestructura remota actúa exclusivamente como una capa de persistencia binaria y sincronización de alta disponibilidad en el borde global (*Edge*) mediante **Cloudflare Workers** y la base de datos distribuida **Cloudflare D1**.
+Revolt Pass implementa una arquitectura desacoplada y distribuida basada en el paradigma **Zero-Knowledge Client-Side Computing**. El procesamiento criptográfico sensible se ejecuta íntegramente en el dispositivo del usuario utilizando la aceleración de hardware de la **Web Crypto API** y módulos WebAssembly aislados (`hash-wasm`). La infraestructura remota actúa exclusivamente como una capa de persistencia binaria y sincronización de alta disponibilidad en el borde global (*Edge*) mediante **Cloudflare Workers** y la base de datos distribuida **Cloudflare D1**.
 
 ### 1.1 Diagrama de Arquitectura de Alto Nivel
 
@@ -31,11 +31,12 @@ flowchart TB
         end
 
         subgraph CoreEngine ["Motor Core & Seguridad (TypeScript)"]
-            CryptoWorker["Web Worker (PBKDF2-SHA256 600k rounds)"]
+            CryptoWorker["Web Worker (Argon2id WASM 64MB / PBKDF2 600k)"]
             SubtleEngine["Web Crypto API (AES-GCM-256 / HMAC)"]
             WebAuthnManager["WebAuthn Manager (Windows Hello PIN / Biometrics)"]
             TimeSyncManager["Time Drift Compensator"]
             SyncEngine["Bi-directional Sync Engine"]
+            PushClient["Web Push Client (RFC 8291 / 8292)"]
         end
 
         subgraph ClientStorage ["Almacenamiento Local Seguro"]
@@ -52,13 +53,16 @@ flowchart TB
         subgraph Endpoints ["Worker Micro-Endpoints"]
             TimeEp["GET /api/time (UTC Timestamp)"]
             AuthEp["POST /api/auth/* (Register / Salt)"]
+            UpgradeEp["POST /api/auth/upgrade-kdf (Argon2id Auto-Upgrade)"]
             VaultEp["GET|PUT /api/vault (Encrypted Sync)"]
             SessionEp["POST|GET|DELETE|PUT /api/auth/sessions (Session Mgmt)"]
             PasskeyEp["GET|POST|PUT|DELETE /api/passkeys (FIDO2 Registry)"]
             AuditEp["GET /api/audit-logs (Security Audit)"]
+            PushEp["POST /api/push/* (Web Push VAPID RFC 8292)"]
+            EmailEp["POST /api/notifications/email (BYOK Dispatch)"]
         end
         
-        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & sync_logs")]
+        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & push_subscriptions")]
     end
 
     %% Relaciones
@@ -70,15 +74,20 @@ flowchart TB
     WAF --> Worker
     Worker --> TimeEp
     Worker --> AuthEp
+    Worker --> UpgradeEp
     Worker --> VaultEp
     Worker --> SessionEp
     Worker --> PasskeyEp
     Worker --> AuditEp
+    Worker --> PushEp
+    Worker --> EmailEp
     VaultEp <--> |"Prepared SQL"| D1Database
     AuthEp <--> |"Prepared SQL"| D1Database
+    UpgradeEp <--> |"Prepared SQL"| D1Database
     SessionEp <--> |"Prepared SQL"| D1Database
     PasskeyEp <--> |"Prepared SQL"| D1Database
     AuditEp <--> |"Prepared SQL"| D1Database
+    PushEp <--> |"Prepared SQL"| D1Database
 ```
 
 ---
@@ -88,10 +97,10 @@ flowchart TB
 ### 2.1 Flujo de Registro e Inicialización de Bóveda
 1. El usuario accede a `https://<tu-dominio-o-subdominio>.workers.dev` e introduce un nombre de usuario y una Contraseña Maestra (*Master Password*).
 2. El cliente genera un `kdf_salt` criptográfico de 16 bytes usando `crypto.getRandomValues`.
-3. El cliente despacha al Web Worker la derivación de la `MasterKey` mediante `PBKDF2-SHA256` (600,000 iteraciones).
+3. El cliente despacha al Web Worker la derivación de la `MasterKey` mediante **Argon2id** (64 MB RAM, 3 rondas, 1 lane vía WASM). Cuentas históricas retienen compatibilidad con PBKDF2-SHA256 (600,000 iteraciones).
 4. El cliente inicializa una lista vacía de `VaultItem[]`, la serializa a JSON y genera un `IV` aleatorio de 12 bytes.
 5. El cliente cifra el JSON usando `AES-GCM-256`, produciendo el `encrypted_blob`.
-6. El cliente envía `POST /api/auth/register` al Worker conteniendo: `{ username, kdf_salt, encrypted_blob, iv }`.
+6. El cliente envía `POST /api/auth/register` al Worker conteniendo: `{ username, kdf_salt, encrypted_blob, iv, kdf: "argon2id" }`.
 7. El Worker ejecuta una transacción atómica en Cloudflare D1 insertando al usuario y su registro de bóveda inicial (versión 1).
 8. El blob cifrado y las configuraciones se persisten en el `IndexedDB` local.
 
@@ -208,6 +217,29 @@ sequenceDiagram
   - Los ítems compartidos recibidos se descifran en tiempo de ejecución tras la sincronización y habitan **estrictamente en la memoria RAM volátil**.
   - Si la sesión se bloquea o caduca, las referencias a los ítems compartidos y sus claves se purgan automáticamente de la memoria.
   - En `IndexedDB`, solo se almacena el paquete cifrado (`encrypted_item`, `encrypted_item_key`, IVs) para permitir funcionamiento offline, garantizando que una inspección de almacenamiento local no exponga jamás secretos en claro.
+
+---
+
+### 2.5 Auto-Upgrade Silencioso de KDF (PBKDF2 -> Argon2id)
+Con la introducción de Argon2id en v1.5.0, el cliente gestiona la migración progresiva y transparente de todas las cuentas creadas bajo PBKDF2:
+
+1. **Detección:** Al autenticarse o desbloquear la bóveda, el cliente inspecciona el algoritmo de KDF devuelto por `/api/auth/salt` o almacenado localmente en `user_config`.
+2. **Re-derivación Off-Thread:** Una vez descifrado el baúl con la clave legada, el cliente invoca al Web Worker para derivar una nueva `MasterKey` con **Argon2id** (64 MB, 3 rondas) utilizando un nuevo salt criptográfico de 16 bytes.
+3. **Re-cifrado y Re-envoltura:** El payload del baúl se vuelve a cifrar con la nueva clave maestra. Si existen credenciales WebAuthn/passkey registradas, se re-envuelve la clave maestra bajo la clave de plataforma del dispositivo.
+4. **Persistencia Atómica:** El cliente envía `POST /api/auth/upgrade-kdf` transmitiendo el nuevo salt, el nuevo KDF (`argon2id`), el nuevo blob cifrado y el nuevo verifier de autenticación. La base de datos D1 actualiza el registro atómicamente, consolidando la migración sin que el usuario deba cambiar su contraseña.
+
+---
+
+### 2.6 Despacho de Notificaciones Proactivas Zero-Knowledge (Web Push y BYOK Email)
+Para mantener a los usuarios al tanto de eventos de seguridad críticos sin comprometer su privacidad ni generar costos operativos:
+
+1. **Web Push RFC 8291 / RFC 8292:**
+   - El cliente solicita permisos de notificación y registra un Service Worker Push Subscription.
+   - Los parámetros de la suscripción (`endpoint`, claves públicas `p256dh` y `auth`) se almacenan en la tabla `push_subscriptions` de D1 vinculadas al `user_id`.
+   - Ante eventos de auditoría sensibles (ej. inicio de sesión desde un nuevo país, sesión remota revocada, passkey agregada), el Cloudflare Worker despacha directamente un mensaje cifrado mediante **VAPID RFC 8292** y payload **AES-128-GCM RFC 8291** a los servidores Push del navegador (FCM / APNs / Mozilla).
+2. **Email BYOK (Bring Your Own Key):**
+   - El usuario puede configurar opcionalmente una clave personal gratuita de Resend o canalizar alertas a través de Cloudflare Email Workers (`send_email`).
+   - El envío se produce directamente desde el Worker perimetral sin que Revolt Pass almacene listas de correos centralizadas ni contrate servicios de terceros.
 
 ---
 

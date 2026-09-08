@@ -12,8 +12,9 @@ Only the latest active minor release receives security patches and proactive vul
 
 | Version | Supported          | Status |
 | :------ | :----------------- | :----- |
-| `1.2.x` | :white_check_mark: | Currently Supported & Maintained |
-| `< 1.2` | :x:                | End of Life (Upgrade Recommended) |
+| `1.5.x` | :white_check_mark: | Currently Supported & Maintained (Argon2id + Web Push) |
+| `1.4.x` | :white_check_mark: | Maintained |
+| `< 1.4` | :x:                | End of Life (Upgrade Recommended) |
 
 ---
 
@@ -51,7 +52,7 @@ Please allow us reasonable time to investigate and remediate before publicly dis
 ## 🎯 Scope
 
 ### In-Scope
-* **Client-Side Cryptography:** Implementation flaws in WebCrypto primitives, AES-256-GCM mode, PBKDF2-HMAC-SHA256 (600,000 iterations), WebAuthn PRF wrapping, or entropy generation.
+* **Client-Side Cryptography:** Implementation flaws in WebCrypto / WASM primitives, AES-256-GCM mode, Argon2id (64 MB RAM, 3 iterations) / PBKDF2-HMAC-SHA256 (600,000 iterations), WebAuthn wrapping, RFC 8291/8292 Web Push encryption (AES-128-GCM + ECDH P-256 + VAPID), or entropy generation.
 * **Authentication & Authorization:** Session token forgery, replay attacks, broken access control, or privilege escalation on `/api/*` Cloudflare Worker endpoints.
 * **Memory & Storage Hygiene:** Plaintext secret leakage in IndexedDB, `localStorage`, application logs, un-cleared clipboard buffers, or persistent RAM retention after vault lock.
 * **Cross-Site Scripting (XSS) / Injection:** Vulnerabilities allowing malicious code execution within the authenticated PWA origin.

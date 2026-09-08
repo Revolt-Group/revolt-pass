@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-RDM-005` |
-| **Versión Actual** | `1.4.4-PROD` (En Producción / Live) |
+| **Versión Actual** | `1.5.0-PROD` (En Producción / Live) |
 | **Estado** | Aprobado / Plan de Evolución Basado en Hitos de Calidad |
 | **Repositorio Remoto** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Principal** | `main` |
@@ -21,7 +21,7 @@ Cada hito o versión del proyecto se estructura en torno a una **Definición de 
 
 ```mermaid
 flowchart TD
-    subgraph COMPLETADAS ["✅ Cimientos Fundacionales en Producción (v1.0 — v1.4.4)"]
+    subgraph COMPLETADAS ["✅ Cimientos Fundacionales en Producción (v1.0 — v1.5.0)"]
         v10["Fases 1 a 8: Núcleo Criptográfico & PWA<br/>AES-256-GCM, PBKDF2 600k en Web Worker, Cloudflare D1 Edge, WebAuthn, AutoLock"]
         v11["Fase 9: Multidispositivo & Auditoría (v1.1)<br/>Sesiones D1, Revocación remota granular, Passkeys FIDO2, Audit Logs"]
         v12["Fases 10 y 11: i18n, Backups & Apertura Open Source (v1.2.1)<br/>Internacionalización ES/EN, Backups cifrados, Modo Instancia Privada, AGPLv3"]
@@ -32,11 +32,11 @@ flowchart TD
         v142["Hito v1.4.2: Mobile Overhaul<br/>Diseño contenido, viewport anti-zoom, dropdown táctil"]
         v143["Hito v1.4.3: Sync Cloud Fix & Preservación de Claves<br/>Preservación total de recovery codes y sincronización reactiva"]
         v144["Hito v1.4.4: Eliminación Bucle de Sesión & Auto-Deduplicación<br/>Fin de bucle de revocación y auto-limpieza sin pérdida de datos"]
-        v10 --> v11 --> v12 --> v13 --> v131 --> v14 --> v141 --> v142 --> v143 --> v144
+        v15["Hito v1.5.0: Argon2id KDF & Alertas Proactivas (Web Push + BYOK Email)<br/>Argon2id WASM 64MB, auto-upgrade silencioso, Web Push RFC 8291/8292, BYOK Resend/Cloudflare"]
+        v10 --> v11 --> v12 --> v13 --> v131 --> v14 --> v141 --> v142 --> v143 --> v144 --> v15
     end
 
     subgraph PROXIMAS ["🔵 Horizontes de Evolución Técnica (Próximas Versiones)"]
-        v15["Hito v1.5: Argon2id KDF & Web Push / BYOK Email<br/>Upgrade criptográfico Argon2id WASM, Resend / Cloudflare Email Workers"]
         v20["Hito v2.0: Suite Integral de Secretos & Bóveda Completa<br/>Contraseñas, Tarjetas, Notas, SSH, Snapshots 5d, Emergency Kit, encrypted_key por ítem"]
         v21["Hito v2.1: Extensión para Navegadores (Manifest V3)<br/>Autofill contextual eTLD+1, inyección inline 2FA, auto-lock 2m"]
         v22["Hito v2.2: Aplicación de Escritorio Nativa (Tauri v2 + Rust)<br/>Binario liviano <10MB, Windows Hello / Touch ID OS, auto-update firmado"]
@@ -44,7 +44,7 @@ flowchart TD
         v24["Hito v2.4: Contraseña bajo Coacción & Bóveda Oculta<br/>Duress password, bóveda decoy plausible, auditoría silente"]
         v25["Hito v2.5: Compartición Segura ECDH P-384 (ADR-014)<br/>Compartición de secretos entre usuarios Zero-Knowledge vía ECIES nativo"]
         v30["Hito v3.0: Backend Self-Hosted Desacoplado<br/>Docker Compose, VPS independiente, alternativa a Cloudflare D1"]
-        v144 -.-> v15 --> v20 --> v21 --> v22 --> v23 --> v24 --> v25 --> v30
+        v15 -.-> v20 --> v21 --> v22 --> v23 --> v24 --> v25 --> v30
     end
 
     style COMPLETADAS fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
@@ -59,7 +59,7 @@ flowchart TD
     style v142 fill:#166534,stroke:#22c55e,color:#fff
     style v143 fill:#166534,stroke:#22c55e,color:#fff
     style v144 fill:#166534,stroke:#22c55e,color:#fff
-    style v15 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v15 fill:#166534,stroke:#22c55e,color:#fff
     style v20 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v21 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v22 fill:#1e1b4b,stroke:#818cf8,color:#fff
@@ -217,6 +217,20 @@ Las siguientes fases iniciales representan la base estructural que se encuentra 
   - [x] Descarga del historial de auditoría de seguridad en formato CSV y JSON desde el panel de seguridad.
   - [x] Resiliencia de concurrencia y ventana deslizante con `prev_token_hash` en Cloudflare D1 y refresco activo en el cliente IndexedDB.
   - [x] Suite de pruebas unitarias expandida a 111 pruebas pasando al 100% en Vitest y 0 errores de compilación (`tsc -b`).
+
+---
+
+### FASE 15: Argon2id Memory-Hard KDF & Alertas Proactivas Zero-Knowledge (v1.5.0)
+* **Objetivo:** Migrar la derivación de clave maestra a Argon2id (OWASP 2024: 64 MB RAM, 3 rondas) con auto-upgrade transparente en segundo plano e incorporar alertas proactivas nativas vía Web Push (RFC 8291/8292) y correo BYOK (Resend / Cloudflare) sin costos operacionales.
+* **Definition of Done (DoD) - Fase 15:**
+  - [x] WebAssembly nativo compilado vía `hash-wasm` ejecutándose en Web Worker para derivación Argon2id (64 MB, 3 iteraciones, 1 hilo).
+  - [x] Auto-upgrade silencioso y transparente: las cuentas legadas PBKDF2 se re-derivan, recifran y actualizan atómicamente a Argon2id vía `POST /api/auth/upgrade-kdf` al iniciar sesión o desbloquear.
+  - [x] Re-empaquetado transparente de passkeys biométricas (Windows Hello / FIDO2) con la nueva clave maestra Argon2id sin intervención del usuario.
+  - [x] Alertas Web Push nativas sin intermediarios implementadas con Web Crypto puro (VAPID RFC 8292 y cifrado RFC 8291 AES-128-GCM).
+  - [x] Notificaciones por correo BYOK configurables por el usuario con API key gratuita personal de Resend (3,000 emails/mes) o Cloudflare Email (`send_email`).
+  - [x] Pestaña de Notificaciones dedicada en el Modal de Seguridad con botones interactivos de prueba inmediata.
+  - [x] Disparadores automáticos de alerta ante nuevo país de inicio de sesión, nueva sesión activa, revocación remota y passkey añadida.
+  - [x] Suite de pruebas automatizadas expandida a 134 pruebas pasando al 100% en Vitest y 0 errores de compilación (`tsc -b`).
 
 ---
 

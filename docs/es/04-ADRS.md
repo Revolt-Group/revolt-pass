@@ -366,3 +366,33 @@ Revolt Pass es tradicionalmente una bóveda personal monousuario. Sin embargo, e
 Se adopta **ECDH P-384 con HKDF-SHA256 para derivación de clave de encapsulamiento y AES-256-GCM para encapsulamiento de clave de ítem** (esquema ECIES nativo en Web Crypto API).
 - El modelo es 100% Zero-Knowledge respecto al contenido: D1 solo almacena metadatos de relación y blobs cifrados.
 - Requiere como precondición arquitectónica que el Hito v2.0 implemente el modelo de clave simétrica por ítem (`encrypted_key`).
+
+---
+
+## ADR-015: Adopción de Argon2id KDF (WASM) y Alertas Proactivas Web Push / BYOK Email
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+PBKDF2-HMAC-SHA256 (incluso a 600,000 iteraciones) es vulnerable a ataques masivos de fuerza bruta paralelizados en GPUs y clusters ASIC especializados debido a su ausencia de dureza en memoria (*memory-hardness*). OWASP y NIST recomiendan enérgicamente **Argon2id** como el estándar de oro moderno para la derivación de claves maestras. No obstante, los navegadores web aún no implementan Argon2id dentro de la Web Crypto API nativa.
+
+Adicionalmente, eventos de seguridad críticos (inicios de sesión desde nuevos países o dispositivos no reconocidos, registro de passkeys, revocaciones remotas de sesión) requerían notificación inmediata al usuario. Los servicios comerciales tradicionales de notificaciones push y correo imponen costes recurrentes, modelos de suscripción o recopilación centralizada de identificadores personales, violando el principio fundacional de coste operacional de $0 y las garantías Zero-Knowledge de Revolt Pass.
+
+### Alternativas Evaluadas
+1. **Incrementar iteraciones de PBKDF2 a 1,000,000+:**
+   - Sobrecarga el hilo del navegador sin resolver la vulnerabilidad fundamental frente a ataques con hardware ASIC/GPU de alta memoria. **Descartada.**
+2. **Scrypt:**
+   - Ofrece dureza en memoria pero presenta menor resistencia teórica a ataques de canal lateral y temporización que Argon2id, además de requerir bibliotecas con mayor huella. **Descartada.**
+3. **Argon2id compilado a WebAssembly (`hash-wasm`) ejecutado en Web Worker (Opción Seleccionada):**
+   - Implementa los parámetros recomendados por OWASP 2024: 64 MB de memoria RAM, 3 iteraciones y 1 hilo.
+   - Ejecutado en un Web Worker dedicado para no bloquear la interfaz de usuario ni provocar caídas de frames en el DOM.
+   - Incluye mecanismo de migración atómica transparente (*silent auto-upgrade*): las cuentas históricas creadas con PBKDF2 se re-derivan a Argon2id al iniciar sesión o desbloquear el baúl, actualizando sus salts, verifiers y passkeys biométricas mediante `POST /api/auth/upgrade-kdf` sin requerir intervención ni cambio de clave por parte del usuario.
+4. **Web Push Nativo (RFC 8291 / RFC 8292) + Email BYOK (Opción Seleccionada):**
+   - Web Push directo entre el navegador del usuario y el servidor Push del sistema operativo (Mozilla, Google FCM, Apple Push Services) utilizando VAPID RFC 8292 y cifrado de carga útil AES-128-GCM RFC 8291 implementado íntegramente con Web Crypto API pura en Cloudflare Workers, sin intermediarios de pago (Pusher, OneSignal).
+   - Notificaciones por correo bajo el esquema **BYOK (Bring Your Own Key)**: los usuarios pueden configurar opcionalmente su propia clave API gratuita de Resend (3,000 correos/mes de por vida) o canalizar alertas a través de Cloudflare Email Workers (`send_email`), manteniendo el coste operativo del proyecto en $0 perpetuo y preservando el anonimato.
+
+### Decisión
+1. Adoptar **Argon2id (64 MB, 3 iteraciones, 1 hilo) vía WebAssembly (`hash-wasm`) en Web Worker** como la función de derivación de claves (KDF) por defecto para todo nuevo registro.
+2. Implementar **auto-upgrade silencioso de KDF**: migración automática y atómica de PBKDF2 a Argon2id al desbloquear, con re-empaquetado de passkeys FIDO2/WebAuthn.
+3. Desplegar **Web Push nativo RFC 8291/8292 en Cloudflare Workers** y soporte de **Email BYOK** para alertas de seguridad proactivas en tiempo real con coste operativo de $0.

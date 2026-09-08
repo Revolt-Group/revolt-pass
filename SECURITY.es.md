@@ -12,8 +12,9 @@ Solo la versión menor activa más reciente recibe parches de seguridad y triaje
 
 | Versión | Compatible         | Estado |
 | :------ | :----------------- | :----- |
-| `1.2.x` | :white_check_mark: | Soportada y Mantenida Activamente |
-| `< 1.2` | :x:                | Fin de Ciclo de Vida (Actualización recomendada) |
+| `1.5.x` | :white_check_mark: | Soportada y Mantenida Activamente (Argon2id + Web Push) |
+| `1.4.x` | :white_check_mark: | Mantenida |
+| `< 1.4` | :x:                | Fin de Ciclo de Vida (Actualización recomendada) |
 
 ---
 
@@ -51,7 +52,7 @@ Te solicitamos brindarnos un tiempo razonable para investigar y remediar antes d
 ## 🎯 Alcance (Scope)
 
 ### Dentro del Alcance (In-Scope)
-* **Criptografía del Lado del Cliente:** Fallas en el uso de primitivas WebCrypto, modo AES-256-GCM (reutilización de IV/nonce), derivación de claves PBKDF2-HMAC-SHA256 (600.000 iteraciones), envoltura de claves con WebAuthn PRF o generación de entropía.
+* **Criptografía del Lado del Cliente:** Fallas en el uso de primitivas WebCrypto / WASM, modo AES-256-GCM (reutilización de IV/nonce), derivación de claves Argon2id (64 MB RAM, 3 iteraciones) / PBKDF2-HMAC-SHA256 (600.000 iteraciones), envoltura de claves con WebAuthn, cifrado de notificaciones Web Push RFC 8291/8292 (AES-128-GCM + ECDH P-256 + VAPID) o generación de entropía.
 * **Autenticación y Autorización:** Falsificación de tokens de sesión, ataques de repetición, evasión de control de accesos o escalada de privilegios en endpoints `/api/*` del Worker en Cloudflare.
 * **Higiene de Memoria y Almacenamiento Local:** Fuga de secretos en texto plano en IndexedDB, `localStorage`, registros de consola, búferes de portapapeles no purgados o persistencia indebida de la Clave Maestra en memoria RAM tras bloquear la bóveda.
 * **Cross-Site Scripting (XSS) e Inyecciones:** Vulnerabilidades que permitan la ejecución de código no autorizado dentro del origen autenticado de la PWA.

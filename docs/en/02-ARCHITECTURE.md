@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-ARCH-002` |
-| **Version** | `1.4.4-PROD (v2.5 Architecture)` |
+| **Version** | `1.5.0-PROD (v2.5 Architecture)` |
 | **Status** | Approved / Architecture Specification |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
 | **Tech Stack** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
@@ -14,7 +14,7 @@
 
 ## 1. Architecture Overview
 
-Revolt Pass implements a decoupled and distributed architecture based on the **Zero-Knowledge Client-Side Computing** paradigm. Sensitive cryptographic processing executes entirely on the user's device utilizing native hardware acceleration via the **Web Crypto API**. Remote infrastructure acts exclusively as a binary persistence and high-availability edge synchronization layer on the global network via **Cloudflare Workers** and the distributed database **Cloudflare D1**.
+Revolt Pass implements a decoupled and distributed architecture based on the **Zero-Knowledge Client-Side Computing** paradigm. Sensitive cryptographic processing executes entirely on the user's device utilizing native hardware acceleration via the **Web Crypto API** and sandboxed WebAssembly modules (`hash-wasm`). Remote infrastructure acts exclusively as a binary persistence and high-availability edge synchronization layer on the global network via **Cloudflare Workers** and the distributed database **Cloudflare D1**.
 
 ### 1.1 High-Level Architecture Diagram
 
@@ -31,11 +31,12 @@ flowchart TB
         end
 
         subgraph CoreEngine ["Core Security Engine (TypeScript)"]
-            CryptoWorker["Web Worker (PBKDF2-SHA256 600k rounds)"]
+            CryptoWorker["Web Worker (Argon2id WASM 64MB / PBKDF2 600k)"]
             SubtleEngine["Web Crypto API (AES-GCM-256 / HMAC)"]
             WebAuthnManager["WebAuthn Manager (Windows Hello PIN / Biometrics)"]
             TimeSyncManager["Time Drift Compensator"]
             SyncEngine["Bi-directional Sync Engine"]
+            PushClient["Web Push Client (RFC 8291 / 8292)"]
         end
 
         subgraph ClientStorage ["Secure Local Storage"]
@@ -52,13 +53,16 @@ flowchart TB
         subgraph Endpoints ["Worker Micro-Endpoints"]
             TimeEp["GET /api/time (UTC Timestamp)"]
             AuthEp["POST /api/auth/* (Register / Salt)"]
+            UpgradeEp["POST /api/auth/upgrade-kdf (Argon2id Auto-Upgrade)"]
             VaultEp["GET|PUT /api/vault (Encrypted Sync)"]
             SessionEp["POST|GET|DELETE|PUT /api/auth/sessions (Session Mgmt)"]
             PasskeyEp["GET|POST|PUT|DELETE /api/passkeys (FIDO2 Registry)"]
             AuditEp["GET /api/audit-logs (Security Audit)"]
+            PushEp["POST /api/push/* (Web Push VAPID RFC 8292)"]
+            EmailEp["POST /api/notifications/email (BYOK Dispatch)"]
         end
         
-        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & sync_logs")]
+        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & push_subscriptions")]
     end
 
     %% Relationships
@@ -70,15 +74,20 @@ flowchart TB
     WAF --> Worker
     Worker --> TimeEp
     Worker --> AuthEp
+    Worker --> UpgradeEp
     Worker --> VaultEp
     Worker --> SessionEp
     Worker --> PasskeyEp
     Worker --> AuditEp
+    Worker --> PushEp
+    Worker --> EmailEp
     VaultEp <--> |"Prepared SQL"| D1Database
     AuthEp <--> |"Prepared SQL"| D1Database
+    UpgradeEp <--> |"Prepared SQL"| D1Database
     SessionEp <--> |"Prepared SQL"| D1Database
     PasskeyEp <--> |"Prepared SQL"| D1Database
     AuditEp <--> |"Prepared SQL"| D1Database
+    PushEp <--> |"Prepared SQL"| D1Database
 ```
 
 ---
@@ -88,10 +97,10 @@ flowchart TB
 ### 2.1 Registration and Initial Vault Provisioning Flow
 1. The user visits `https://<your-domain-or-subdomain>.workers.dev` and inputs a username and Master Password.
 2. The client generates a random 16-byte cryptographic `kdf_salt` using `crypto.getRandomValues`.
-3. The client dispatches Master Key derivation via `PBKDF2-SHA256` (600,000 iterations) to an isolated Web Worker.
+3. The client dispatches Master Key derivation via **Argon2id** (64 MB RAM, 3 rounds, 1 lane via WASM) to an isolated Web Worker. Legacy accounts retain backward compatibility with PBKDF2-SHA256 (600,000 iterations).
 4. The client initializes an empty list of `VaultItem[]`, serializes it to JSON, and generates a random 12-byte `IV`.
 5. The client encrypts the JSON using `AES-GCM-256`, producing the `encrypted_blob`.
-6. The client sends `POST /api/auth/register` to the Worker containing `{ username, kdf_salt, encrypted_blob, iv }`.
+6. The client sends `POST /api/auth/register` to the Worker containing `{ username, kdf_salt, encrypted_blob, iv, kdf: "argon2id" }`.
 7. The Worker runs an atomic transaction on Cloudflare D1 inserting the user and their initial vault record (version 1).
 8. The encrypted blob and user config are persisted locally in `IndexedDB`.
 
@@ -188,6 +197,29 @@ sequenceDiagram
   - Received shared items are decrypted in real time upon sync and reside **strictly in volatile RAM memory**.
   - When the vault locks or the session expires, shared item references and their symmetric keys are instantly purged.
   - In `IndexedDB`, only the encrypted payload (`encrypted_item`, `encrypted_item_key`, IVs) is cached for offline availability, ensuring local disk inspections never reveal plaintext secrets.
+
+---
+
+### 2.5 Silent KDF Auto-Upgrade (PBKDF2 -> Argon2id)
+With the introduction of Argon2id in v1.5.0, the client transparently migrates all existing vaults configured with PBKDF2:
+
+1. **Detection:** Upon login or unlocking the vault, the client inspects the KDF algorithm returned by `/api/auth/salt` or cached locally in `user_config`.
+2. **Off-Thread Re-derivation:** Once the vault payload is decrypted with the legacy key, the client prompts the Web Worker to derive a new `MasterKey` using **Argon2id** (64 MB RAM, 3 iterations) and a fresh 16-byte cryptographic salt.
+3. **Re-encryption and Passkey Re-wrapping:** The vault JSON payload is re-encrypted under the new Argon2id master key. Any enrolled platform passkeys (Windows Hello / Touch ID) are re-wrapped transparently with the device platform key.
+4. **Atomic Persistence:** The client calls `POST /api/auth/upgrade-kdf`, submitting the new salt, updated KDF identifier (`argon2id`), re-encrypted vault ciphertext, and refreshed authentication verifier. Cloudflare D1 updates the user profile in a single atomic transaction without requiring the user to change their master password.
+
+---
+
+### 2.6 Proactive Zero-Knowledge Notification Dispatch (Web Push & BYOK Email)
+To deliver instantaneous alerts for high-risk security events without sacrificing user privacy or incurring SaaS costs:
+
+1. **Web Push RFC 8291 / RFC 8292:**
+   - The browser registers a Push Subscription via its Service Worker.
+   - Subscription metadata (`endpoint`, public keys `p256dh` and `auth`) is saved in the `push_subscriptions` table in D1 tied to `user_id`.
+   - On critical auditing events (e.g. login from a newly detected country, remote session termination, newly enrolled passkey), the Cloudflare Worker sends an encrypted push payload using **RFC 8292 VAPID** and **RFC 8291 AES-128-GCM** directly to browser push gateways (FCM / APNs / Mozilla).
+2. **BYOK (Bring Your Own Key) Email:**
+   - Users can optionally provide a free personal Resend API key or route notifications through Cloudflare Email Workers (`send_email`).
+   - Alerts are dispatched directly from the edge worker without Revolt Pass maintaining centralized mailing lists or subscribing to paid email services.
 
 ---
 

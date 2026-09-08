@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-PRD-001` |
-| **Versión** | `1.4.4-PROD (v2.5 Scope Ready)` |
+| **Versión** | `1.5.0-PROD (v2.5 Scope Ready)` |
 | **Estado** | Aprobado / Especificación Canónica |
 | **Organización** | Revolt Group |
 | **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
@@ -44,9 +44,10 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 
 ## 3. Alcance del Producto (Scope Management)
 
-### 3.1 In-Scope (Alcance Comprometido para MVP v1.0)
+### 3.1 In-Scope (Alcance Comprometido para MVP v1.0 — v1.5.0)
 * **Motor Criptográfico TOTP:** Soporte completo de RFC 6238 con HMAC-SHA1 y HMAC-SHA256, dígitos configurables (6 u 8), intervalos de rotación (default 30s) y decodificador Base32 puro RFC 4648 sin librerías externas obsoletas.
-* **Cifrado Simétrico y KDF:** Derivación de clave mediante PBKDF2-SHA256 (600,000 iteraciones recomendadas por OWASP) y cifrado autenticado de la bóveda completa vía AES-256-GCM.
+* **Cifrado Simétrico y KDF:** Derivación de clave mediante **Argon2id (64 MB RAM, 3 rondas recomendadas por OWASP 2024)** con soporte y auto-upgrade transparente para cuentas legadas **PBKDF2-SHA256 (600,000 iteraciones)**, y cifrado autenticado de la bóveda completa vía AES-256-GCM.
+* **Alertas Proactivas Zero-Knowledge:** Notificaciones push nativas en tiempo real mediante Web Push (RFC 8291/8292 con VAPID) y notificaciones por correo bajo modelo BYOK (Resend / Cloudflare).
 * **Autenticación Biométrica / Plataforma (WebAuthn / FIDO2):**
   * Soporte nativo para **Windows Hello** (utilizando PIN de Windows en equipos sin lector de huellas).
   * Soporte para **Biometría Móvil** (Touch ID, Face ID, Biometría de huella en Android).
@@ -113,7 +114,7 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 ### RF-03: Derivación de Llaves y Cifrado Zero-Knowledge
 * **RF-03.1:** El usuario definirá una Contraseña Maestra (*Master Password*) de alta entropía.
 * **RF-03.2:** El sistema generará un `kdf_salt` criptográficamente seguro de al menos 16 bytes (128 bits) utilizando `crypto.getRandomValues`.
-* **RF-03.3:** La clave de cifrado simétrica se derivará exclusivamente en el cliente mediante **PBKDF2 con HMAC-SHA256**, aplicando **600,000 iteraciones**.
+* **RF-03.3:** La clave de cifrado simétrica se derivará exclusivamente en el cliente mediante **Argon2id con 64 MB de memoria y 3 rondas** (con auto-upgrade transparente desde **PBKDF2-HMAC-SHA256 con 600,000 iteraciones** para cuentas históricas).
 * **RF-03.4:** El payload completo de la bóveda (todos los `VaultItem` serializados en JSON) se cifrará utilizando **AES-GCM de 256 bits** con un vector de inicialización (`IV`) único y aleatorio de 12 bytes por cada operación de guardado.
 * **RF-03.5:** Está terminantemente prohibido almacenar la contraseña maestra o la clave derivada en texto plano en cualquier mecanismo de almacenamiento persistente (`localStorage`, `sessionStorage`, `IndexedDB`, `cookies`).
 
@@ -206,7 +207,7 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 
 ### RNF-01: Rendimiento y Latencia
 * **Cómputo de Código TOTP:** Tiempo de ejecución inferior a **5 milisegundos** en cualquier CPU moderna.
-* **Derivación KDF (PBKDF2 600k):** Tiempo de derivación inferior a **800 milisegundos** en hardware de escritorio estándar. Para no congelar la tasa de cuadros por segundo (FPS) de la interfaz de usuario, la derivación pesada debe ejecutarse en un **Web Worker** dedicado.
+* **Derivación KDF (Argon2id 64MB / PBKDF2 600k):** Tiempo de derivación inferior a **400-800 milisegundos** en hardware estándar. Para no congelar la tasa de cuadros por segundo (FPS) de la interfaz de usuario, la derivación pesada debe ejecutarse en un **Web Worker** dedicado.
 * **Tiempo de Inicio (First Contentful Paint):** Inferior a **1.2 segundos** sobre conexiones 3G simuladas gracias a los assets precacheados por el Service Worker.
 
 ### RNF-02: Disponibilidad y Modo Offline
@@ -254,6 +255,8 @@ Revolt Pass se posiciona en el mercado como el **único gestor Zero-Knowledge de
 | Vector de Comparación | Revolt Pass | Bitwarden | 1Password | Aegis Authenticator | Google Authenticator |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Paradigma Criptográfico** | **Zero-Knowledge Nativo** (Web Crypto API) | Zero-Knowledge | Zero-Knowledge | Zero-Knowledge Local | Almacenamiento en Nube opcional (sin E2EE estricto) |
+| **KDF por Defecto** | **Argon2id WASM (64 MB)** | PBKDF2 / Argon2id | PBKDF2 / Argon2id | Argon2id / scrypt | PBKDF2 |
+| **Alertas Proactivas ($0)** | **Web Push RFC 8291 + BYOK** | De pago / Requiere Plan | De pago / Requiere Plan | No disponible | No disponible |
 | **Compartición Segura entre Cuentas** | **Sí** (v2.5 ECDH P-384 nativo) | Sí (Requiere Organización paga) | Sí (De pago comercial) | No (Solo exportación manual) | No (Solo exportación masiva QR) |
 | **Costo Operativo para el Usuario** | **$0 / Siempre Gratuito** (Cloudflare Free Tier) | $3 - $4 / usuario / mes para compartir | $3 - $8 / usuario / mes | Gratuito (Solo local) | Gratuito |
 | **Desbloqueo Windows Hello con PIN** | **Sí** (WebAuthn Level 3) | Requiere app de escritorio | Requiere app de escritorio | No aplicable (Solo Android) | No aplicable |

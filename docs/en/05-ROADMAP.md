@@ -3,8 +3,8 @@
 
 | Metadata | Detail |
 | :--- | :--- |
-| **Document Identifier** | `RP-RDM-005` |
-| **Current Version** | `1.4.4-PROD` (Live & Production Ready) |
+| **Identificador de Documento / Document Identifier** | `RP-RDM-005` |
+| **Current Version** | `1.5.0-PROD` (Live & Production Ready) |
 | **Status** | Approved / Quality-Driven Milestone Evolution Plan |
 | **Remote Repository** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Primary Branch** | `main` |
@@ -21,7 +21,7 @@ Every milestone or product release is structured around a rigorous **Definition 
 
 ```mermaid
 flowchart TD
-    subgraph COMPLETADAS ["✅ Production Foundation in Production (v1.0 — v1.4.4)"]
+    subgraph COMPLETADAS ["✅ Production Foundation in Production (v1.0 — v1.5.0)"]
         v10["Phases 1 to 8: Cryptographic Core & PWA<br/>AES-256-GCM, PBKDF2 600k in Web Worker, Cloudflare D1 Edge, WebAuthn, AutoLock"]
         v11["Phase 9: Multi-Device & Auditing (v1.1)<br/>D1 Sessions, Granular Remote Revocation, FIDO2 Passkeys, Audit Logs"]
         v12["Phases 10 & 11: i18n, Backups & Open Source Release (v1.2.1)<br/>Bilingual i18n ES/EN, Encrypted Backups, Private Instance Mode, AGPLv3"]
@@ -32,11 +32,11 @@ flowchart TD
         v142["Milestone v1.4.2: Mobile Overhaul<br/>Contained design, anti-zoom viewport, touch dropdowns"]
         v143["Milestone v1.4.3: Cloud Sync Fix & Key Preservation<br/>Recovery code retention across imports and reactive sync"]
         v144["Milestone v1.4.4: Session Revocation Fix & Auto-Deduplication<br/>End of session revocation loops & zero-data-loss deduplication"]
-        v10 --> v11 --> v12 --> v13 --> v131 --> v14 --> v141 --> v142 --> v143 --> v144
+        v15["Milestone v1.5.0: Argon2id KDF & Proactive Alerts (Web Push + BYOK Email)<br/>Argon2id WASM 64MB, silent auto-upgrade, Web Push RFC 8291/8292, BYOK Resend/Cloudflare"]
+        v10 --> v11 --> v12 --> v13 --> v131 --> v14 --> v141 --> v142 --> v143 --> v144 --> v15
     end
 
     subgraph PROXIMAS ["🔵 Technical Evolution Horizons (Upcoming Versions)"]
-        v15["Milestone v1.5: Argon2id KDF & Web Push / BYOK Email<br/>Argon2id WASM cryptographic upgrade, Resend / Cloudflare Email Workers"]
         v20["Milestone v2.0: Full Secret Suite & Vault Evolution<br/>Passwords, Credit Cards, Notes, SSH, 5d Snapshots, Emergency Kit, per-item encrypted_key"]
         v21["Milestone v2.1: Browser Extension (Manifest V3)<br/>Contextual Autofill via eTLD+1 Matching, Inline 2FA Token Injection, 2m Auto-lock"]
         v22["Milestone v2.2: Native Desktop Application (Tauri v2 + Rust)<br/>Lightweight Binary <10MB, OS Windows Hello / Touch ID, Signed Auto-updater"]
@@ -44,7 +44,7 @@ flowchart TD
         v24["Milestone v2.4: Duress Password & Plausible Deniability<br/>Decoy vault, emergency silent auditing"]
         v25["Milestone v2.5: ECDH P-384 Secure Sharing (ADR-014)<br/>Cross-user Zero-Knowledge secret sharing via native Web Crypto ECIES"]
         v30["Milestone v3.0: Decoupled Self-Hosted Backend<br/>Docker Compose, standalone VPS, alternative to Cloudflare D1"]
-        v144 -.-> v15 --> v20 --> v21 --> v22 --> v23 --> v24 --> v25 --> v30
+        v15 -.-> v20 --> v21 --> v22 --> v23 --> v24 --> v25 --> v30
     end
 
     style COMPLETADAS fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
@@ -59,7 +59,7 @@ flowchart TD
     style v142 fill:#166534,stroke:#22c55e,color:#fff
     style v143 fill:#166534,stroke:#22c55e,color:#fff
     style v144 fill:#166534,stroke:#22c55e,color:#fff
-    style v15 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v15 fill:#166534,stroke:#22c55e,color:#fff
     style v20 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v21 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v22 fill:#1e1b4b,stroke:#818cf8,color:#fff
@@ -71,7 +71,7 @@ flowchart TD
 
 ---
 
-## 2. Block I: Deployed Foundation Phases (v1.0 — v1.4.4)
+## 2. Block I: Deployed Foundation Phases (v1.0 — v1.5.0)
 
 The following foundational phases represent the architectural baseline that is **100% implemented, audited, and live in production**:
 
@@ -217,6 +217,20 @@ The following foundational phases represent the architectural baseline that is *
   - [x] Security audit trail export to CSV and JSON directly from the Security Modal.
   - [x] Sliding session token concurrency resilience with D1 `prev_token_hash` grace window and IndexedDB client re-sync.
   - [x] Test suite expanded to 111 tests passing at 100% in Vitest with 0 TypeScript compilation errors (`tsc -b`).
+
+---
+
+### PHASE 15: Argon2id Memory-Hard KDF & Proactive Zero-Knowledge Alerts (v1.5.0)
+* **Objective:** Migrate master key derivation to Argon2id (OWASP 2024: 64 MB RAM, 3 rounds) with transparent background auto-upgrade and incorporate proactive native alerts via Web Push (RFC 8291/8292) and BYOK Email (Resend / Cloudflare) with zero operational costs.
+* **Definition of Done (DoD) - Phase 15:**
+  - [x] Native WebAssembly compiled via `hash-wasm` running in a dedicated Web Worker for Argon2id key derivation (64 MB, 3 iterations, 1 lane).
+  - [x] Transparent silent auto-upgrade: legacy PBKDF2 accounts re-derive, re-encrypt, and atomically upgrade to Argon2id via `POST /api/auth/upgrade-kdf` upon login or unlock.
+  - [x] Transparent re-wrapping of biometric passkeys (Windows Hello / FIDO2) with the new Argon2id master key with zero user friction.
+  - [x] Direct native Web Push alerts without third-party push notification services built on pure Web Crypto (VAPID RFC 8292 and RFC 8291 AES-128-GCM payload encryption).
+  - [x] User-configurable BYOK email notifications using personal free-tier API keys for Resend (3,000 emails/month) or Cloudflare Email (`send_email`).
+  - [x] Dedicated Notifications tab inside the Security Modal featuring interactive immediate test buttons for both push and email.
+  - [x] Automated proactive alert triggers on new login country, new active session, remote session revocation, and newly registered passkey.
+  - [x] Automated test suite expanded to 134 tests passing at 100% in Vitest and 0 compilation errors (`tsc -b`).
 
 ---
 

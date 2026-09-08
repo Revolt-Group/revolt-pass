@@ -5,20 +5,24 @@
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.4.4](https://img.shields.io/badge/Version-v1.4.4-blue.svg)](./CHANGELOG.md)
+[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 114/114](https://img.shields.io/badge/Tests-114%2F114_Passing-brightgreen.svg)](#)
+[![Tests: 134/134](https://img.shields.io/badge/Tests-134%2F134_Passing-brightgreen.svg)](#)
 
-> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, universal individual account QR viewer, Google Authenticator batch QR migration carousel, universal cross-platform importers (Authy, Bitwarden, Aegis, 1Password, etc.), physical YubiKey/FIDO2 roaming keys, proactive vault health diagnostics, k-Anonymity breach detection (HaveIBeenPwned), edge hardening (CSP, Rate Limiting, token rotation), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
+> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, **Argon2id WASM (64 MB)** key derivation with silent background auto-migration, **Web Push RFC 8291/8292** and **BYOK Email (Resend / Cloudflare)** proactive security alerts, universal individual account QR viewer, Google Authenticator batch QR migration carousel, universal cross-platform importers (Authy, Bitwarden, Aegis, 1Password, etc.), physical YubiKey/FIDO2 roaming keys, proactive vault health diagnostics, k-Anonymity breach detection (HaveIBeenPwned), edge hardening (CSP, Rate Limiting, token rotation), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
 
 ---
 
 ## 🌟 Key Features
 
+* **Argon2id KDF & Proactive Zero-Knowledge Alerts (v1.5.0):**
+  - **Argon2id WASM:** Memory-hard master key derivation (64 MB, 3 rounds) compiled to WebAssembly via `hash-wasm`, impervious to GPU/ASIC cluster cracking. Features seamless, silent background auto-upgrade of legacy PBKDF2 vaults on next login or unlock, re-encrypting the vault and re-wrapping biometric Passkeys.
+  - **Native Web Push ($0 Operating Cost):** Real-time push security notifications direct from Cloudflare Workers to browser push services via native Push API, Service Worker, and RFC 8291/8292 (VAPID + AES-128-GCM). Alerts on logins from unrecognized countries, new active sessions, remote revocations, and added passkeys.
+  - **BYOK Email Alerts (Bring Your Own Key):** Zero-cost email security notifications utilizing user's personal free-tier Resend API key (3,000 emails/month free) or Cloudflare Email (`send_email`). Dedicated Notifications tab in the Security Modal with instant test buttons.
 * **Multi-Account QR Carousel Exporter & Individual QR Viewer (v1.4.1):** Pure TypeScript Protocol Buffers encoder generating official `otpauth-migration://offline?data=...` migration URIs divided into optimal batches of 7 accounts per QR code with an interactive carousel to absorb your entire vault using Google Authenticator, Aegis, or 2FAS cameras. High-definition vector SVG QR viewer to transfer individual accounts with any mobile authenticator (`otpauth://`).
 * **Universal Importers & Open Vault Exporters (v1.4.0):** Frictionless zero-knowledge migration from Google Authenticator (pure TypeScript Protobuf decoder), Authy, Aegis, 2FAS, Bitwarden, 1Password, Proton Pass, Ente Auth, LastPass, and `otpauth://` URI lists. Interactive smart reconciliation engine with diff preview (*new, duplicate, conflict*) and selectable resolution strategies (*keep existing, overwrite, keep both*). Open export to Aegis JSON, Bitwarden CSV, and `otpauth://` list formats. WebAuthn support for physical hardware security keys (**YubiKey / FIDO2 Roaming**) and CSV/JSON security audit log export.
 * **Client-Side Zero-Knowledge Encryption:** Authenticated symmetric **256-bit AES-GCM** encryption with a fresh initialization vector (`IV`) per save operation, alongside master key derivation via **Argon2id / PBKDF2 (600,000 rounds)** running in a dedicated Web Worker.

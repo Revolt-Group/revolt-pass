@@ -5,20 +5,24 @@
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.4.4](https://img.shields.io/badge/Version-v1.4.4-blue.svg)](./CHANGELOG.md)
+[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 114/114](https://img.shields.io/badge/Tests-114%2F114_Passing-brightgreen.svg)](#)
+[![Tests: 134/134](https://img.shields.io/badge/Tests-134%2F134_Passing-brightgreen.svg)](#)
 
-> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), visor QR individual universal, carrusel de exportación masiva compatible con Google Authenticator, importadores universales multiplataforma (Authy, Bitwarden, Aegis, 1Password, etc.), soporte de llaves físicas YubiKey/FIDO2, diagnóstico preventivo de salud de la bóveda, detección de filtraciones k-Anonymity (HaveIBeenPwned), endurecimiento perimetral (CSP, Rate Limiting, rotación de sesiones) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
+> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), derivación de clave con **Argon2id WASM (64 MB)** con auto-migración silenciosa, alertas proactivas **Web Push RFC 8291/8292** y correo **BYOK (Resend / Cloudflare)**, visor QR individual universal, carrusel de exportación masiva compatible con Google Authenticator, importadores universales multiplataforma (Authy, Bitwarden, Aegis, 1Password, etc.), soporte de llaves físicas YubiKey/FIDO2, diagnóstico preventivo de salud de la bóveda, detección de filtraciones k-Anonymity (HaveIBeenPwned), endurecimiento perimetral (CSP, Rate Limiting, rotación de sesiones) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
 
 ---
 
 ## 🌟 Características Principales
 
+* **Argon2id KDF y Alertas Proactivas Zero-Knowledge (v1.5.0):**
+  - **Argon2id WASM:** Derivación de clave maestra resistente a memoria (64 MB, 3 rondas) compilada a WebAssembly via `hash-wasm`, inmune a ataques con clústeres GPU/ASIC. Incluye auto-upgrade silencioso e imperceptible de cuentas legadas PBKDF2 en su próximo inicio de sesión o desbloqueo, con recifrado de bóveda y re-empaquetado biométrico de passkeys.
+  - **Web Push Nativo ($0 Costo):** Alertas push en tiempo real directas desde Cloudflare Worker mediante la Push API del navegador, Service Worker y RFC 8291/8292 (VAPID + AES-128-GCM). Alerta ante inicios de sesión desde nuevos países, nuevas sesiones activas, revocaciones remotas y passkeys añadidas.
+  - **Alertas por Correo BYOK (Bring Your Own Key):** Notificaciones de seguridad por correo configurables a $0 de costo operacional mediante clave personal gratuita de Resend (3,000 emails/mes) o Cloudflare Email (`send_email`). Pestaña de Notificaciones dedicada en el Modal de Seguridad con botones de prueba inmediata.
 * **Exportador Masivo por Carrusel de QRs y Visor QR Individual (v1.4.1):** Codificador binario nativo de Protocol Buffers en TypeScript puro para generar URIs de migración `otpauth-migration://offline?data=...` divididas en lotes de 7 cuentas con carrusel interactivo para absorber toda la bóveda con la cámara de Google Authenticator, Aegis o 2FAS. Visor vectorial SVG de alta definición para transferir cuentas individuales con cualquier app móvil (`otpauth://`).
 * **Importadores Universales y Exportadores Abiertos (v1.4.0):** Migración instantánea y sin fricción desde Google Authenticator (decodificador Protobuf en TypeScript puro), Authy, Aegis, 2FAS, Bitwarden, 1Password, Proton Pass, Ente Auth, LastPass y listas de URIs `otpauth://`. Motor de reconciliación inteligente con previsualización interactiva de diferencias (*nuevas, duplicadas, conflictos*) y resolución seleccionable (*conservar existentes, sobrescribir o conservar ambos*). Exportación abierta hacia formatos Aegis JSON, Bitwarden CSV y lista `otpauth://`. Soporte WebAuthn para llaves de seguridad físicas por hardware (**YubiKey / FIDO2 Roaming**) y exportación del historial de auditoría de seguridad en CSV/JSON.
 * **Cifrado Zero-Knowledge en Cliente:** Cifrado simétrico autenticado **AES-GCM de 256 bits** con vector de inicialización (`IV`) fresco por guardado y derivación de clave maestra mediante **Argon2id / PBKDF2 (600,000 rondas)** en un Web Worker dedicado.
