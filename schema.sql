@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,                       -- Prefix 'usr_' + UUID v4
     username TEXT NOT NULL COLLATE NOCASE,     -- Case-insensitive for login lookup
     kdf_salt TEXT NOT NULL,                    -- 16 bytes in Base64 format
+    kdf_algorithm TEXT NOT NULL DEFAULT 'pbkdf2', -- 'pbkdf2' | 'argon2id'
     passkey_credential_id TEXT,                -- Optional FIDO2 credential ID
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -104,4 +105,48 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_user_created ON audit_logs(user_id, created_at DESC);
+
+-- =====================================================================
+-- PROACTIVE SECURITY ALERTS & NOTIFICATIONS (v1.5)
+-- =====================================================================
+
+-- Web Push Subscriptions Table (Zero-Knowledge, Zero-Cost)
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id TEXT PRIMARY KEY,                       -- Prefix 'sub_' + UUID v4
+    user_id TEXT NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,             -- Browser push service endpoint
+    p256dh TEXT NOT NULL,                      -- Client P-256 public key (Base64URL)
+    auth TEXT NOT NULL,                        -- Client auth secret (Base64URL)
+    user_agent TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_push_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+
+-- User Notification Preferences & BYOK Email Config
+CREATE TABLE IF NOT EXISTS user_notification_settings (
+    user_id TEXT PRIMARY KEY,
+    push_enabled INTEGER NOT NULL DEFAULT 1,
+    email_enabled INTEGER NOT NULL DEFAULT 0,
+    email_provider TEXT NOT NULL DEFAULT 'resend',  -- 'resend' | 'cloudflare'
+    resend_api_key TEXT,                            -- BYOK user API key
+    resend_from_email TEXT,                         -- e.g. "onboarding@resend.dev" or custom domain
+    destination_email TEXT,                         -- Email address where alerts arrive
+    notify_new_country INTEGER NOT NULL DEFAULT 1,
+    notify_new_session INTEGER NOT NULL DEFAULT 1,
+    notify_passkey_added INTEGER NOT NULL DEFAULT 1,
+    notify_session_revoked INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_notif_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Global Application Settings (Persistent VAPID Keypair storage, etc.)
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
 

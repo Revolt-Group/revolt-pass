@@ -16,6 +16,7 @@ export default defineConfig({
         'pwa-192x192.png',
         'pwa-512x512.png',
         'maskable-icon-512x512.png',
+        'push-sw.js',
       ],
       manifest: {
         name: 'Revolt Pass',
@@ -54,10 +55,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ['/push-sw.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,webmanifest}'],
         clientsClaim: true,
         skipWaiting: true,
         cleanupOutdatedCaches: true,
+
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.simpleicons\.org\/.*/i,

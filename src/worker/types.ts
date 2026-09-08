@@ -19,7 +19,15 @@ export interface Env {
   APP_DOMAIN?: string;
   /** FIX-02 (v1.3.1): Cloudflare native rate limiter — optional, degrades gracefully if absent. */
   RATE_LIMITER?: RateLimiter;
+  /** v1.5: Push & Email alert configurations */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  SEND_EMAIL?: {
+    send: (message: { from: string; to: string; subject: string; content: string }) => Promise<void>;
+  };
 }
+
 
 
 export interface ApiErrorPayload {
@@ -35,13 +43,67 @@ export interface ApiResponse<T = unknown> {
   timestamp: number;
 }
 
+export type KdfAlgorithm = 'pbkdf2' | 'argon2id';
+
 export interface RegisterRequestBody {
   username: string;
   kdf_salt: string;
+  kdf_algorithm?: KdfAlgorithm;
   encrypted_blob: string;
   iv: string;
   passkey_credential_id?: string;
+  device_name?: string;
 }
+
+export interface UpgradeKdfRequestBody {
+  kdf_salt: string;
+  kdf_algorithm: KdfAlgorithm;
+  encrypted_blob: string;
+  iv: string;
+}
+
+export interface PushSubscriptionRequestBody {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent?: string;
+}
+
+export interface UserNotificationSettingsRecord {
+  user_id: string;
+  push_enabled: number;
+  email_enabled: number;
+  email_provider: 'resend' | 'cloudflare';
+  resend_api_key?: string | null;
+  resend_from_email?: string | null;
+  destination_email?: string | null;
+  notify_new_country: number;
+  notify_new_session: number;
+  notify_passkey_added: number;
+  notify_session_revoked: number;
+  updated_at: number;
+}
+
+export interface UpdateNotificationSettingsRequestBody {
+  push_enabled?: boolean;
+  email_enabled?: boolean;
+  email_provider?: 'resend' | 'cloudflare';
+  resend_api_key?: string;
+  resend_from_email?: string;
+  destination_email?: string;
+  notify_new_country?: boolean;
+  notify_new_session?: boolean;
+  notify_passkey_added?: boolean;
+  notify_session_revoked?: boolean;
+}
+
+export interface TestEmailRequestBody {
+  provider?: 'resend' | 'cloudflare';
+  resend_api_key?: string;
+  resend_from_email?: string;
+  destination_email: string;
+}
+
 
 export interface VaultUpdateRequestBody {
   encrypted_blob: string;

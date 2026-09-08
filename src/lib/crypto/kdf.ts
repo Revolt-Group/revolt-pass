@@ -1,12 +1,18 @@
 /**
  * Master Key Derivation Module (KDF).
- * Implements PBKDF2-HMAC-SHA256 with 600,000 iterations and 16-byte salt.
+ * Implements Argon2id (OWASP 2024 recommended, 64MB RAM, 3 iterations) via WebAssembly (hash-wasm)
+ * with backward-compatible PBKDF2-HMAC-SHA256 fallback.
  * Orchestrates Web Worker execution in the browser, with direct execution fallback.
  */
 
-import type { KdfWorkerRequest, KdfWorkerResponse } from './kdf.worker.ts';
+import { argon2id } from 'hash-wasm';
+import type { KdfWorkerRequest, KdfWorkerResponse, KdfAlgorithm } from './kdf.worker.ts';
 
-export const DEFAULT_KDF_ITERATIONS = 600000;
+export type { KdfAlgorithm };
+export const DEFAULT_KDF_ALGORITHM: KdfAlgorithm = 'argon2id';
+export const DEFAULT_ARGON2ID_ITERATIONS = 3;
+export const DEFAULT_ARGON2ID_MEMORY_KIB = 65536; // 64 MB
+export const DEFAULT_PBKDF2_ITERATIONS = 600000;
 export const DEFAULT_SALT_LENGTH_BYTES = 16;
 
 /**
@@ -18,6 +24,47 @@ export function generateSalt(length = DEFAULT_SALT_LENGTH_BYTES): Uint8Array {
   return salt;
 }
 
+export interface DeriveKeyOptions {
+  algorithm?: KdfAlgorithm;
+  iterations?: number;
+  memorySize?: number;
+  extractable?: boolean;
+}
+
+function resolveKdfParams(
+  optionsOrIterations?: number | DeriveKeyOptions,
+  extractable = true
+): {
+  algorithm: KdfAlgorithm;
+  iterations?: number;
+  memorySize?: number;
+  isExtractable: boolean;
+} {
+  if (typeof optionsOrIterations === 'number') {
+    return {
+      algorithm: 'pbkdf2',
+      iterations: optionsOrIterations,
+      isExtractable: extractable,
+    };
+  }
+
+  if (typeof optionsOrIterations === 'object') {
+    return {
+      algorithm: optionsOrIterations.algorithm ?? DEFAULT_KDF_ALGORITHM,
+      iterations: optionsOrIterations.iterations,
+      memorySize: optionsOrIterations.memorySize,
+      isExtractable: optionsOrIterations.extractable ?? extractable,
+    };
+  }
+
+  return {
+    algorithm: DEFAULT_KDF_ALGORITHM,
+    iterations: DEFAULT_ARGON2ID_ITERATIONS,
+    memorySize: DEFAULT_ARGON2ID_MEMORY_KIB,
+    isExtractable: extractable,
+  };
+}
+
 /**
  * Derives a symmetric AES-GCM (256-bit) CryptoKey directly in the current thread.
  * Used as base engine and fallback for automated test environments (Vitest/Node).
@@ -25,13 +72,39 @@ export function generateSalt(length = DEFAULT_SALT_LENGTH_BYTES): Uint8Array {
 export async function deriveMasterKeyDirect(
   password: string,
   salt: Uint8Array,
-  iterations = DEFAULT_KDF_ITERATIONS,
+  optionsOrIterations?: number | DeriveKeyOptions,
   extractable = true
 ): Promise<CryptoKey> {
+  const params = resolveKdfParams(optionsOrIterations, extractable);
+
+  if (params.algorithm === 'argon2id') {
+    const derivedBytes = await argon2id({
+      password,
+      salt,
+      iterations: params.iterations ?? DEFAULT_ARGON2ID_ITERATIONS,
+      memorySize: params.memorySize ?? DEFAULT_ARGON2ID_MEMORY_KIB,
+      parallelism: 1,
+      hashLength: 32,
+      outputType: 'binary',
+    });
+
+    const masterKey = await crypto.subtle.importKey(
+      'raw',
+      derivedBytes as unknown as BufferSource,
+      { name: 'AES-GCM', length: 256 },
+      params.isExtractable,
+      ['encrypt', 'decrypt']
+    );
+
+    // Wipe memory buffer
+    derivedBytes.fill(0);
+    return masterKey;
+  }
+
+  // PBKDF2 path
   const encoder = new TextEncoder();
   const passwordBytes = encoder.encode(password);
 
-  // 1. Import password as raw PBKDF2 base key
   const baseKey = await crypto.subtle.importKey(
     'raw',
     passwordBytes,
@@ -40,17 +113,16 @@ export async function deriveMasterKeyDirect(
     ['deriveKey']
   );
 
-  // 2. Directly derive CryptoKey for AES-GCM (256-bit)
   const masterKey = await crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: salt as unknown as ArrayBuffer,
-      iterations,
+      iterations: params.iterations ?? DEFAULT_PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
     baseKey,
     { name: 'AES-GCM', length: 256 },
-    extractable,
+    params.isExtractable,
     ['encrypt', 'decrypt']
   );
 
@@ -59,22 +131,23 @@ export async function deriveMasterKeyDirect(
 
 /**
  * Derives a symmetric AES-GCM (256-bit) CryptoKey using a background Web Worker
- * to prevent UI freezes during the 600,000 iterations.
+ * to prevent UI freezes during heavy computation.
  * 
  * If the environment lacks Web Worker support (e.g. Vitest / Node.js), safely falls back to deriveMasterKeyDirect.
  */
 export async function deriveMasterKey(
   password: string,
   salt: Uint8Array,
-  iterations = DEFAULT_KDF_ITERATIONS,
+  optionsOrIterations?: number | DeriveKeyOptions,
   extractable = true
 ): Promise<CryptoKey> {
-  // Check if environment has full module Web Worker support
   const hasWorkerSupport = typeof window !== 'undefined' && typeof Worker !== 'undefined';
 
   if (!hasWorkerSupport) {
-    return deriveMasterKeyDirect(password, salt, iterations, extractable);
+    return deriveMasterKeyDirect(password, salt, optionsOrIterations, extractable);
   }
+
+  const params = resolveKdfParams(optionsOrIterations, extractable);
 
   return new Promise((resolve, reject) => {
     let worker: Worker | null = null;
@@ -91,12 +164,11 @@ export async function deriveMasterKey(
 
         if (data.success) {
           try {
-            // Import derived bits into an AES-GCM CryptoKey
             const masterKey = await crypto.subtle.importKey(
               'raw',
               data.derivedBits,
               { name: 'AES-GCM', length: 256 },
-              extractable,
+              params.isExtractable,
               ['encrypt', 'decrypt']
             );
 
@@ -117,22 +189,23 @@ export async function deriveMasterKey(
 
       worker.onerror = () => {
         worker?.terminate();
-        // If worker fails to instantiate in emulated environments, fallback to direct execution
-        deriveMasterKeyDirect(password, salt, iterations).then(resolve).catch(reject);
+        deriveMasterKeyDirect(password, salt, optionsOrIterations, extractable).then(resolve).catch(reject);
       };
 
       const request: KdfWorkerRequest = {
         id: requestId,
         password,
         salt,
-        iterations,
+        algorithm: params.algorithm,
+        iterations: params.iterations,
+        memorySize: params.memorySize,
       };
 
       worker.postMessage(request);
     } catch {
-      // Immediate fallback if new Worker fails
       worker?.terminate();
-      deriveMasterKeyDirect(password, salt, iterations).then(resolve).catch(reject);
+      deriveMasterKeyDirect(password, salt, optionsOrIterations, extractable).then(resolve).catch(reject);
     }
   });
 }
+

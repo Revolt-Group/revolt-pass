@@ -475,6 +475,7 @@ export function App() {
       const saltData = (await saltRes.json()) as ApiResponse<{
         user_id: string;
         kdf_salt: string;
+        kdf_algorithm?: 'pbkdf2' | 'argon2id';
         has_passkey: boolean;
       }>;
 
@@ -482,11 +483,15 @@ export function App() {
         throw new Error('Respuesta del servidor inválida al obtener el salt.');
       }
 
-      const { user_id, kdf_salt } = saltData.data;
+      const { user_id, kdf_salt, kdf_algorithm = 'pbkdf2' } = saltData.data;
 
-      // 2. Derive MasterKey via PBKDF2 600k rounds using remote salt
+      // 2. Derive MasterKey via Argon2id (or PBKDF2 if legacy)
       const saltBytes = Uint8Array.from(atob(kdf_salt), (c) => c.charCodeAt(0));
-      const key = await deriveMasterKey(loginPassword, saltBytes, 600000);
+      const key = await deriveMasterKey(loginPassword, saltBytes, {
+        algorithm: kdf_algorithm,
+        iterations: kdf_algorithm === 'argon2id' ? 3 : 600000,
+        memorySize: 65536,
+      });
 
       // 3. Download encrypted vault from Cloudflare D1
       const vaultRes = await fetch('/api/vault', {
@@ -548,6 +553,7 @@ export function App() {
         user_id,
         username: cleanUsername,
         kdf_salt,
+        kdf_algorithm,
         session_token: sessionToken,
         auto_lock_minutes: 5,
         clipboard_clear_seconds: 45,
@@ -574,6 +580,76 @@ export function App() {
       toast.success(t('toasts.vaultLinked'), {
         description: t('toasts.vaultLinkedDesc', { count: decryptedItems.length }),
       });
+
+      // 7. Silent Background Argon2id Upgrade if legacy account
+      if (kdf_algorithm !== 'argon2id') {
+        (async () => {
+          try {
+            const newSaltBytes = generateSalt(16);
+            let binarySalt = '';
+            for (let i = 0; i < newSaltBytes.length; i++) binarySalt += String.fromCharCode(newSaltBytes[i]);
+            const newSaltBase64 = btoa(binarySalt);
+
+            const newMasterKey = await deriveMasterKey(loginPassword, newSaltBytes, {
+              algorithm: 'argon2id',
+              iterations: 3,
+              memorySize: 65536,
+            });
+
+            const enc = await encryptVault(cleanItems, newMasterKey, remoteVault.version + 1);
+
+            const upRes = await fetch('/api/auth/upgrade-kdf', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': user_id,
+                ...(sessionToken ? { 'X-Session-Token': sessionToken } : {}),
+              },
+              body: JSON.stringify({
+                kdf_salt: newSaltBase64,
+                kdf_algorithm: 'argon2id',
+                encrypted_blob: enc.encryptedBlob,
+                iv: enc.iv,
+              }),
+            });
+
+            if (upRes.ok) {
+              let updatedWrappedKey = config.wrapped_master_key;
+              if (config.webauthn_credential_id) {
+                try {
+                  const newPkg = await wrapMasterKey(newMasterKey, config.webauthn_credential_id);
+                  updatedWrappedKey = JSON.stringify(newPkg);
+                } catch (wrapErr) {
+                  console.warn('Failed to re-wrap master key with passkey:', wrapErr);
+                }
+              }
+
+              const updatedCfg: LocalUserConfig = {
+                ...config,
+                kdf_salt: newSaltBase64,
+                kdf_algorithm: 'argon2id',
+                wrapped_master_key: updatedWrappedKey,
+              };
+              await saveUserConfig(updatedCfg);
+              await saveLocalVault({
+                user_id,
+                encrypted_blob: enc.encryptedBlob,
+                iv: enc.iv,
+                version: remoteVault.version + 1,
+                updated_at: enc.updatedAt,
+                sync_status: 'synced',
+              });
+              setUserConfig(updatedCfg);
+              setMasterKey(newMasterKey);
+              setVaultVersion(remoteVault.version + 1);
+              toast.success(t('security.argon2idAutoUpgraded'));
+            }
+          } catch (upgradeErr) {
+            console.warn('Silent KDF upgrade deferred:', upgradeErr);
+          }
+        })();
+      }
+
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al iniciar sesión';
       toast.error(msg);
@@ -611,10 +687,16 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // 1. Generate 16-byte salt and derive MasterKey via Web Worker (PBKDF2 600k)
+      // 1. Generate 16-byte salt and derive MasterKey via Web Worker (Argon2id 64MB / 3 iterations)
       const salt = generateSalt(16);
-      const saltBase64 = btoa(String.fromCharCode(...salt));
-      const key = await deriveMasterKey(regPassword, salt, 600000);
+      let binarySalt = '';
+      for (let i = 0; i < salt.length; i++) binarySalt += String.fromCharCode(salt[i]);
+      const saltBase64 = btoa(binarySalt);
+      const key = await deriveMasterKey(regPassword, salt, {
+        algorithm: 'argon2id',
+        iterations: 3,
+        memorySize: 65536,
+      });
 
       // 2. Encrypt empty initial vault
       const initialEnc = await encryptVault([], key, 1);
@@ -628,6 +710,7 @@ export function App() {
         body: JSON.stringify({
           username: cleanUsername,
           kdf_salt: saltBase64,
+          kdf_algorithm: 'argon2id',
           encrypted_blob: initialEnc.encryptedBlob,
           iv: initialEnc.iv,
         }),
@@ -652,6 +735,7 @@ export function App() {
         user_id: userId,
         username: cleanUsername,
         kdf_salt: saltBase64,
+        kdf_algorithm: 'argon2id',
         session_token: sessionToken,
         auto_lock_minutes: 5,
         clipboard_clear_seconds: 45,
@@ -765,9 +849,14 @@ export function App() {
 
     setIsAuthenticating(true);
     try {
-      // 1. Derive master key from stored salt
+      // 1. Derive master key from stored salt (Argon2id or legacy PBKDF2)
+      const kdfAlgo = userConfig.kdf_algorithm || 'pbkdf2';
       const saltBytes = Uint8Array.from(atob(userConfig.kdf_salt), (c) => c.charCodeAt(0));
-      const key = await deriveMasterKey(unlockPassword, saltBytes, 600000);
+      const key = await deriveMasterKey(unlockPassword, saltBytes, {
+        algorithm: kdfAlgo,
+        iterations: kdfAlgo === 'argon2id' ? 3 : 600000,
+        memorySize: 65536,
+      });
 
       // 2. Retrieve local vault from IndexedDB
       const localVault = await getLocalVault();
@@ -793,15 +882,16 @@ export function App() {
       toast.success(t('toasts.vaultUnlocked'));
 
       // If duplicate accounts were pruned, persist and push the clean vault immediately
+      let activeVaultVersion = localVault.version;
       if (cleanItems.length !== decryptedItems.length) {
-        const nextVer = localVault.version + 1;
-        setVaultVersion(nextVer);
-        encryptVault(cleanItems, key, nextVer).then(async (enc) => {
+        activeVaultVersion = localVault.version + 1;
+        setVaultVersion(activeVaultVersion);
+        encryptVault(cleanItems, key, activeVaultVersion).then(async (enc) => {
           await saveLocalVault({
             user_id: userConfig.user_id,
             encrypted_blob: enc.encryptedBlob,
             iv: enc.iv,
-            version: nextVer,
+            version: activeVaultVersion,
             updated_at: enc.updatedAt,
             sync_status: 'dirty',
           });
@@ -809,13 +899,83 @@ export function App() {
         }).catch(console.error);
       }
 
-      // 4. Refresh or touch active session in background without creating duplicates
+      // 4. Silent Background Argon2id Upgrade if legacy account
+      if (kdfAlgo !== 'argon2id') {
+        (async () => {
+          try {
+            const newSaltBytes = generateSalt(16);
+            let binarySalt = '';
+            for (let i = 0; i < newSaltBytes.length; i++) binarySalt += String.fromCharCode(newSaltBytes[i]);
+            const newSaltBase64 = btoa(binarySalt);
+
+            const newMasterKey = await deriveMasterKey(unlockPassword, newSaltBytes, {
+              algorithm: 'argon2id',
+              iterations: 3,
+              memorySize: 65536,
+            });
+
+            const nextVersion = activeVaultVersion + 1;
+            const enc = await encryptVault(cleanItems, newMasterKey, nextVersion);
+
+            const upRes = await fetch('/api/auth/upgrade-kdf', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': userConfig.user_id,
+                ...(userConfig.session_token ? { 'X-Session-Token': userConfig.session_token } : {}),
+              },
+              body: JSON.stringify({
+                kdf_salt: newSaltBase64,
+                kdf_algorithm: 'argon2id',
+                encrypted_blob: enc.encryptedBlob,
+                iv: enc.iv,
+              }),
+            });
+
+            if (upRes.ok) {
+              let updatedWrappedKey = userConfig.wrapped_master_key;
+              if (userConfig.webauthn_credential_id) {
+                try {
+                  const newPkg = await wrapMasterKey(newMasterKey, userConfig.webauthn_credential_id);
+                  updatedWrappedKey = JSON.stringify(newPkg);
+                } catch (wrapErr) {
+                  console.warn('Failed to re-wrap master key with passkey:', wrapErr);
+                }
+              }
+
+              const updatedCfg: LocalUserConfig = {
+                ...userConfig,
+                kdf_salt: newSaltBase64,
+                kdf_algorithm: 'argon2id',
+                wrapped_master_key: updatedWrappedKey,
+              };
+              await saveUserConfig(updatedCfg);
+              await saveLocalVault({
+                user_id: userConfig.user_id,
+                encrypted_blob: enc.encryptedBlob,
+                iv: enc.iv,
+                version: nextVersion,
+                updated_at: enc.updatedAt,
+                sync_status: 'synced',
+              });
+              setUserConfig(updatedCfg);
+              setMasterKey(newMasterKey);
+              setVaultVersion(nextVersion);
+              toast.success(t('security.argon2idAutoUpgraded'));
+            }
+          } catch (upgradeErr) {
+            console.warn('Silent KDF upgrade deferred:', upgradeErr);
+          }
+        })();
+      }
+
+      // 5. Refresh or touch active session in background without creating duplicates
       syncSessionAndDevice(userConfig).catch(() => {});
       if (userConfig.webauthn_credential_id) {
         syncLocalPasskey(userConfig).catch(() => {});
       }
 
-      // 5. Attempt remote synchronization in the background
+      // 6. Attempt remote synchronization in the background
       pullRemoteVault('', key).then((res) => {
         if (res.pulled && res.items) {
           const cleanRemote = deduplicateVaultItems(res.items);
@@ -1455,7 +1615,7 @@ export function App() {
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 {t('auth.aesNotice')}
               </span>
-              <span>{t('auth.pbkdf2Notice')}</span>
+              <span>{t('auth.argon2idNotice')}</span>
               <span>{t('auth.clientSideOnly')}</span>
             </div>
           </div>
@@ -1578,7 +1738,7 @@ export function App() {
             <div className="w-full mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-zinc-500">
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                {t('auth.aesNotice')}
+                {userConfig?.kdf_algorithm === 'argon2id' ? t('auth.argon2idNotice') : t('auth.pbkdf2Notice')}
               </span>
               <span>{t('auth.zeroKnowledge')}</span>
             </div>

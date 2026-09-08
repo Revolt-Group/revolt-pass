@@ -24,6 +24,14 @@ import {
   Usb,
   FileSpreadsheet,
   FileJson,
+  Bell,
+  Mail,
+  Send,
+  Cpu,
+  Info,
+  ShieldCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from '../i18n/index.ts';
@@ -35,9 +43,12 @@ import {
   wrapMasterKey,
   checkWebAuthnSupport,
 } from '../lib/crypto/webauthn';
-import { saveUserConfig, getUserConfig, updateSessionToken } from '../lib/storage/idb';
+import { saveUserConfig, getUserConfig, updateSessionToken, saveLocalVault } from '../lib/storage/idb';
 import { evaluateVaultHygiene } from '../lib/security/vaultHygiene';
 import { checkPasswordPwned } from '../lib/security/pwnedCheck';
+import { deriveMasterKey, generateSalt } from '../lib/crypto/kdf';
+import { encryptVault } from '../lib/crypto/vault';
+
 
 interface SecurityModalProps {
   isOpen: boolean;
@@ -65,7 +76,8 @@ export function SecurityModal({
   onSelectAccount,
 }: SecurityModalProps) {
   const { t, lang } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'health' | 'sessions' | 'passkeys' | 'audit'>('health');
+  const [activeTab, setActiveTab] = useState<'health' | 'sessions' | 'passkeys' | 'notifications' | 'audit'>('health');
+
 
   // Vault Hygiene & Diagnostics
   const [lastBackupAt, setLastBackupAt] = useState<number | null>(() => {
@@ -130,6 +142,35 @@ export function SecurityModal({
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState(false);
+
+  // Push Notification state
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [isLoadingPush, setIsLoadingPush] = useState(false);
+  const [isTestingPush, setIsTestingPush] = useState(false);
+
+  // Email Notification & BYOK settings
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailProvider, setEmailProvider] = useState<'resend' | 'cloudflare'>('resend');
+  const [resendApiKey, setResendApiKey] = useState('');
+  const [hasStoredResendKey, setHasStoredResendKey] = useState(false);
+  const [showResendKey, setShowResendKey] = useState(false);
+  const [resendFromEmail, setResendFromEmail] = useState('');
+  const [destinationEmail, setDestinationEmail] = useState('');
+  const [notifyNewCountry, setNotifyNewCountry] = useState(true);
+  const [notifyNewSession, setNotifyNewSession] = useState(true);
+  const [notifyPasskeyAdded, setNotifyPasskeyAdded] = useState(true);
+  const [notifySessionRevoked, setNotifySessionRevoked] = useState(true);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+
+  // KDF Upgrade State
+  const [kdfUpgradePassword, setKdfUpgradePassword] = useState('');
+  const [isUpgradingKdf, setIsUpgradingKdf] = useState(false);
+  const [showUpgradePassword, setShowUpgradePassword] = useState(false);
+
 
   // Helper to reliably obtain the latest session token from IndexedDB (or fallback to prop)
   const getActiveToken = useCallback(async (): Promise<string | undefined> => {
@@ -298,6 +339,69 @@ export function SecurityModal({
     }
   }, [userId, getActiveToken]);
 
+  // Check Web Push subscription and browser support
+  const checkPushStatus = useCallback(async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setPushPermission('unsupported');
+      return;
+    }
+    setPushPermission(Notification.permission);
+    if (Notification.permission === 'granted') {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        setIsPushSubscribed(!!sub);
+      } catch {
+        setIsPushSubscribed(false);
+      }
+    } else {
+      setIsPushSubscribed(false);
+    }
+  }, []);
+
+  // Fetch notification preferences from server
+  const fetchNotificationSettings = useCallback(async () => {
+    if (!userId) return;
+    setIsLoadingSettings(true);
+    try {
+      const activeToken = await getActiveToken();
+      const headers: Record<string, string> = { 'X-User-Id': userId };
+      if (activeToken) headers['X-Session-Token'] = activeToken;
+
+      const res = await fetch('/api/notifications/settings', { headers });
+      if (res.ok) {
+        const json = (await res.json()) as ApiResponse<{
+          push_enabled?: boolean;
+          email_enabled?: boolean;
+          email_provider?: 'resend' | 'cloudflare';
+          has_resend_api_key?: boolean;
+          resend_from_email?: string;
+          destination_email?: string;
+          notify_new_country?: boolean;
+          notify_new_session?: boolean;
+          notify_passkey_added?: boolean;
+          notify_session_revoked?: boolean;
+        }>;
+        if (json.success && json.data) {
+          setPushEnabled(json.data.push_enabled ?? true);
+          setEmailEnabled(json.data.email_enabled ?? false);
+          setEmailProvider(json.data.email_provider || 'resend');
+          setHasStoredResendKey(!!json.data.has_resend_api_key);
+          setResendFromEmail(json.data.resend_from_email || '');
+          setDestinationEmail(json.data.destination_email || '');
+          setNotifyNewCountry(json.data.notify_new_country ?? true);
+          setNotifyNewSession(json.data.notify_new_session ?? true);
+          setNotifyPasskeyAdded(json.data.notify_passkey_added ?? true);
+          setNotifySessionRevoked(json.data.notify_session_revoked ?? true);
+        }
+      }
+    } catch {
+      // Non-fatal
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  }, [userId, getActiveToken]);
+
   // Trigger loads on modal open or tab change
   useEffect(() => {
     if (!isOpen) return;
@@ -305,10 +409,304 @@ export function SecurityModal({
       fetchSessions();
     } else if (activeTab === 'passkeys') {
       fetchPasskeys();
+    } else if (activeTab === 'notifications') {
+      checkPushStatus();
+      fetchNotificationSettings();
     } else if (activeTab === 'audit') {
       fetchAuditLogs();
     }
-  }, [isOpen, activeTab, fetchSessions, fetchPasskeys, fetchAuditLogs]);
+  }, [isOpen, activeTab, fetchSessions, fetchPasskeys, fetchAuditLogs, checkPushStatus, fetchNotificationSettings]);
+
+  // Handlers for Web Push
+  const handleSubscribePush = async () => {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      toast.error(t('security.pushStatusUnsupported'));
+      return;
+    }
+
+    try {
+      const perm = await Notification.requestPermission();
+      setPushPermission(perm);
+      if (perm !== 'granted') {
+        toast.error(t('security.pushStatusDeniedHelp'));
+        return;
+      }
+
+      setIsLoadingPush(true);
+      const resKey = await fetch('/api/notifications/vapid-public-key');
+      const jsonKey = (await resKey.json()) as ApiResponse<{ public_key: string }>;
+      if (!jsonKey.success || !jsonKey.data?.public_key) {
+        throw new Error('No se pudo obtener la clave VAPID');
+      }
+
+      // Base64URL decode to Uint8Array
+      const padding = '='.repeat((4 - (jsonKey.data.public_key.length % 4)) % 4);
+      const b64 = (jsonKey.data.public_key + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(b64);
+      const appServerKey = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) appServerKey[i] = raw.charCodeAt(i);
+
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: appServerKey,
+        });
+      }
+
+      const p256dhBytes = new Uint8Array(sub.getKey('p256dh') || new ArrayBuffer(0));
+      const authBytes = new Uint8Array(sub.getKey('auth') || new ArrayBuffer(0));
+
+      let p256dhStr = '';
+      for (let i = 0; i < p256dhBytes.byteLength; i++) p256dhStr += String.fromCharCode(p256dhBytes[i]);
+      const p256dh = btoa(p256dhStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      let authStr = '';
+      for (let i = 0; i < authBytes.byteLength; i++) authStr += String.fromCharCode(authBytes[i]);
+      const auth = btoa(authStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      const activeToken = await getActiveToken();
+      const subRes = await fetch('/api/notifications/push-subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          ...(activeToken ? { 'X-Session-Token': activeToken } : {}),
+        },
+        body: JSON.stringify({
+          endpoint: sub.endpoint,
+          p256dh,
+          auth,
+        }),
+      });
+
+      const subJson = (await subRes.json()) as ApiResponse<{ message?: string; subscribed?: boolean }>;
+      if (!subJson.success) {
+        throw new Error(subJson.error?.message || 'Error registrando suscripción');
+      }
+
+      setIsPushSubscribed(true);
+      toast.success('¡Alertas push activadas exitosamente!');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error activando push';
+      toast.error(msg);
+    } finally {
+      setIsLoadingPush(false);
+    }
+  };
+
+  const handleUnsubscribePush = async () => {
+    setIsLoadingPush(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await sub.unsubscribe();
+        const activeToken = await getActiveToken();
+        await fetch('/api/notifications/push-unsubscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Id': userId,
+            ...(activeToken ? { 'X-Session-Token': activeToken } : {}),
+          },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+      }
+      setIsPushSubscribed(false);
+      toast.success(t('security.pushStatusInactive'));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desactivando push';
+      toast.error(msg);
+    } finally {
+      setIsLoadingPush(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setIsTestingPush(true);
+    try {
+      const activeToken = await getActiveToken();
+      const res = await fetch('/api/notifications/test-push', {
+        method: 'POST',
+        headers: {
+          'X-User-Id': userId,
+          ...(activeToken ? { 'X-Session-Token': activeToken } : {}),
+        },
+      });
+      const json = (await res.json()) as ApiResponse<{ message?: string }>;
+      if (json.success) {
+        toast.success(t('security.testPushSuccess'));
+      } else {
+        toast.error(json.error?.message || 'Error en prueba push');
+      }
+    } catch {
+      toast.error('Error enviando notificación de prueba');
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
+
+  const handleSaveNotificationSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      const activeToken = await getActiveToken();
+      const res = await fetch('/api/notifications/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          ...(activeToken ? { 'X-Session-Token': activeToken } : {}),
+        },
+        body: JSON.stringify({
+          push_enabled: pushEnabled,
+          email_enabled: emailEnabled,
+          email_provider: emailProvider,
+          resend_api_key: resendApiKey.trim() || undefined,
+          resend_from_email: resendFromEmail.trim() || undefined,
+          destination_email: destinationEmail.trim() || undefined,
+          notify_new_country: notifyNewCountry,
+          notify_new_session: notifyNewSession,
+          notify_passkey_added: notifyPasskeyAdded,
+          notify_session_revoked: notifySessionRevoked,
+        }),
+      });
+      const json = (await res.json()) as ApiResponse<{ message?: string }>;
+      if (json.success) {
+        if (resendApiKey.trim()) {
+          setHasStoredResendKey(true);
+          setResendApiKey('');
+        }
+        toast.success(t('security.settingsSaved'));
+      } else {
+        toast.error(json.error?.message || 'Error al guardar configuración');
+      }
+    } catch {
+      toast.error('Error al guardar configuración');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!destinationEmail || !destinationEmail.includes('@')) {
+      toast.error(t('security.emailDestinationPlaceholder'));
+      return;
+    }
+    setIsTestingEmail(true);
+    try {
+      const activeToken = await getActiveToken();
+      const res = await fetch('/api/notifications/test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          ...(activeToken ? { 'X-Session-Token': activeToken } : {}),
+        },
+        body: JSON.stringify({
+          provider: emailProvider,
+          destination_email: destinationEmail.trim(),
+          resend_api_key: resendApiKey.trim() || undefined,
+          resend_from_email: resendFromEmail.trim() || undefined,
+        }),
+      });
+      const json = (await res.json()) as ApiResponse<{ message?: string }>;
+      if (json.success) {
+        toast.success(t('security.testEmailSuccess'));
+      } else {
+        toast.error(json.error?.message || t('security.testEmailFailed'));
+      }
+    } catch {
+      toast.error(t('security.testEmailFailed'));
+    } finally {
+      setIsTestingEmail(false);
+    }
+  };
+
+  const handleUpgradeKdfManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kdfUpgradePassword) {
+      toast.error('Debes ingresar tu contraseña maestra actual');
+      return;
+    }
+    if (!userConfig) {
+      toast.error('Configuración de usuario no encontrada');
+      return;
+    }
+    setIsUpgradingKdf(true);
+    try {
+      const newSaltBytes = generateSalt(16);
+      let binarySalt = '';
+      for (let i = 0; i < newSaltBytes.length; i++) binarySalt += String.fromCharCode(newSaltBytes[i]);
+      const newSaltBase64 = btoa(binarySalt);
+
+      const newMasterKey = await deriveMasterKey(kdfUpgradePassword, newSaltBytes, {
+        algorithm: 'argon2id',
+        iterations: 3,
+        memorySize: 65536,
+      });
+
+      const encrypted = await encryptVault(items, newMasterKey);
+
+      const activeToken = await getActiveToken();
+      const res = await fetch('/api/auth/upgrade-kdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          ...(activeToken ? { 'X-Session-Token': activeToken } : {}),
+        },
+        body: JSON.stringify({
+          kdf_salt: newSaltBase64,
+          kdf_algorithm: 'argon2id',
+          encrypted_blob: encrypted.encryptedBlob,
+          iv: encrypted.iv,
+        }),
+      });
+
+      const json = (await res.json()) as ApiResponse<{ message?: string }>;
+      if (!json.success) {
+        throw new Error(json.error?.message || 'Error al actualizar algoritmo en el servidor');
+      }
+
+      let updatedWrappedKey = userConfig.wrapped_master_key;
+      if (userConfig.webauthn_credential_id) {
+        try {
+          const newPkg = await wrapMasterKey(newMasterKey, userConfig.webauthn_credential_id);
+          updatedWrappedKey = JSON.stringify(newPkg);
+        } catch (wrapErr) {
+          console.warn('Failed to re-wrap master key with passkey:', wrapErr);
+        }
+      }
+
+      const updatedConfig: LocalUserConfig = {
+        ...userConfig,
+        kdf_salt: newSaltBase64,
+        kdf_algorithm: 'argon2id',
+        wrapped_master_key: updatedWrappedKey,
+      };
+      await saveUserConfig(updatedConfig);
+      await saveLocalVault({
+        user_id: userId,
+        encrypted_blob: encrypted.encryptedBlob,
+        iv: encrypted.iv,
+        version: encrypted.version,
+        updated_at: encrypted.updatedAt,
+        sync_status: 'synced',
+      });
+      onConfigUpdated(updatedConfig);
+
+      setKdfUpgradePassword('');
+      toast.success(t('security.kdfUpgradeSuccess'));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al actualizar a Argon2id';
+      toast.error(msg);
+    } finally {
+      setIsUpgradingKdf(false);
+    }
+  };
+
 
   // ---------------------------------------------------------------------------
   // Action Handlers: Sessions
@@ -795,6 +1193,18 @@ export function SecurityModal({
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('notifications')}
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
+                activeTab === 'notifications'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <span>{t('security.tabNotifications')}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('audit')}
               className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'audit'
@@ -805,6 +1215,7 @@ export function SecurityModal({
               <Clock className="w-3.5 h-3.5" />
               <span>{t('security.tabAudit')}</span>
             </button>
+
           </div>
 
           {/* Tab Content Container */}
@@ -1403,8 +1814,380 @@ export function SecurityModal({
               </div>
             )}
 
+            {/* TAB 4: PROACTIVE ALERTS & BYOK & KDF */}
+            {activeTab === 'notifications' && (
+              <div className="space-y-5">
+                {/* 1. Header description */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-amber-400" />
+                      <span>{t('security.notificationsTitle')}</span>
+                    </h4>
+                    <p className="text-[11px] text-zinc-400">
+                      {t('security.notificationsSubtitle')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Web Push Section */}
+                <div className="p-4 rounded-xl bg-[#12141a] border border-white/[0.08] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                        <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>{t('security.pushSectionTitle')}</span>
+                      </h5>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {t('security.pushSectionSubtitle')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {pushPermission === 'unsupported' ? (
+                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center gap-2 text-[11px]">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{t('security.pushStatusUnsupported')}</span>
+                    </div>
+                  ) : pushPermission === 'denied' ? (
+                    <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-start gap-2 text-[11px]">
+                      <AlertOctagon className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold">{t('security.pushStatusDenied')}</div>
+                        <div className="text-[10px] text-rose-200/80 mt-0.5">{t('security.pushStatusDeniedHelp')}</div>
+                      </div>
+                    </div>
+                  ) : isPushSubscribed ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <div className="flex items-center gap-2 text-[11px] font-medium">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{t('security.pushStatusActive')}</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300">
+                          RFC 8292
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleTestPush}
+                          disabled={isTestingPush}
+                          className="flex-1 py-1.5 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] font-medium transition-all flex items-center justify-center gap-1.5"
+                        >
+                          {isTestingPush ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>{t('security.testPush')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleUnsubscribePush}
+                          disabled={isLoadingPush}
+                          className="py-1.5 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-medium transition-all flex items-center gap-1.5"
+                        >
+                          {isLoadingPush ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                          <span>{t('security.disablePush')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#16181d] border border-white/[0.06] text-zinc-400">
+                        <span className="text-[11px]">{t('security.pushStatusInactive')}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSubscribePush}
+                        disabled={isLoadingPush}
+                        className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-sm transition-all flex items-center justify-center gap-1.5"
+                      >
+                        {isLoadingPush ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                        <span>{t('security.enablePush')}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. BYOK Email Section */}
+                <div className="p-4 rounded-xl bg-[#12141a] border border-white/[0.08] space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h5 className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-sky-400" />
+                        <span>{t('security.emailSectionTitle')}</span>
+                      </h5>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {t('security.emailSectionSubtitle')}
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={emailEnabled}
+                        onChange={(e) => setEmailEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {emailEnabled && (
+                    <div className="space-y-3.5 pt-2 border-t border-white/[0.06]">
+                      {/* Provider Toggle */}
+                      <div>
+                        <label className="text-[11px] font-medium text-zinc-300 block mb-1.5">
+                          {t('security.emailProviderLabel')}
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEmailProvider('resend')}
+                            className={`p-2.5 rounded-lg border text-left transition-all ${
+                              emailProvider === 'resend'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                : 'bg-[#16181d] border-white/[0.06] text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            <div className="font-semibold text-xs text-white flex items-center gap-1.5">
+                              <span>Resend</span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/20 text-emerald-300 font-mono">FREE</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 mt-1">3.000 emails/mes gratis</div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEmailProvider('cloudflare')}
+                            className={`p-2.5 rounded-lg border text-left transition-all ${
+                              emailProvider === 'cloudflare'
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                                : 'bg-[#16181d] border-white/[0.06] text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            <div className="font-semibold text-xs text-white flex items-center gap-1.5">
+                              <span>Cloudflare</span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/20 text-amber-300 font-mono">PAID $5</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 mt-1">Workers Paid requerido</div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Notice Callout */}
+                      {emailProvider === 'resend' ? (
+                        <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-[11px] text-zinc-300 flex items-start gap-2">
+                          <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{t('security.resendNotice')}</span>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span>{t('security.cfNotice')}</span>
+                        </div>
+                      )}
+
+                      {/* Destination Email */}
+                      <div>
+                        <label className="text-[11px] font-medium text-zinc-300 block mb-1">
+                          {t('security.emailDestinationLabel')}
+                        </label>
+                        <input
+                          type="email"
+                          value={destinationEmail}
+                          onChange={(e) => setDestinationEmail(e.target.value)}
+                          placeholder={t('security.emailDestinationPlaceholder')}
+                          className="w-full bg-[#16181d] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      {/* Resend Fields */}
+                      {emailProvider === 'resend' && (
+                        <div className="space-y-2.5">
+                          <div>
+                            <label className="text-[11px] font-medium text-zinc-300 block mb-1">
+                              {t('security.resendKeyLabel')}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showResendKey ? 'text' : 'password'}
+                                value={resendApiKey}
+                                onChange={(e) => setResendApiKey(e.target.value)}
+                                placeholder={hasStoredResendKey ? '•••••••••••••••• (API Key guardada)' : t('security.resendKeyPlaceholder')}
+                                className="w-full bg-[#16181d] border border-white/[0.08] rounded-lg pl-3 pr-9 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowResendKey(!showResendKey)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200"
+                              >
+                                {showResendKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-medium text-zinc-300 block mb-1">
+                              {t('security.resendFromLabel')}
+                            </label>
+                            <input
+                              type="text"
+                              value={resendFromEmail}
+                              onChange={(e) => setResendFromEmail(e.target.value)}
+                              placeholder={t('security.resendFromPlaceholder')}
+                              className="w-full bg-[#16181d] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Triggers selection */}
+                      <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+                        <label className="text-[11px] font-semibold text-zinc-300 block">
+                          {t('security.eventsSectionTitle')}
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={notifyNewCountry}
+                              onChange={(e) => setNotifyNewCountry(e.target.checked)}
+                              className="rounded border-white/[0.1] bg-[#16181d] text-emerald-500 focus:ring-0"
+                            />
+                            <span>{t('security.eventNewCountry')}</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={notifyNewSession}
+                              onChange={(e) => setNotifyNewSession(e.target.checked)}
+                              className="rounded border-white/[0.1] bg-[#16181d] text-emerald-500 focus:ring-0"
+                            />
+                            <span>{t('security.eventNewSession')}</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={notifyPasskeyAdded}
+                              onChange={(e) => setNotifyPasskeyAdded(e.target.checked)}
+                              className="rounded border-white/[0.1] bg-[#16181d] text-emerald-500 focus:ring-0"
+                            />
+                            <span>{t('security.eventPasskeyAdded')}</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-zinc-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={notifySessionRevoked}
+                              onChange={(e) => setNotifySessionRevoked(e.target.checked)}
+                              className="rounded border-white/[0.1] bg-[#16181d] text-emerald-500 focus:ring-0"
+                            />
+                            <span>{t('security.eventSessionRevoked')}</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Email Actions */}
+                      <div className="flex items-center gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveNotificationSettings}
+                          disabled={isSavingSettings || isLoadingSettings}
+                          className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          {isSavingSettings ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>{t('security.saveNotificationSettings')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleTestEmail}
+                          disabled={isTestingEmail || !destinationEmail}
+                          className="py-1.5 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] font-medium transition-all flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {isTestingEmail ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 text-sky-400" />}
+                          <span>{t('security.testEmail')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. KDF Cryptographic Engine Card */}
+                <div className="p-4 rounded-xl bg-[#12141a] border border-white/[0.08] space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h5 className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-violet-400" />
+                        <span>{t('security.kdfSectionTitle')}</span>
+                      </h5>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {t('security.kdfSectionSubtitle')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {userConfig?.kdf_algorithm === 'argon2id' ? (
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-semibold text-xs">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                          <span>{t('security.kdfArgon2idActive')}</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300">
+                          64 MB · 3 Rondas
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-200/80 leading-relaxed">
+                        {t('security.kdfArgon2idDesc')}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-semibold text-xs">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          <span>{t('security.kdfPbkdf2Active')}</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/20 text-amber-300">
+                          Legado
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                        {t('security.kdfPbkdf2Desc')}
+                      </p>
+
+                      <form onSubmit={handleUpgradeKdfManual} className="space-y-2 pt-2 border-t border-amber-500/20">
+                        <div className="relative">
+                          <input
+                            type={showUpgradePassword ? 'text' : 'password'}
+                            value={kdfUpgradePassword}
+                            onChange={(e) => setKdfUpgradePassword(e.target.value)}
+                            placeholder="Contraseña maestra actual"
+                            className="w-full bg-[#16181d] border border-amber-500/30 rounded-lg pl-3 pr-9 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowUpgradePassword(!showUpgradePassword)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200"
+                          >
+                            {showUpgradePassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isUpgradingKdf || !kdfUpgradePassword}
+                          className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          {isUpgradingKdf ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                          <span>{isUpgradingKdf ? t('security.upgradingKdf') : t('security.upgradeKdfBtn')}</span>
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* TAB 3: AUDIT LOGS */}
             {activeTab === 'audit' && (
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>

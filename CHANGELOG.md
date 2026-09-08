@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-09-08
+
+### Added
+- **Argon2id Memory-Hard KDF Core (`src/lib/crypto/kdf.ts` & `kdf.worker.ts`):**
+  - Upgraded Master Key Derivation Function from PBKDF2 to **Argon2id** (OWASP recommended: 64 MB memory cost, 3 iterations, 1 parallelism thread) compiled to WebAssembly via `hash-wasm`.
+  - Immune to GPU/ASIC parallel brute-force cluster attacks, while maintaining sub-400ms derivation speed on commodity client devices.
+  - **Seamless Silent Background Auto-Upgrade:** Existing PBKDF2 accounts are automatically, silently re-keyed and upgraded to Argon2id upon their next successful login or unlock, re-encrypting the vault and updating `kdf_algorithm` in Cloudflare D1 via atomic `POST /api/auth/upgrade-kdf`.
+  - Automatic passkey re-wrapping: existing Windows Hello / FIDO2 biometric bindings are automatically re-wrapped with the new Argon2id Master Key without prompting the user.
+  - Manual upgrade interface in the Security Modal for users wishing to trigger and inspect the migration immediately.
+  - Backward compatibility: legacy PBKDF2 accounts decrypt flawlessly and display their current cryptographic parameters.
+- **Native Zero-Knowledge Web Push Security Alerts (`src/worker/push.ts` & `public/push-sw.js`):**
+  - Real-time instant push notifications delivered directly to user devices via native browser Push API and Service Worker (`push-sw.js`).
+  - Zero-cost, zero-account-creation: notifications are sent directly from the Cloudflare Worker to browser push services (Google FCM, Apple APNs, Mozilla Push) via RFC 8292 (VAPID) and RFC 8291 (AES-128-GCM message encryption).
+  - VAPID keys generated and securely persisted in the database (`app_settings`), with zero hardcoded server credentials.
+  - Triggers alerts on critical hygiene events: login from an unrecognized country, new session creation, remote session revocation, and passkey registration.
+  - 100% Zero-Knowledge: payloads contain only sanitised hygiene metadata (event description, device name, country, timestamp), never vault item contents or secrets.
+- **Bring Your Own Key (BYOK) Email Alerter (`src/worker/email.ts`):**
+  - User-configurable proactive email alerts maintaining a strict **$0 operational cost** footprint for the self-hosted instance owner:
+    - **Resend (Recommended):** Users supply their personal free-tier API key (3,000 emails/month free).
+    - **Cloudflare Email (`send_email`):** Direct Worker outbound email support with prominent UI badge and warning stating the Cloudflare Workers Paid ($5/month) plan requirement on the user's account.
+  - Dark-mode branded HTML alert email templates styled with Revolt Pass design language.
+  - Granular event toggles: independently toggle alerts for new country, new session, session revocation, and passkey addition.
+  - In-app test notification buttons for both Web Push and BYOK Email with immediate feedback.
+- **Security Modal Notifications Tab (`src/components/SecurityModal.tsx`):**
+  - Dedicated "Notifications" tab featuring live push subscription status, activate/unsubscribe controls, BYOK email configuration, and active KDF algorithm diagnostics.
+  - Dynamic lock screen and authentication badges reflecting active cryptographic engine (`Argon2id 64MB` vs `PBKDF2 600K`).
+
+### Changed
+- Bumped project version to `v1.5.0` across `package.json` and `src/constants/version.ts`.
+- Database schema updated with `kdf_algorithm` column on `users`, `push_subscriptions`, `user_notification_settings`, and `app_settings` tables.
+- Expanded test suite to **134 passing automated tests** across 17 test suites, verifying Argon2id WASM derivation, cross-algorithm cryptographic isolation, VAPID key exchange, notification settings persistence, and Web Push subscription endpoints.
+
+---
+
 ## [1.4.1] - 2026-09-07
 
 ### Added

@@ -1,7 +1,7 @@
 {
   "name": "revolt-pass",
   "private": true,
-  "version": "1.4.4",
+  "version": "1.5.0",
   "description": "Zero-Knowledge 2FA & Security Vault",
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -20,6 +20,7 @@
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "cmdk": "^1.1.1",
+    "hash-wasm": "^4.12.0",
     "idb": "^8.0.3",
     "lucide-react": "^1.41.0",
     "motion": "^13.2.0",

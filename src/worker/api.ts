@@ -16,7 +16,15 @@ import type {
   RegisterPasskeyRequestBody,
   UpdateSessionRequestBody,
   UpdatePasskeyRequestBody,
+  UpgradeKdfRequestBody,
+  PushSubscriptionRequestBody,
+  UserNotificationSettingsRecord,
+  UpdateNotificationSettingsRequestBody,
+  TestEmailRequestBody,
 } from './types.ts';
+import { getOrCreateVapidKeys, sendWebPushNotification } from './push.ts';
+import { dispatchEmailAlert } from './email.ts';
+
 
 /**
  * FIX-03 (v1.3.1): Returns security headers with domain-restricted CORS.
@@ -276,10 +284,87 @@ async function checkSessionValidity(
   return null;
 }
 
+export interface SecurityAlertEvent {
+  type: 'NEW_COUNTRY' | 'NEW_SESSION' | 'PASSKEY_ADDED' | 'SESSION_REVOKED';
+  titleEs: string;
+  titleEn: string;
+  bodyEs: string;
+  bodyEn: string;
+  deviceName?: string;
+  ipCountry?: string;
+}
 
+/**
+ * Dispatches proactive push and BYOK email alerts for security events.
+ * Executes gracefully and never throws or breaks the core transaction.
+ */
+export async function triggerSecurityAlert(
+  env: Env,
+  userId: string,
+  event: SecurityAlertEvent
+): Promise<void> {
+  try {
+    // 1. Fetch user notification preferences
+    const settings = await env.DB.prepare(
+      'SELECT * FROM user_notification_settings WHERE user_id = ?'
+    )
+      .bind(userId)
+      .first<UserNotificationSettingsRecord>();
 
+    const pushEnabled = settings ? settings.push_enabled === 1 : true;
+    const emailEnabled = settings ? settings.email_enabled === 1 : false;
 
+    // Check specific event filters
+    if (settings) {
+      if (event.type === 'NEW_COUNTRY' && settings.notify_new_country === 0) return;
+      if (event.type === 'NEW_SESSION' && settings.notify_new_session === 0) return;
+      if (event.type === 'PASSKEY_ADDED' && settings.notify_passkey_added === 0) return;
+      if (event.type === 'SESSION_REVOKED' && settings.notify_session_revoked === 0) return;
+    }
 
+    // 2. Dispatch Web Push to all active subscriptions
+    if (pushEnabled) {
+      const subs = await env.DB.prepare(
+        'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?'
+      )
+        .bind(userId)
+        .all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
+
+      if (subs.results && subs.results.length > 0) {
+        for (const sub of subs.results) {
+          const res = await sendWebPushNotification(env, sub, {
+            title: `🛡️ Revolt Pass: ${event.titleEs}`,
+            body: event.bodyEs,
+            eventType: event.type,
+            timestamp: Date.now(),
+          });
+          if (res.expired) {
+            await env.DB.prepare('DELETE FROM push_subscriptions WHERE id = ?')
+              .bind(sub.id)
+              .run();
+          }
+        }
+      }
+    }
+
+    // 3. Dispatch Email Alert if enabled
+    if (emailEnabled && settings?.destination_email) {
+      await dispatchEmailAlert(env, {
+        to: settings.destination_email,
+        provider: settings.email_provider || 'resend',
+        resendApiKey: settings.resend_api_key || undefined,
+        resendFromEmail: settings.resend_from_email || undefined,
+        title: `Alerta de Seguridad: ${event.titleEs}`,
+        eventType: event.titleEs,
+        deviceName: event.deviceName,
+        ipCountry: event.ipCountry,
+        timestamp: Date.now(),
+      });
+    }
+  } catch {
+    // Proactive alerts must never crash the main transaction
+  }
+}
 
 /**
  * Main REST API request handler.
@@ -390,7 +475,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       }
 
 
-      const { username, kdf_salt, encrypted_blob, iv, passkey_credential_id, device_name } = body;
+      const { username, kdf_salt, kdf_algorithm = 'argon2id', encrypted_blob, iv, passkey_credential_id, device_name } = body;
 
       if (!username || !kdf_salt || !encrypted_blob || !iv) {
         return errorResponse(
@@ -433,9 +518,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       // 3. Atomically insert user, initial vault, session, and audit logs into Cloudflare D1
       const batchStatements = [
         env.DB.prepare(
-          `INSERT INTO users (id, username, kdf_salt, passkey_credential_id, created_at, updated_at) 
-           VALUES (?, ?, ?, ?, unixepoch(), unixepoch())`
-        ).bind(userId, cleanUsername, kdf_salt, passkey_credential_id || null),
+          `INSERT INTO users (id, username, kdf_salt, kdf_algorithm, passkey_credential_id, created_at, updated_at) 
+           VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())`
+        ).bind(userId, cleanUsername, kdf_salt, kdf_algorithm, passkey_credential_id || null),
         env.DB.prepare(
           `INSERT INTO vaults (user_id, encrypted_blob, iv, version, updated_at) 
            VALUES (?, ?, ?, 1, unixepoch())`
@@ -497,10 +582,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
       const cleanUsername = usernameParam.trim().toLowerCase();
       const user = await env.DB.prepare(
-        'SELECT id, kdf_salt, passkey_credential_id FROM users WHERE username = ? COLLATE NOCASE'
+        'SELECT id, kdf_salt, kdf_algorithm, passkey_credential_id FROM users WHERE username = ? COLLATE NOCASE'
       )
         .bind(cleanUsername)
-        .first<{ id: string; kdf_salt: string; passkey_credential_id: string | null }>();
+        .first<{ id: string; kdf_salt: string; kdf_algorithm: string | null; passkey_credential_id: string | null }>();
 
       if (!user) {
         return errorResponse('USER_NOT_FOUND', `Usuario "${cleanUsername}" no encontrado`, 404);
@@ -511,6 +596,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         data: {
           user_id: user.id,
           kdf_salt: user.kdf_salt,
+          kdf_algorithm: user.kdf_algorithm || 'pbkdf2',
           has_passkey: !!user.passkey_credential_id,
         },
         timestamp: Date.now(),
@@ -666,6 +752,16 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         }
       }
 
+      // Check prior active sessions to determine if country or device is new
+      const priorSessions = await env.DB.prepare(
+        'SELECT ip_country FROM sessions WHERE user_id = ? AND is_revoked = 0'
+      )
+        .bind(targetUserId)
+        .all<{ ip_country: string | null }>();
+
+      const hasPrior = priorSessions.results && priorSessions.results.length > 0;
+      const isNewCountry = hasPrior && ipCountry && !priorSessions.results.some((s) => s.ip_country === ipCountry);
+
       // 3. Completely new session creation
       const sessionToken = generateToken();
       const tokenHash = await hashToken(sessionToken);
@@ -691,6 +787,31 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       }
 
       await env.DB.batch(batchStatements);
+
+      if (hasPrior) {
+        if (isNewCountry) {
+          triggerSecurityAlert(env, targetUserId, {
+            type: 'NEW_COUNTRY',
+            titleEs: 'Nuevo país detectado',
+            titleEn: 'New country detected',
+            bodyEs: `Inicio de sesión desde ${ipCountry} (${resolvedDeviceName})`,
+            bodyEn: `Login from ${ipCountry} (${resolvedDeviceName})`,
+            deviceName: resolvedDeviceName,
+            ipCountry,
+          });
+        } else {
+          triggerSecurityAlert(env, targetUserId, {
+            type: 'NEW_SESSION',
+            titleEs: 'Nuevo dispositivo conectado',
+            titleEn: 'New device connected',
+            bodyEs: `Se inició sesión en ${resolvedDeviceName}`,
+            bodyEn: `Session started on ${resolvedDeviceName}`,
+            deviceName: resolvedDeviceName,
+            ipCountry: ipCountry || undefined,
+          });
+        }
+      }
+
 
       return jsonResponse({
         success: true,
@@ -816,6 +937,16 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         ).bind(userId, JSON.stringify({ current_token_hash_prefix: currentHash.slice(0, 8) })),
       ]);
 
+      triggerSecurityAlert(env, userId, {
+        type: 'SESSION_REVOKED',
+        titleEs: 'Sesiones remotas revocadas',
+        titleEn: 'Remote sessions revoked',
+        bodyEs: 'Se han cerrado todas las demás sesiones activas por seguridad.',
+        bodyEn: 'All other active sessions have been terminated for security.',
+        deviceName: parseDeviceName(request.headers.get('User-Agent')),
+        ipCountry: getIpCountry(request) || undefined,
+      });
+
       return jsonResponse({
         success: true,
         data: { message: 'Todas las demás sesiones han sido revocadas exitosamente' },
@@ -854,6 +985,17 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
            VALUES (?, 'SESSION_REVOKED', ?, ?, unixepoch())`
         ).bind(userId, resolvedDevice, JSON.stringify({ revoked_session_id: targetSessionId, device_name: resolvedDevice })),
       ]);
+
+      triggerSecurityAlert(env, userId, {
+        type: 'SESSION_REVOKED',
+        titleEs: 'Sesión revocada remotamente',
+        titleEn: 'Session revoked remotely',
+        bodyEs: `La sesión en ${resolvedDevice} ha sido cerrada remotamente.`,
+        bodyEn: `The session on ${resolvedDevice} was terminated remotely.`,
+        deviceName: resolvedDevice,
+        ipCountry: getIpCountry(request) || undefined,
+      });
+
 
       return jsonResponse({
         success: true,
@@ -1066,7 +1208,20 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
       await env.DB.batch(batchStatements);
 
+      if (!existingRecord) {
+        triggerSecurityAlert(env, userId, {
+          type: 'PASSKEY_ADDED',
+          titleEs: 'Nueva passkey registrada',
+          titleEn: 'New passkey registered',
+          bodyEs: `Se registró la llave biométrica "${finalName}" en ${resolvedDeviceName}`,
+          bodyEn: `Biometric passkey "${finalName}" registered on ${resolvedDeviceName}`,
+          deviceName: resolvedDeviceName,
+          ipCountry: getIpCountry(request) || undefined,
+        });
+      }
+
       return jsonResponse(
+
         {
           success: true,
           data: {
@@ -1399,8 +1554,359 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       }, 200, extraHeaders, env);
     }
 
+    // -----------------------------------------------------------------------
+    // POST /api/auth/upgrade-kdf: Seamless promotion from PBKDF2 to Argon2id
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/auth/upgrade-kdf' || path === '/api/v1/auth/upgrade-kdf')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: UpgradeKdfRequestBody;
+      try {
+        body = (await request.json()) as UpgradeKdfRequestBody;
+      } catch {
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400, undefined, env);
+      }
+
+      const { kdf_salt, kdf_algorithm, encrypted_blob, iv } = body;
+      if (!kdf_salt || !kdf_algorithm || !encrypted_blob || !iv) {
+        return errorResponse(
+          'MISSING_REQUIRED_FIELDS',
+          'Los campos kdf_salt, kdf_algorithm, encrypted_blob e iv son obligatorios',
+          400,
+          undefined,
+          env
+        );
+      }
+
+      const currentVault = await env.DB.prepare('SELECT version FROM vaults WHERE user_id = ?')
+        .bind(userId)
+        .first<{ version: number }>();
+
+      if (!currentVault) {
+        return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada', 404, undefined, env);
+      }
+
+      const newVersion = currentVault.version + 1;
+      const resolvedDeviceName = parseDeviceName(request.headers.get('User-Agent'));
+
+      await env.DB.batch([
+        env.DB.prepare(
+          'UPDATE users SET kdf_salt = ?, kdf_algorithm = ?, updated_at = unixepoch() WHERE id = ?'
+        ).bind(kdf_salt, kdf_algorithm, userId),
+        env.DB.prepare(
+          'UPDATE vaults SET encrypted_blob = ?, iv = ?, version = ?, updated_at = unixepoch() WHERE user_id = ?'
+        ).bind(encrypted_blob, iv, newVersion, userId),
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
+           VALUES (?, 'KDF_UPGRADED', ?, ?, unixepoch())`
+        ).bind(userId, resolvedDeviceName, JSON.stringify({ algorithm: kdf_algorithm, version: newVersion })),
+      ]);
+
+      return jsonResponse({
+        success: true,
+        data: {
+          user_id: userId,
+          kdf_algorithm,
+          version: newVersion,
+          updated_at: Math.floor(Date.now() / 1000),
+        },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /api/notifications/vapid-public-key: Retrieve VAPID public key for Web Push
+    // -----------------------------------------------------------------------
+    if (request.method === 'GET' && (path === '/api/notifications/vapid-public-key' || path === '/api/v1/notifications/vapid-public-key')) {
+      const vapidKeys = await getOrCreateVapidKeys(env);
+      return jsonResponse({
+        success: true,
+        data: { public_key: vapidKeys.publicKey },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/notifications/push-subscribe: Register Web Push subscription
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/notifications/push-subscribe' || path === '/api/v1/notifications/push-subscribe')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: PushSubscriptionRequestBody;
+      try {
+        body = (await request.json()) as PushSubscriptionRequestBody;
+      } catch {
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400, undefined, env);
+      }
+
+      const { endpoint, p256dh, auth } = body;
+      if (!endpoint || !p256dh || !auth) {
+        return errorResponse('MISSING_REQUIRED_FIELDS', 'endpoint, p256dh y auth son obligatorios', 400, undefined, env);
+      }
+
+      const userAgent = request.headers.get('User-Agent') || null;
+      const subId = `sub_${crypto.randomUUID()}`;
+
+      await env.DB.prepare(
+        `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, unixepoch())
+         ON CONFLICT(endpoint) DO UPDATE SET 
+           user_id = excluded.user_id,
+           p256dh = excluded.p256dh,
+           auth = excluded.auth,
+           user_agent = excluded.user_agent`
+      ).bind(subId, userId, endpoint, p256dh, auth, userAgent).run();
+
+      return jsonResponse({
+        success: true,
+        data: { message: 'Suscripción push registrada exitosamente', subscribed: true },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/notifications/push-unsubscribe: Remove Web Push subscription
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/notifications/push-unsubscribe' || path === '/api/v1/notifications/push-unsubscribe')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: { endpoint?: string } = {};
+      try {
+        body = (await request.json()) as { endpoint?: string };
+      } catch {
+        // body optional
+      }
+
+      if (body.endpoint) {
+        await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?')
+          .bind(body.endpoint, userId)
+          .run();
+      } else {
+        await env.DB.prepare('DELETE FROM push_subscriptions WHERE user_id = ?')
+          .bind(userId)
+          .run();
+      }
+
+      return jsonResponse({
+        success: true,
+        data: { message: 'Suscripción eliminada', unsubscribed: true },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/notifications/test-push: Dispatch immediate test push
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/notifications/test-push' || path === '/api/v1/notifications/test-push')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const subs = await env.DB.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?')
+        .bind(userId)
+        .all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
+
+      if (!subs.results || subs.results.length === 0) {
+        return errorResponse('NO_PUSH_SUBSCRIPTION', 'No hay suscripciones Web Push activas en este dispositivo', 400, undefined, env);
+      }
+
+      let sentCount = 0;
+      for (const sub of subs.results) {
+        const res = await sendWebPushNotification(env, sub, {
+          title: '🛡️ Revolt Pass: Alerta de Prueba',
+          body: 'Las notificaciones push nativas están activas y funcionando correctamente.',
+          eventType: 'TEST_PUSH',
+          timestamp: Date.now(),
+        });
+        if (res.success) sentCount++;
+        if (res.expired) {
+          await env.DB.prepare('DELETE FROM push_subscriptions WHERE id = ?').bind(sub.id).run();
+        }
+      }
+
+      return jsonResponse({
+        success: true,
+        data: { sent_count: sentCount },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /api/notifications/settings: Retrieve user notification preferences
+    // -----------------------------------------------------------------------
+    if (request.method === 'GET' && (path === '/api/notifications/settings' || path === '/api/v1/notifications/settings')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const settings = await env.DB.prepare(
+        'SELECT * FROM user_notification_settings WHERE user_id = ?'
+      )
+        .bind(userId)
+        .first<UserNotificationSettingsRecord>();
+
+      return jsonResponse({
+        success: true,
+        data: {
+          push_enabled: settings ? settings.push_enabled === 1 : true,
+          email_enabled: settings ? settings.email_enabled === 1 : false,
+          email_provider: settings?.email_provider || 'resend',
+          has_resend_api_key: !!(settings?.resend_api_key),
+          resend_from_email: settings?.resend_from_email || '',
+          destination_email: settings?.destination_email || '',
+          notify_new_country: settings ? settings.notify_new_country === 1 : true,
+          notify_new_session: settings ? settings.notify_new_session === 1 : true,
+          notify_passkey_added: settings ? settings.notify_passkey_added === 1 : true,
+          notify_session_revoked: settings ? settings.notify_session_revoked === 1 : true,
+        },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/notifications/settings: Save user notification preferences
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/notifications/settings' || path === '/api/v1/notifications/settings')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: UpdateNotificationSettingsRequestBody;
+      try {
+        body = (await request.json()) as UpdateNotificationSettingsRequestBody;
+      } catch {
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400, undefined, env);
+      }
+
+      const existing = await env.DB.prepare(
+        'SELECT * FROM user_notification_settings WHERE user_id = ?'
+      )
+        .bind(userId)
+        .first<UserNotificationSettingsRecord>();
+
+      const pushEnabled = body.push_enabled !== undefined ? (body.push_enabled ? 1 : 0) : (existing?.push_enabled ?? 1);
+      const emailEnabled = body.email_enabled !== undefined ? (body.email_enabled ? 1 : 0) : (existing?.email_enabled ?? 0);
+      const emailProvider = body.email_provider || existing?.email_provider || 'resend';
+      const resendApiKey = body.resend_api_key !== undefined ? body.resend_api_key : existing?.resend_api_key;
+      const resendFromEmail = body.resend_from_email !== undefined ? body.resend_from_email : existing?.resend_from_email;
+      const destinationEmail = body.destination_email !== undefined ? body.destination_email : existing?.destination_email;
+      const notifyNewCountry = body.notify_new_country !== undefined ? (body.notify_new_country ? 1 : 0) : (existing?.notify_new_country ?? 1);
+      const notifyNewSession = body.notify_new_session !== undefined ? (body.notify_new_session ? 1 : 0) : (existing?.notify_new_session ?? 1);
+      const notifyPasskeyAdded = body.notify_passkey_added !== undefined ? (body.notify_passkey_added ? 1 : 0) : (existing?.notify_passkey_added ?? 1);
+      const notifySessionRevoked = body.notify_session_revoked !== undefined ? (body.notify_session_revoked ? 1 : 0) : (existing?.notify_session_revoked ?? 1);
+
+      await env.DB.prepare(
+        `INSERT INTO user_notification_settings (
+           user_id, push_enabled, email_enabled, email_provider,
+           resend_api_key, resend_from_email, destination_email,
+           notify_new_country, notify_new_session, notify_passkey_added, notify_session_revoked,
+           updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+         ON CONFLICT(user_id) DO UPDATE SET
+           push_enabled = excluded.push_enabled,
+           email_enabled = excluded.email_enabled,
+           email_provider = excluded.email_provider,
+           resend_api_key = CASE WHEN excluded.resend_api_key IS NOT NULL AND excluded.resend_api_key != '' THEN excluded.resend_api_key ELSE user_notification_settings.resend_api_key END,
+           resend_from_email = excluded.resend_from_email,
+           destination_email = excluded.destination_email,
+           notify_new_country = excluded.notify_new_country,
+           notify_new_session = excluded.notify_new_session,
+           notify_passkey_added = excluded.notify_passkey_added,
+           notify_session_revoked = excluded.notify_session_revoked,
+           updated_at = unixepoch()`
+      ).bind(
+        userId, pushEnabled, emailEnabled, emailProvider,
+        resendApiKey || null, resendFromEmail || null, destinationEmail || null,
+        notifyNewCountry, notifyNewSession, notifyPasskeyAdded, notifySessionRevoked
+      ).run();
+
+      return jsonResponse({
+        success: true,
+        data: { message: 'Preferencias de notificación guardadas' },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/notifications/test-email: Test BYOK email alert
+    // -----------------------------------------------------------------------
+    if (request.method === 'POST' && (path === '/api/notifications/test-email' || path === '/api/v1/notifications/test-email')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      let body: TestEmailRequestBody;
+      try {
+        body = (await request.json()) as TestEmailRequestBody;
+      } catch {
+        return errorResponse('INVALID_JSON_BODY', 'El cuerpo de la solicitud no es un JSON válido', 400, undefined, env);
+      }
+
+      const { provider = 'resend', resend_api_key, resend_from_email, destination_email } = body;
+      if (!destination_email || !destination_email.includes('@')) {
+        return errorResponse('INVALID_EMAIL', 'Debe especificar un email de destino válido', 400, undefined, env);
+      }
+
+      let finalApiKey = resend_api_key;
+      if (provider === 'resend' && !finalApiKey) {
+        const stored = await env.DB.prepare('SELECT resend_api_key FROM user_notification_settings WHERE user_id = ?')
+          .bind(userId)
+          .first<{ resend_api_key?: string }>();
+        finalApiKey = stored?.resend_api_key;
+      }
+
+      if (provider === 'resend' && !finalApiKey) {
+        return errorResponse('MISSING_API_KEY', 'Se requiere una API Key de Resend para realizar la prueba', 400, undefined, env);
+      }
+
+      const result = await dispatchEmailAlert(env, {
+        to: destination_email,
+        provider,
+        resendApiKey: finalApiKey,
+        resendFromEmail: resend_from_email,
+        title: '🛡️ Revolt Pass: Correo de Prueba de Seguridad',
+        eventType: 'Prueba de Alertas Proactivas',
+        deviceName: parseDeviceName(request.headers.get('User-Agent')),
+        ipCountry: getIpCountry(request) || 'AR',
+        timestamp: Date.now(),
+      });
+
+      if (!result.success) {
+        return errorResponse('EMAIL_SEND_FAILED', result.error || 'Falló el envío de correo', 502, undefined, env);
+      }
+
+      return jsonResponse({
+        success: true,
+        data: { message: 'Correo de prueba enviado exitosamente' },
+        timestamp: Date.now(),
+      }, 200, {}, env);
+    }
+
     // Endpoint not found
     return errorResponse('ENDPOINT_NOT_FOUND', `Ruta de API no encontrada: ${request.method} ${path}`, 404);
+
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error interno del servidor';
     return errorResponse('INTERNAL_SERVER_ERROR', message, 500);

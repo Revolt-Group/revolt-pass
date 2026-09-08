@@ -17,6 +17,7 @@ class MockD1Database {
     id: string;
     username: string;
     kdf_salt: string;
+    kdf_algorithm: string;
     passkey_credential_id: string | null;
     created_at: number;
     updated_at: number;
@@ -40,6 +41,29 @@ class MockD1Database {
     server_version: number;
     created_at: number;
   }> = [];
+  public appSettings = new Map<string, string>();
+  public pushSubscriptions = new Map<string, {
+    id: string;
+    user_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    user_agent?: string;
+    created_at: number;
+  }>();
+  public notificationSettings = new Map<string, {
+    user_id: string;
+    email_enabled: number;
+    email_provider: string;
+    resend_api_key?: string | null;
+    resend_from_email?: string | null;
+    destination_email?: string | null;
+    notify_on_new_country: number;
+    notify_on_new_session: number;
+    notify_on_session_revoked: number;
+    notify_on_passkey_added: number;
+    updated_at: number;
+  }>();
 
   public prepare(query: string) {
     const db = this;
@@ -59,6 +83,7 @@ class MockD1Database {
                     id: u.id,
                     username: u.username,
                     kdf_salt: u.kdf_salt,
+                    kdf_algorithm: u.kdf_algorithm || 'pbkdf2',
                     passkey_credential_id: u.passkey_credential_id,
                   } as unknown as T;
                 }
@@ -151,6 +176,32 @@ class MockD1Database {
               const userId = String(params[0]);
               const vault = db.vaults.get(userId);
               return (vault ? { ...vault } : null) as unknown as T;
+            }
+
+            // SELECT value FROM app_settings WHERE key = ?
+            if (normalizedQuery.includes('from app_settings where key =')) {
+              const key = String(params[0]);
+              const val = db.appSettings.get(key);
+              return (val !== undefined ? { value: val } : null) as unknown as T;
+            }
+
+            // SELECT ... FROM user_notification_settings WHERE user_id = ?
+            if (normalizedQuery.includes('from user_notification_settings where user_id =')) {
+              const userId = String(params[0]);
+              const s = db.notificationSettings.get(userId);
+              return (s ? { ...s } : null) as unknown as T;
+            }
+
+            // SELECT id FROM push_subscriptions WHERE user_id = ? AND endpoint = ?
+            if (normalizedQuery.includes('from push_subscriptions where user_id =') && normalizedQuery.includes('endpoint =')) {
+              const userId = String(params[0]);
+              const endpoint = String(params[1]);
+              for (const p of db.pushSubscriptions.values()) {
+                if (p.user_id === userId && p.endpoint === endpoint) {
+                  return { id: p.id } as unknown as T;
+                }
+              }
+              return null;
             }
 
             return null;
@@ -263,6 +314,87 @@ class MockD1Database {
               }
             }
 
+            // INSERT INTO app_settings
+            if (normalizedQuery.includes('into app_settings')) {
+              const [key, value] = params as [string, string];
+              db.appSettings.set(key, value);
+            }
+
+            // INSERT INTO push_subscriptions
+            if (normalizedQuery.includes('into push_subscriptions')) {
+              const [id, user_id, endpoint, p256dh, auth, user_agent] = params as [
+                string,
+                string,
+                string,
+                string,
+                string,
+                string | undefined
+              ];
+              db.pushSubscriptions.set(id, {
+                id,
+                user_id,
+                endpoint,
+                p256dh,
+                auth,
+                user_agent,
+                created_at: Math.floor(Date.now() / 1000),
+              });
+            }
+
+            // DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?
+            if (normalizedQuery.includes('from push_subscriptions where user_id =') && normalizedQuery.includes('endpoint =')) {
+              const userId = String(params[0]);
+              const endpoint = String(params[1]);
+              for (const [k, p] of db.pushSubscriptions.entries()) {
+                if (p.user_id === userId && p.endpoint === endpoint) {
+                  db.pushSubscriptions.delete(k);
+                }
+              }
+            }
+
+            // INSERT INTO user_notification_settings ... ON CONFLICT
+            if (normalizedQuery.includes('into user_notification_settings')) {
+              const [
+                user_id,
+                push_enabled,
+                email_enabled,
+                email_provider,
+                resend_api_key,
+                resend_from_email,
+                destination_email,
+                notify_on_new_country,
+                notify_on_new_session,
+                notify_on_passkey_added,
+                notify_on_session_revoked,
+              ] = params as [
+                string,
+                number,
+                number,
+                string,
+                string | null,
+                string | null,
+                string | null,
+                number,
+                number,
+                number,
+                number
+              ];
+              db.notificationSettings.set(user_id, {
+                user_id,
+                push_enabled,
+                email_enabled,
+                email_provider,
+                resend_api_key: resend_api_key || null,
+                resend_from_email: resend_from_email || null,
+                destination_email: destination_email || null,
+                notify_on_new_country,
+                notify_on_new_session,
+                notify_on_passkey_added,
+                notify_on_session_revoked,
+                updated_at: Math.floor(Date.now() / 1000),
+              });
+            }
+
             return { success: true, meta: {} as unknown as D1Meta };
           },
         };
@@ -275,10 +407,12 @@ class MockD1Database {
     id: string;
     username: string;
     kdf_salt: string;
+    kdf_algorithm?: string;
     passkey_credential_id?: string | null;
   }) {
     this.users.set(user.id, {
       ...user,
+      kdf_algorithm: user.kdf_algorithm || 'pbkdf2',
       passkey_credential_id: user.passkey_credential_id || null,
       created_at: Math.floor(Date.now() / 1000),
       updated_at: Math.floor(Date.now() / 1000),
@@ -326,8 +460,26 @@ class MockD1Database {
           const q = s.query.toLowerCase().replace(/\s+/g, ' ');
 
           if (q.includes('insert into users')) {
-            const [id, username, kdf_salt, passkey_id] = s.params as [string, string, string, string | null];
-            db.addUser({ id, username, kdf_salt, passkey_credential_id: passkey_id });
+            const params = s.params as any[];
+            const id = params[0];
+            const username = params[1];
+            const kdf_salt = params[2];
+            let kdf_algorithm = 'pbkdf2';
+            let passkey_id = null;
+            if (params.length >= 5) {
+              kdf_algorithm = params[3];
+              passkey_id = params[4];
+            } else {
+              passkey_id = params[3];
+            }
+            db.addUser({ id, username, kdf_salt, kdf_algorithm, passkey_credential_id: passkey_id });
+          } else if (q.includes('update users set kdf_salt =')) {
+            const [kdf_salt, kdf_algorithm, userId] = s.params as [string, string, string];
+            const u = db.users.get(userId);
+            if (u) {
+              u.kdf_salt = kdf_salt;
+              u.kdf_algorithm = kdf_algorithm;
+            }
           } else if (q.includes('insert into vaults')) {
             const [user_id, encrypted_blob, iv] = s.params as [string, string, string];
             db.addVault({ user_id, encrypted_blob, iv, version: 1 });
@@ -1521,6 +1673,227 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
       });
       const resAudit = await handleApiRequest(reqAudit, env);
       expect(resAudit.status).toBe(200);
+    });
+  });
+
+  describe('Milestone v1.5: Argon2id KDF & Proactive Notifications', () => {
+    it('registers user with Argon2id algorithm by default and retrieves it via GET /api/auth/salt', async () => {
+      const reqReg = new Request('https://pass.example.com/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'argon_user',
+          kdf_salt: 'salt_argon_123',
+          kdf_algorithm: 'argon2id',
+          encrypted_blob: 'blob_argon_1',
+          iv: 'iv_argon_1',
+        }),
+      });
+      const resReg = await handleApiRequest(reqReg, env);
+      expect(resReg.status).toBe(201);
+      const regJson = (await resReg.json()) as ApiResponse<{ user_id: string; session_token: string }>;
+      expect(regJson.success).toBe(true);
+
+      const reqSalt = new Request('https://pass.example.com/api/auth/salt?username=argon_user', {
+        method: 'GET',
+      });
+      const resSalt = await handleApiRequest(reqSalt, env);
+      expect(resSalt.status).toBe(200);
+      const saltJson = (await resSalt.json()) as ApiResponse<{ user_id: string; kdf_salt: string; kdf_algorithm: string }>;
+      expect(saltJson.success).toBe(true);
+      expect(saltJson.data?.kdf_algorithm).toBe('argon2id');
+    });
+
+    it('upgrades user from PBKDF2 to Argon2id via POST /api/auth/upgrade-kdf', async () => {
+      // 1. Register legacy user with PBKDF2
+      const reqReg = new Request('https://pass.example.com/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'legacy_pbkdf2_user',
+          kdf_salt: 'salt_old_pbkdf2',
+          kdf_algorithm: 'pbkdf2',
+          encrypted_blob: 'blob_pbkdf2_1',
+          iv: 'iv_pbkdf2_1',
+        }),
+      });
+      const resReg = await handleApiRequest(reqReg, env);
+      const regJson = (await resReg.json()) as ApiResponse<{ user_id: string; session_token: string }>;
+      const userId = regJson.data!.user_id;
+      const sessionToken = regJson.data!.session_token;
+
+      // 2. Perform atomic upgrade to Argon2id
+      const reqUpgrade = new Request('https://pass.example.com/api/auth/upgrade-kdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          'X-Session-Token': sessionToken,
+        },
+        body: JSON.stringify({
+          kdf_salt: 'salt_new_argon2id',
+          kdf_algorithm: 'argon2id',
+          encrypted_blob: 'blob_argon2id_reencrypted',
+          iv: 'iv_argon2id_new',
+        }),
+      });
+      const resUpgrade = await handleApiRequest(reqUpgrade, env);
+      expect(resUpgrade.status).toBe(200);
+      const upJson = (await resUpgrade.json()) as ApiResponse<{ kdf_algorithm: string; version: number }>;
+      expect(upJson.success).toBe(true);
+      expect(upJson.data?.kdf_algorithm).toBe('argon2id');
+      expect(upJson.data?.version).toBe(2);
+
+      // 3. Verify that salt query now returns argon2id
+      const reqSalt = new Request('https://pass.example.com/api/auth/salt?username=legacy_pbkdf2_user', {
+        method: 'GET',
+      });
+      const resSalt = await handleApiRequest(reqSalt, env);
+      const saltJson = (await resSalt.json()) as ApiResponse<{ kdf_algorithm: string; kdf_salt: string }>;
+      expect(saltJson.data?.kdf_algorithm).toBe('argon2id');
+      expect(saltJson.data?.kdf_salt).toBe('salt_new_argon2id');
+    });
+
+    it('generates and returns VAPID public key via GET /api/notifications/vapid-public-key', async () => {
+      const reqVapid = new Request('https://pass.example.com/api/notifications/vapid-public-key', {
+        method: 'GET',
+      });
+      const resVapid = await handleApiRequest(reqVapid, env);
+      expect(resVapid.status).toBe(200);
+      const vapidJson = (await resVapid.json()) as ApiResponse<{ public_key: string }>;
+      expect(vapidJson.success).toBe(true);
+      expect(typeof vapidJson.data?.public_key).toBe('string');
+      expect(vapidJson.data!.public_key.length).toBeGreaterThan(20);
+    });
+
+    it('manages BYOK notification settings via GET and POST /api/notifications/settings', async () => {
+      // 1. Create a user
+      const reqReg = new Request('https://pass.example.com/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'notif_settings_user',
+          kdf_salt: 'salt_notif',
+          encrypted_blob: 'blob_notif',
+          iv: 'iv_notif',
+        }),
+      });
+      const resReg = await handleApiRequest(reqReg, env);
+      const regJson = (await resReg.json()) as ApiResponse<{ user_id: string; session_token: string }>;
+      const userId = regJson.data!.user_id;
+      const sessionToken = regJson.data!.session_token;
+
+      // 2. GET default notification settings
+      const reqGet = new Request('https://pass.example.com/api/notifications/settings', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': sessionToken,
+        },
+      });
+      const resGet = await handleApiRequest(reqGet, env);
+      expect(resGet.status).toBe(200);
+      const getJson = (await resGet.json()) as ApiResponse<{ email_enabled: boolean }>;
+      expect(getJson.success).toBe(true);
+      expect(getJson.data?.email_enabled).toBe(false);
+
+      // 3. POST updated settings (BYOK Resend)
+      const reqPost = new Request('https://pass.example.com/api/notifications/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          'X-Session-Token': sessionToken,
+        },
+        body: JSON.stringify({
+          email_enabled: true,
+          email_provider: 'resend',
+          resend_api_key: 're_test_key_123',
+          resend_from_email: 'alerts@example.com',
+          destination_email: 'user@example.com',
+          notify_on_new_country: true,
+          notify_on_new_session: true,
+          notify_on_session_revoked: true,
+          notify_on_passkey_added: false,
+        }),
+      });
+      const resPost = await handleApiRequest(reqPost, env);
+      expect(resPost.status).toBe(200);
+      const postJson = (await resPost.json()) as ApiResponse<{ message: string }>;
+      expect(postJson.success).toBe(true);
+
+      // 4. Verify round-trip persistence via GET
+      const reqGet2 = new Request('https://pass.example.com/api/notifications/settings', {
+        method: 'GET',
+        headers: {
+          'X-User-Id': userId,
+          'X-Session-Token': sessionToken,
+        },
+      });
+      const resGet2 = await handleApiRequest(reqGet2, env);
+      expect(resGet2.status).toBe(200);
+      const getJson2 = (await resGet2.json()) as ApiResponse<{ email_enabled: boolean; destination_email: string; has_resend_api_key: boolean }>;
+      expect(getJson2.success).toBe(true);
+      expect(getJson2.data?.email_enabled).toBe(true);
+      expect(getJson2.data?.destination_email).toBe('user@example.com');
+      expect(getJson2.data?.has_resend_api_key).toBe(true);
+    });
+
+    it('subscribes and unsubscribes Web Push notifications via API', async () => {
+      // 1. Create a user
+      const reqReg = new Request('https://pass.example.com/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'push_sub_user',
+          kdf_salt: 'salt_push',
+          encrypted_blob: 'blob_push',
+          iv: 'iv_push',
+        }),
+      });
+      const resReg = await handleApiRequest(reqReg, env);
+      const regJson = (await resReg.json()) as ApiResponse<{ user_id: string; session_token: string }>;
+      const userId = regJson.data!.user_id;
+      const sessionToken = regJson.data!.session_token;
+
+      // 2. Subscribe to push
+      const testEndpoint = 'https://fcm.googleapis.com/fcm/send/test-sub-12345';
+      const reqSub = new Request('https://pass.example.com/api/notifications/push-subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          'X-Session-Token': sessionToken,
+        },
+        body: JSON.stringify({
+          endpoint: testEndpoint,
+          p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9AcFY3XWM2BgVRWnuvSGA7CQ0tSpfScZZWkd81GneuQnQ4=',
+          auth: 'tBHItJI5svbpez7KI4CCXg==',
+        }),
+      });
+      const resSub = await handleApiRequest(reqSub, env);
+      expect(resSub.status).toBe(200);
+      const subJson = (await resSub.json()) as ApiResponse<{ subscribed: boolean }>;
+      expect(subJson.success).toBe(true);
+      expect(subJson.data?.subscribed).toBe(true);
+
+      // 3. Unsubscribe from push
+      const reqUnsub = new Request('https://pass.example.com/api/notifications/push-unsubscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': userId,
+          'X-Session-Token': sessionToken,
+        },
+        body: JSON.stringify({
+          endpoint: testEndpoint,
+        }),
+      });
+      const resUnsub = await handleApiRequest(reqUnsub, env);
+      expect(resUnsub.status).toBe(200);
+      const unsubJson = (await resUnsub.json()) as ApiResponse<{ unsubscribed: boolean }>;
+      expect(unsubJson.success).toBe(true);
+      expect(unsubJson.data?.unsubscribed).toBe(true);
     });
   });
 });

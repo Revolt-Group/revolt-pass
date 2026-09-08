@@ -57,6 +57,7 @@ export interface LocalUserConfig {
   user_id: string;
   username: string;
   kdf_salt: string;
+  kdf_algorithm?: 'pbkdf2' | 'argon2id';
   session_token?: string;
   device_name?: string;
   passkey_name?: string;
