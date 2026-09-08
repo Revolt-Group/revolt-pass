@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-RDM-005` |
-| **Current Version** | `1.3.1-PROD` (Live & Production Ready) |
+| **Current Version** | `1.4.4-PROD` (Live & Production Ready) |
 | **Status** | Approved / Quality-Driven Milestone Evolution Plan |
 | **Remote Repository** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Primary Branch** | `main` |
@@ -21,22 +21,30 @@ Every milestone or product release is structured around a rigorous **Definition 
 
 ```mermaid
 flowchart TD
-    subgraph COMPLETADAS ["Production Foundation in Production (v1.0 to v1.3.1)"]
+    subgraph COMPLETADAS ["✅ Production Foundation in Production (v1.0 — v1.4.4)"]
         v10["Phases 1 to 8: Cryptographic Core & PWA<br/>AES-256-GCM, PBKDF2 600k in Web Worker, Cloudflare D1 Edge, WebAuthn, AutoLock"]
         v11["Phase 9: Multi-Device & Auditing (v1.1)<br/>D1 Sessions, Granular Remote Revocation, FIDO2 Passkeys, Audit Logs"]
         v12["Phases 10 & 11: i18n, Backups & Open Source Release (v1.2.1)<br/>Bilingual i18n ES/EN, Encrypted Backups, Private Instance Mode, AGPLv3"]
         v13["Phase 12: Hygiene & HaveIBeenPwned (v1.3.0)<br/>k-Anonymity SHA-1, Base32 Entropy Alerts, Visual Scorecard"]
         v131["Phase 13: Hardening & Token Rotation (v1.3.1)<br/>Strict CSP, Edge Rate Limiter, Scoped CORS, Sliding Token Rotation"]
-        v10 --> v11 --> v12 --> v13 --> v131
+        v14["Milestone v1.4.0: Universal Importers, Exporters & YubiKey<br/>Google Auth, Aegis, 2FAS, Bitwarden + otpauth:// export & FIDO2 roaming"]
+        v141["Milestone v1.4.1: Mass QR Exporter & Individual Viewer<br/>Protobuf carousel matching Google Authenticator"]
+        v142["Milestone v1.4.2: Mobile Overhaul<br/>Contained design, anti-zoom viewport, touch dropdowns"]
+        v143["Milestone v1.4.3: Cloud Sync Fix & Key Preservation<br/>Recovery code retention across imports and reactive sync"]
+        v144["Milestone v1.4.4: Session Revocation Fix & Auto-Deduplication<br/>End of session revocation loops & zero-data-loss deduplication"]
+        v10 --> v11 --> v12 --> v13 --> v131 --> v14 --> v141 --> v142 --> v143 --> v144
     end
 
-    subgraph PROXIMAS ["Technical Evolution Horizons (Upcoming Versions)"]
-        v14["Milestone v1.4: Universal Importers, Exporters & YubiKey<br/>Google Auth, Aegis, 2FAS, Bitwarden + otpauth:// export & FIDO2 roaming"]
-        v15["Milestone v1.5: Argon2id KDF & Proactive Notifications<br/>Argon2id WASM cryptographic upgrade, Cloudflare Email Workers"]
-        v20["Milestone v2.0: Full Secret Suite & Vault Evolution<br/>Passwords, Credit Cards, Markdown Notes, SSH Keys, 5d Snapshots, Emergency Kit"]
+    subgraph PROXIMAS ["🔵 Technical Evolution Horizons (Upcoming Versions)"]
+        v15["Milestone v1.5: Argon2id KDF & Web Push / BYOK Email<br/>Argon2id WASM cryptographic upgrade, Resend / Cloudflare Email Workers"]
+        v20["Milestone v2.0: Full Secret Suite & Vault Evolution<br/>Passwords, Credit Cards, Notes, SSH, 5d Snapshots, Emergency Kit, per-item encrypted_key"]
         v21["Milestone v2.1: Browser Extension (Manifest V3)<br/>Contextual Autofill via eTLD+1 Matching, Inline 2FA Token Injection, 2m Auto-lock"]
         v22["Milestone v2.2: Native Desktop Application (Tauri v2 + Rust)<br/>Lightweight Binary <10MB, OS Windows Hello / Touch ID, Signed Auto-updater"]
-        v131 -.-> v14 --> v15 --> v20 --> v21 --> v22
+        v23["Milestone v2.3: Command Line Interface CLI (rpctl)<br/>Terminal secret retrieval, environment variable injection"]
+        v24["Milestone v2.4: Duress Password & Plausible Deniability<br/>Decoy vault, emergency silent auditing"]
+        v25["Milestone v2.5: ECDH P-384 Secure Sharing (ADR-014)<br/>Cross-user Zero-Knowledge secret sharing via native Web Crypto ECIES"]
+        v30["Milestone v3.0: Decoupled Self-Hosted Backend<br/>Docker Compose, standalone VPS, alternative to Cloudflare D1"]
+        v144 -.-> v15 --> v20 --> v21 --> v22 --> v23 --> v24 --> v25 --> v30
     end
 
     style COMPLETADAS fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
@@ -46,16 +54,24 @@ flowchart TD
     style v12 fill:#166534,stroke:#22c55e,color:#fff
     style v13 fill:#166534,stroke:#22c55e,color:#fff
     style v131 fill:#166534,stroke:#22c55e,color:#fff
-    style v14 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v14 fill:#166534,stroke:#22c55e,color:#fff
+    style v141 fill:#166534,stroke:#22c55e,color:#fff
+    style v142 fill:#166534,stroke:#22c55e,color:#fff
+    style v143 fill:#166534,stroke:#22c55e,color:#fff
+    style v144 fill:#166534,stroke:#22c55e,color:#fff
     style v15 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v20 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v21 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v22 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v23 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v24 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v25 fill:#1e1b4b,stroke:#22c55e,color:#fff
+    style v30 fill:#1e1b4b,stroke:#818cf8,color:#fff
 ```
 
 ---
 
-## 2. Block I: Deployed Foundation Phases (v1.0 — v1.3.1)
+## 2. Block I: Deployed Foundation Phases (v1.0 — v1.4.4)
 
 The following foundational phases represent the architectural baseline that is **100% implemented, audited, and live in production**:
 
@@ -225,10 +241,13 @@ The following milestones define the future product evolution. Each milestone wil
   3. **Password History & Trash Bin:**
      - History of the last 5 previous passwords retained inside encrypted payload.
      - Trash bin with automatic permanent purge after 30 days and immediate manual recovery.
+  4. **Symmetric Key per Item (Architectural Foundation for v2.5 Sharing):**
+     - Each `vault_items` row introduces its own symmetric key `item_key` (AES-256-GCM 256-bit) wrapped inside the `encrypted_key` column via the user's `masterKey`, moving beyond monolithic blobs and enabling future asymmetric re-wrapping.
 * **Definition of Done (DoD) - v2.0:**
   - [ ] Backwards compatibility guaranteed: existing v1.x 2FA vaults migrate seamlessly with zero data loss.
   - [ ] Client decryption latency remains <100ms for vaults containing over 1,000 secret items.
   - [ ] Database schema preserves Zero-Knowledge paradigm without revealing secret types or metadata to the server.
+  - [ ] Each `vault_items` record features its own `item_key` wrapped inside `encrypted_key` using the `masterKey`, guaranteeing per-item cryptographic isolation required by Milestone v2.5.
 
 ---
 
@@ -261,3 +280,66 @@ The following milestones define the future product evolution. Each milestone wil
   - [ ] Official install packages compiled for Windows (MSIX/EXE), macOS (Universal DMG), and Linux (AppImage/Deb).
   - [ ] Cold start latency under 250ms.
   - [ ] Offline vault persisted in local SQLite database encrypted with SQLCipher.
+
+---
+
+### 📍 Milestone v2.3: Command Line Interface CLI (`rpctl`)
+* **Objective:** Enable developers and system administrators to query secrets and generate TOTP tokens directly from terminal environments.
+* **Key Deliverables:**
+  1. **CLI Binary in Rust / Go:** Interaction with the Worker API authenticated via ephemeral session tokens or local encrypted API keys.
+  2. **Environment Variable Injection:** `rpctl run -- <command>` injecting secrets directly into child process memory without writing to disk.
+
+---
+
+### 📍 Milestone v2.4: Duress Password & Plausible Deniability
+* **Objective:** Provide plausible deniability in extreme physical coercion or forced inspection scenarios.
+* **Key Deliverables:**
+  1. **Decoy Vault:** Unlocking via an alternative duress password opens a legitimate decoy vault containing innocuous generic accounts.
+  2. **Silent Audit Log:** Discrete audit logging and optional proactive alert dispatched to emergency contacts.
+
+---
+
+### 📍 Milestone v2.5: Cross-Account Secure Sharing (ECDH P-384 + ECIES - ADR-014)
+* **Objective:** Enable cryptographically secure cross-account sharing of individual items (organization TOTPs, shared credentials) between Revolt Pass users under a strict Zero-Knowledge model, establishing Revolt Pass as the only free open-source ZK manager with native cross-account sharing capabilities.
+* **Blocking Pre-requisites:**
+  - `v2.0` completed with per-item symmetric key model (`item_key` in `encrypted_key`).
+  - `ADR-014` formally adopted.
+* **Cryptographic Architecture:**
+  - **ECDH P-384:** Client-side keypair generation; public key stored in D1, private key stored encrypted inside user's personal vault.
+  - **HKDF-SHA256:** Derivation of AES-256-GCM `wrapping_key` from ECDH shared secret with domain separation context.
+  - **AES-256-GCM Wrapping:** Encapsulation of the shared item's `item_key`. D1 stores only ciphertext and wrapped key.
+* **Cloudflare D1 Database Schema:**
+  - `ALTER TABLE users ADD COLUMN ecdh_public_key TEXT DEFAULT NULL;`
+  - Table `shared_items` (`id`, `owner_user_id`, `recipient_user_id`, `source_item_id`, `encrypted_item`, `item_iv`, `encrypted_item_key`, `key_iv`, `permissions`, `version`, `created_at`, `updated_at`, `revoked_at`).
+* **API Endpoints Catalog:**
+  - `GET /api/users/:username/public-key`: Retrieve recipient ECDH public key (requires authenticated session).
+  - `POST /api/users/me/ecdh-key`: Register or rotate user's ECDH public key.
+  - `POST /api/shared-items`: Share wrapped item with recipient.
+  - `GET /api/shared-items`: List incoming shared items for client-side unwrap and decrypt.
+  - `GET /api/shared-items/sent`: List outgoing items shared by current user.
+  - `PUT /api/shared-items/:id`: Update shared payload (if `permissions='write'`).
+  - `DELETE /api/shared-items/:id`: Revoke recipient access (owner) or decline shared item (recipient).
+* **Client-Side Modules:**
+  - `src/lib/crypto/sharing.ts`: `generateUserECDHKeyPair`, `deriveWrappingKey`, `encryptSharedItem`, `decryptSharedItem`.
+  - Decrypted shared items reside **strictly in volatile RAM memory**; never persisted as plaintext in IndexedDB.
+* **Revocation Model & ZK Inherent Limitation:**
+  - Revocation blocks future sync updates and removes the item from recipient sync, recording the event in `audit_logs`.
+  - UI displays standard security recommendation: rotate the secret on the destination service if the credential was critical.
+* **Mitigations for New Threat Vectors:**
+  - `VEC-NEW-01` (Public key substitution) → Mitigated via visual key fingerprint verification modal in UI.
+  - `VEC-NEW-02` (Replay of shared ciphertext) → Mitigated via session authentication and unique D1 constraints (`owner + recipient + source_item_id`).
+  - `VEC-NEW-03` (Recipient enumeration) → Mitigated via edge rate limiter and mandatory authentication.
+* **Definition of Done (DoD) - v2.5:**
+  - [ ] Unit tests confirming round-trip: `encryptSharedItem` → `decryptSharedItem` reproduces exact original secret.
+  - [ ] Tampering with 1 bit of `encrypted_item` or `encrypted_item_key` triggers immediate `OperationError` via AES-GCM tag verification.
+  - [ ] ECDH private key is never transmitted outside client nor stored in D1.
+  - [ ] Context menus in `TotpCard` and `EditAccountModal` offer "Share with..." flow with permission selection (`read` / `write`).
+  - [ ] "Shared Items" tab in `SecurityModal` with revocation controls for owners and rejection for recipients.
+  - [ ] Visual badge indicators distinguishing owned items from received shared items.
+  - [ ] All endpoints protected by strict session validation and audited in `audit_logs`.
+  - [ ] 0 errors in `tsc -b`, 100% automated test suite passing.
+
+---
+
+### 📍 Milestone v3.0: Decoupled Self-Hosted Backend (Docker / VPS)
+* **Objective:** Enable deployment of the sync backend on user-controlled infrastructure outside Cloudflare (Docker Compose / VPS), utilizing SQLite or PostgreSQL while maintaining full compatibility with the PWA client.

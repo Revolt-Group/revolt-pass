@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-PRD-001` |
-| **Versión** | `1.2.1-PROD` |
+| **Versión** | `1.4.4-PROD (v2.5 Scope Ready)` |
 | **Estado** | Aprobado / Especificación Canónica |
 | **Organización** | Revolt Group |
 | **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
@@ -83,9 +83,12 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
   * Modelo de resolución de concurrencia optimista con detección de conflictos por versión.
 
 ### 3.2 Out-of-Scope (Diferido a Versiones Posteriores v2.0+)
-* Bóvedas compartidas multifamiliares o empresariales multi-usuario (el MVP es monousuario soberano por instancia).
-* Extensión para navegadores Chromium/Firefox con inyección de scripts en páginas de terceros.
-* Integración con la API en tiempo real de HaveIBeenPwned (HIBP) para auditoría masiva de contraseñas.
+* Bóvedas compartidas multifamiliares o directorios centralizados LDAP/SSO corporativos (diferidos a v3.0+; la compartición asimétrica segura de ítems individuales entre cuentas se aborda formalmente en el **Hito v2.5** bajo el esquema ECDH P-384 / ADR-014).
+* Extensión para navegadores Chromium/Firefox con inyección de scripts en páginas de terceros (planificado para **Hito v2.1**).
+* Aplicación de escritorio compilada nativa con integración a Windows Hello / Touch ID directo en Rust (planificado para **Hito v2.2**).
+* Herramienta CLI de terminal (`rpctl`) e inyección en variables de entorno (planificado para **Hito v2.3**).
+* Contraseña bajo coacción y bóveda señuelo (planificado para **Hito v2.4**).
+* Integración con la API en tiempo real de HaveIBeenPwned (HIBP) para auditoría masiva de contraseñas (implementada en v1.3.0 bajo k-Anonymity / ADR-011).
 * Soporte para tokens de hardware U2F propietarios que no implementen la capa estándar FIDO2/WebAuthn.
 
 ---
@@ -190,6 +193,13 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 * **RF-16.1:** El Worker registrará eventos de seguridad en la tabla `audit_logs` (inicios de sesión, enrolamiento de passkeys, cierre de sesiones, revocaciones remotas y cambios de credenciales).
 * **RF-16.2:** La interfaz presentará un historial cronológico de auditoría con formateo de fechas y horas adaptado al idioma seleccionado (`es-ES` / `en-US`), con deduplicación para prevenir saturación de registros ante sincronizaciones en segundo plano.
 
+### RF-17: Compartición Segura de Secretos entre Cuentas (Hito v2.5 - ADR-014)
+* **RF-17.1:** **Acuerdo Asimétrico Zero-Knowledge:** Los usuarios podrán compartir ítems individuales (semillas TOTP corporativas, notas de acceso o credenciales) con otros usuarios registrados mediante acuerdo Diffie-Hellman en curva elíptica ECDH P-384 y encapsulamiento simétrico AES-256-GCM.
+* **RF-17.2:** **Permisos Granulares y Auditoría:** Soporte para privilegios de solo lectura (`read`) o actualización autorizada (`write`). Toda acción de compartición, modificación o revocación emite un evento trazable en `audit_logs`.
+* **RF-17.3:** **Revocación y Control Soberano:** El propietario original puede revocar el acceso a un ítem en cualquier momento (`DELETE /api/shared-items/:id`), impidiendo actualizaciones posteriores y excluyendo el ítem del sync del destinatario. La interfaz instruye la rotación de la credencial en el servicio remoto cuando corresponda.
+* **RF-17.4:** **Aislamiento Volátil en RAM:** Los ítems compartidos recibidos se descifran en tiempo de ejecución y se retienen **estrictamente en memoria RAM volátil**. Jamás se escriben en texto plano en IndexedDB ni en disco, purga inmediata ante bloqueo de sesión.
+* **RF-17.5:** **Verificación de Fingerprint Fuera de Banda:** La interfaz mostrará el fingerprint criptográfico SHA-256 de la clave pública del destinatario (`SHA-256(spki)`) para permitir su verificación fuera de banda contra ataques de sustitución de clave.
+
 ---
 
 ## 5. Requerimientos No Funcionales (RNF)
@@ -234,3 +244,20 @@ El sistema debe operar de manera holgada dentro de los límites estrictos del ni
 | **Consumo de CPU en Worker** | $< 3.5 \text{ ms}$ | Cloudflare Worker Analytics |
 | **Precisión de Time Drift** | $\pm 50 \text{ ms}$ de error máximo | Comparativa vs `Date.now()` ajustado |
 | **Bundle Size Inicial (Gzipped)** | $< 180 \text{ KB}$ | Vite build report & Rollup visualizer |
+
+---
+
+## 7. Matriz de Diferenciación Competitiva
+
+Revolt Pass se posiciona en el mercado como el **único gestor Zero-Knowledge de código abierto y costo cero con compartición asimétrica nativa entre cuentas**:
+
+| Vector de Comparación | Revolt Pass | Bitwarden | 1Password | Aegis Authenticator | Google Authenticator |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Paradigma Criptográfico** | **Zero-Knowledge Nativo** (Web Crypto API) | Zero-Knowledge | Zero-Knowledge | Zero-Knowledge Local | Almacenamiento en Nube opcional (sin E2EE estricto) |
+| **Compartición Segura entre Cuentas** | **Sí** (v2.5 ECDH P-384 nativo) | Sí (Requiere Organización paga) | Sí (De pago comercial) | No (Solo exportación manual) | No (Solo exportación masiva QR) |
+| **Costo Operativo para el Usuario** | **$0 / Siempre Gratuito** (Cloudflare Free Tier) | $3 - $4 / usuario / mes para compartir | $3 - $8 / usuario / mes | Gratuito (Solo local) | Gratuito |
+| **Desbloqueo Windows Hello con PIN** | **Sí** (WebAuthn Level 3) | Requiere app de escritorio | Requiere app de escritorio | No aplicable (Solo Android) | No aplicable |
+| **Gestión Estructurada de Recovery Codes** | **Sí** (Integrado por cuenta) | No (Campo de nota genérico) | No (Campo de nota genérico) | No | No |
+| **Licenciamiento y Soberanía** | **GNU AGPLv3** (Código 100% Abierto) | Servidor parcialmente abierto | Cerrado / Propietario | GPLv3 (Solo Android) | Propietario |
+| **Telemetría y Rastreadores** | **Cero Telemetría** | Analíticas opcionales | Telemetría comercial | Cero Telemetría | Telemetría vinculada a cuenta Google |
+

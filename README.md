@@ -5,7 +5,7 @@
 # Revolt Pass — Zero-Knowledge 2FA & Security Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.4.1](https://img.shields.io/badge/Version-v1.4.1-blue.svg)](./CHANGELOG.md)
+[![Version: v1.4.4](https://img.shields.io/badge/Version-v1.4.4-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
@@ -101,7 +101,7 @@ La especificación técnica exhaustiva y canónica se encuentra disponible en Es
 | **[01-PRD.md](./docs/es/01-PRD.md)** | **[01-PRD.md](./docs/en/01-PRD.md)** | Requerimientos de producto, alcance y KPIs de ingeniería |
 | **[02-ARCHITECTURE.md](./docs/es/02-ARCHITECTURE.md)** | **[02-ARCHITECTURE.md](./docs/en/02-ARCHITECTURE.md)** | Arquitectura C4, flujos integrales de datos y esquema D1 |
 | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/es/03-SECURITY-AND-THREAT-MODEL.md)** | **[03-SECURITY-AND-THREAT-MODEL.md](./docs/en/03-SECURITY-AND-THREAT-MODEL.md)** | Criptografía, modelo STRIDE e higiene de memoria/portapapeles |
-| **[04-ADRS.md](./docs/es/04-ADRS.md)** | **[04-ADRS.md](./docs/en/04-ADRS.md)** | Registros de decisiones arquitectónicas (ADR-001 a ADR-010) |
+| **[04-ADRS.md](./docs/es/04-ADRS.md)** | **[04-ADRS.md](./docs/en/04-ADRS.md)** | Registros de decisiones arquitectónicas (ADR-001 a ADR-014) |
 | **[05-ROADMAP.md](./docs/es/05-ROADMAP.md)** | **[05-ROADMAP.md](./docs/en/05-ROADMAP.md)** | Plan de fases secuenciales y criterios Definition of Done |
 
 ---

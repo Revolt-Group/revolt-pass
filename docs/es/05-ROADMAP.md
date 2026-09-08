@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-RDM-005` |
-| **Versión Actual** | `1.3.1-PROD` (En Producción / Live) |
+| **Versión Actual** | `1.4.4-PROD` (En Producción / Live) |
 | **Estado** | Aprobado / Plan de Evolución Basado en Hitos de Calidad |
 | **Repositorio Remoto** | `https://github.com/Revolt-Group/revolt-pass.git` |
 | **Rama Principal** | `main` |
@@ -21,22 +21,30 @@ Cada hito o versión del proyecto se estructura en torno a una **Definición de 
 
 ```mermaid
 flowchart TD
-    subgraph COMPLETADAS ["Cimientos Fundacionales en Producción (v1.0 a v1.3.1)"]
+    subgraph COMPLETADAS ["✅ Cimientos Fundacionales en Producción (v1.0 — v1.4.4)"]
         v10["Fases 1 a 8: Núcleo Criptográfico & PWA<br/>AES-256-GCM, PBKDF2 600k en Web Worker, Cloudflare D1 Edge, WebAuthn, AutoLock"]
         v11["Fase 9: Multidispositivo & Auditoría (v1.1)<br/>Sesiones D1, Revocación remota granular, Passkeys FIDO2, Audit Logs"]
         v12["Fases 10 y 11: i18n, Backups & Apertura Open Source (v1.2.1)<br/>Internacionalización ES/EN, Backups cifrados, Modo Instancia Privada, AGPLv3"]
         v13["Fase 12: Higiene & HaveIBeenPwned (v1.3.0)<br/>k-Anonymity SHA-1, Alertas de entropía Base32, Scorecard visual"]
         v131["Fase 13: Endurecimiento & Rotación (v1.3.1)<br/>CSP estricta, Rate Limiter perimetral, CORS restringido, Sliding Token Rotation"]
-        v10 --> v11 --> v12 --> v13 --> v131
+        v14["Hito v1.4.0: Ingesta Masiva, Exportadores & YubiKey<br/>Google Auth, Aegis, 2FAS, Bitwarden + Export otpauth:// y FIDO2 roaming"]
+        v141["Hito v1.4.1: Exportador QR Masivo & Visor Individual<br/>Carrusel Protobuf compatible con Google Authenticator"]
+        v142["Hito v1.4.2: Mobile Overhaul<br/>Diseño contenido, viewport anti-zoom, dropdown táctil"]
+        v143["Hito v1.4.3: Sync Cloud Fix & Preservación de Claves<br/>Preservación total de recovery codes y sincronización reactiva"]
+        v144["Hito v1.4.4: Eliminación Bucle de Sesión & Auto-Deduplicación<br/>Fin de bucle de revocación y auto-limpieza sin pérdida de datos"]
+        v10 --> v11 --> v12 --> v13 --> v131 --> v14 --> v141 --> v142 --> v143 --> v144
     end
 
-    subgraph PROXIMAS ["Horizontes de Evolución Técnica (Próximas Versiones)"]
-        v14["Hito v1.4: Ingesta Masiva, Exportadores & YubiKey<br/>Google Auth, Aegis, 2FAS, Bitwarden + Export otpauth:// y FIDO2 roaming"]
-        v15["Hito v1.5: Argon2id KDF & Notificaciones Proactivas<br/>Upgrade criptográfico Argon2id WASM, Cloudflare Email Workers"]
-        v20["Hito v2.0: Suite Integral de Secretos & Bóveda Completa<br/>Contraseñas, Tarjetas de pago, Notas Markdown, Claves SSH, Snapshots 5d, Emergency Kit"]
-        v21["Hito v2.1: Extensión para Navegadores (Manifest V3)<br/>Autofill contextual por dominio eTLD+1, Inyección inline de tokens 2FA, Auto-lock 2m"]
-        v22["Hito v2.2: Aplicación de Escritorio Nativa (Tauri v2 + Rust)<br/>Binario liviano <10MB, Windows Hello / Touch ID OS, Auto-update firmado"]
-        v131 -.-> v14 --> v15 --> v20 --> v21 --> v22
+    subgraph PROXIMAS ["🔵 Horizontes de Evolución Técnica (Próximas Versiones)"]
+        v15["Hito v1.5: Argon2id KDF & Web Push / BYOK Email<br/>Upgrade criptográfico Argon2id WASM, Resend / Cloudflare Email Workers"]
+        v20["Hito v2.0: Suite Integral de Secretos & Bóveda Completa<br/>Contraseñas, Tarjetas, Notas, SSH, Snapshots 5d, Emergency Kit, encrypted_key por ítem"]
+        v21["Hito v2.1: Extensión para Navegadores (Manifest V3)<br/>Autofill contextual eTLD+1, inyección inline 2FA, auto-lock 2m"]
+        v22["Hito v2.2: Aplicación de Escritorio Nativa (Tauri v2 + Rust)<br/>Binario liviano <10MB, Windows Hello / Touch ID OS, auto-update firmado"]
+        v23["Hito v2.3: Herramienta de Línea de Comandos CLI (rpctl)<br/>Acceso a secretos desde terminal, inyección a variables de entorno"]
+        v24["Hito v2.4: Contraseña bajo Coacción & Bóveda Oculta<br/>Duress password, bóveda decoy plausible, auditoría silente"]
+        v25["Hito v2.5: Compartición Segura ECDH P-384 (ADR-014)<br/>Compartición de secretos entre usuarios Zero-Knowledge vía ECIES nativo"]
+        v30["Hito v3.0: Backend Self-Hosted Desacoplado<br/>Docker Compose, VPS independiente, alternativa a Cloudflare D1"]
+        v144 -.-> v15 --> v20 --> v21 --> v22 --> v23 --> v24 --> v25 --> v30
     end
 
     style COMPLETADAS fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#f8fafc
@@ -46,16 +54,24 @@ flowchart TD
     style v12 fill:#166534,stroke:#22c55e,color:#fff
     style v13 fill:#166534,stroke:#22c55e,color:#fff
     style v131 fill:#166534,stroke:#22c55e,color:#fff
-    style v14 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v14 fill:#166534,stroke:#22c55e,color:#fff
+    style v141 fill:#166534,stroke:#22c55e,color:#fff
+    style v142 fill:#166534,stroke:#22c55e,color:#fff
+    style v143 fill:#166534,stroke:#22c55e,color:#fff
+    style v144 fill:#166534,stroke:#22c55e,color:#fff
     style v15 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v20 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v21 fill:#1e1b4b,stroke:#818cf8,color:#fff
     style v22 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v23 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v24 fill:#1e1b4b,stroke:#818cf8,color:#fff
+    style v25 fill:#1e1b4b,stroke:#22c55e,color:#fff
+    style v30 fill:#1e1b4b,stroke:#818cf8,color:#fff
 ```
 
 ---
 
-## 2. Bloque I: Cimientos Fundacionales Desplegados (v1.0 — v1.3.1)
+## 2. Bloque I: Cimientos Fundacionales Desplegados (v1.0 — v1.4.4)
 
 Las siguientes fases iniciales representan la base estructural que se encuentra **100% implementada, auditada y en producción**:
 
@@ -225,10 +241,13 @@ Los siguientes hitos marcan el camino de desarrollo futuro. Cada hito se abordar
   3. **Historial de Contraseñas & Papelera de Reciclaje:**
      - Historial de las últimas 5 contraseñas anteriores preservadas dentro del blob cifrado.
      - Papelera de reciclaje (*Trash Bin*) con purga automática permanente a los 30 días y recuperación inmediata.
+  4. **Clave Simétrica por Ítem (Base Arquitectónica para Compartición v2.5):**
+     - Cada registro de `vault_items` incorpora su propia clave simétrica `item_key` (AES-256-GCM 256-bit) encapsulada en la columna `encrypted_key` mediante la `masterKey` del usuario, superando el modelo de blob monolítico y permitiendo re-encapsulamiento asimétrico futuro.
 * **Definition of Done (DoD) - v2.0:**
   - [ ] Compatibilidad retroactiva garantizada: las bóvedas 2FA existentes de la v1.x se migran automáticamente sin pérdida de datos.
   - [ ] Rendimiento de descifrado en memoria inferior a 100ms para bóvedas con más de 1.000 elementos.
   - [ ] El esquema de base de datos preserva el modelo Zero-Knowledge sin revelar tipos de secretos ni metadatos al servidor.
+  - [ ] Cada elemento de `vault_items` cuenta con su propia `item_key` encapsulada en `encrypted_key` con la `masterKey`, garantizando el aislamiento criptográfico por ítem requerido por el Hito v2.5.
 
 ---
 
@@ -261,3 +280,66 @@ Los siguientes hitos marcan el camino de desarrollo futuro. Cada hito se abordar
   - [ ] Paquetes de instalación oficiales generados para Windows (MSIX/EXE), macOS (DMG universal) y Linux (AppImage/Deb).
   - [ ] Tiempo de inicio en frío inferior a 250ms.
   - [ ] Bóveda offline protegida mediante base de datos SQLite local cifrada con SQLCipher.
+
+---
+
+### 📍 Hito v2.3: Herramienta de Línea de Comandos CLI (`rpctl`)
+* **Objetivo:** Permitir a desarrolladores y administradores de sistemas consultar secretos y emitir tokens TOTP directamente desde la terminal.
+* **Entregables Clave:**
+  1. **Binario CLI en Rust / Go:** Interacción con el API Worker autenticado mediante tokens de sesión efímeros o llaves API locales cifradas.
+  2. **Inyección en Variables de Entorno:** Comando `rpctl run -- <command>` que inyecta secretos directamente en memoria de procesos sin tocar el disco.
+
+---
+
+### 📍 Hito v2.4: Contraseña bajo Coacción & Bóveda Oculta (Duress Password)
+* **Objetivo:** Proveer negación plausible (*Plausible Deniability*) en situaciones extremas de amenaza física o inspección forzada.
+* **Entregables Clave:**
+  1. **Bóveda Decoy / Trampa:** Desbloqueo mediante contraseña alternativa que abre una bóveda legítima de señuelo con cuentas genéricas.
+  2. **Auditoría Silente:** Registro de auditoría discreto y alerta proactiva configurable hacia contactos de emergencia.
+
+---
+
+### 📍 Hito v2.5: Compartición Segura de Ítems entre Cuentas (ECDH P-384 + ECIES - ADR-014)
+* **Objetivo:** Habilitar la compartición criptográficamente segura de ítems individuales (TOTPs de organización, credenciales compartidas) entre usuarios de Revolt Pass bajo estricto modelo Zero-Knowledge, posicionando a Revolt Pass como el único gestor ZK open-source gratuito con esta capacidad.
+* **Pre-requisitos Bloqueantes:**
+  - `v2.0` completado con modelo de clave simétrica por ítem (`item_key` en `encrypted_key`).
+  - `ADR-014` aprobado formalmente.
+* **Arquitectura Criptográfica:**
+  - **ECDH P-384:** Generación de par de claves en cliente; clave pública pública en D1, clave privada cifrada en el vault personal.
+  - **HKDF-SHA256:** Derivación de `wrapping_key` AES-256-GCM a partir del secreto compartido ECDH.
+  - **AES-256-GCM Wrapping:** Encapsulamiento de la `item_key` del ítem compartido. D1 solo almacena ciphertext y clave encapsulada.
+* **Schema de Base de Datos Cloudflare D1:**
+  - `ALTER TABLE users ADD COLUMN ecdh_public_key TEXT DEFAULT NULL;`
+  - Tabla `shared_items` (`id`, `owner_user_id`, `recipient_user_id`, `source_item_id`, `encrypted_item`, `item_iv`, `encrypted_item_key`, `key_iv`, `permissions`, `version`, `created_at`, `updated_at`, `revoked_at`).
+* **Catálogo de Endpoints API:**
+  - `GET /api/users/:username/public-key`: Obtiene clave pública ECDH (requiere sesión activa).
+  - `POST /api/users/me/ecdh-key`: Registra o actualiza clave pública propia.
+  - `POST /api/shared-items`: Comparte ítem encapsulado con destinatario.
+  - `GET /api/shared-items`: Lista ítems recibidos para descifrado en cliente.
+  - `GET /api/shared-items/sent`: Lista ítems compartidos por el usuario actual.
+  - `PUT /api/shared-items/:id`: Actualiza contenido compartido (si `permissions='write'`).
+  - `DELETE /api/shared-items/:id`: Revoca acceso del destinatario (propietario) o rechaza ítem (destinatario).
+* **Módulos Cliente:**
+  - `src/lib/crypto/sharing.ts`: Funciones `generateUserECDHKeyPair`, `deriveWrappingKey`, `encryptSharedItem`, `decryptSharedItem`.
+  - Los ítems compartidos descifrados residen **estrictamente en memoria RAM volátil**; nunca se persisten en texto plano en IndexedDB.
+* **Modelo de Revocación y Limitación ZK:**
+  - La revocación previene actualizaciones futuras y excluye el ítem del sync del destinatario, registrando el evento en `audit_logs`.
+  - La UI instruye la recomendación estándar de seguridad: rotar el secreto original en el servicio de destino si la credencial era crítica.
+* **Defensa ante Nuevos Vectores de Amenaza:**
+  - `VEC-NEW-01` (Sustitución de clave pública) → Mitigado con verificación de fingerprint visual en la UI.
+  - `VEC-NEW-02` (Replay de paquete compartido) → Mitigado con validación de sesión y constraint único en D1 (`owner + recipient + source_item_id`).
+  - `VEC-NEW-03` (Enumeración de usuarios) → Mitigado con limitador de tasa perimetral y autenticación obligatoria.
+* **Definition of Done (DoD) - v2.5:**
+  - [ ] Pruebas unitarias de ida y vuelta (*round-trip*) validando que `encryptSharedItem` → `decryptSharedItem` reproduce fielmente el ítem original.
+  - [ ] Manipulación de 1 bit en `encrypted_item` o `encrypted_item_key` arroja `OperationError` inmediato por autenticación AES-GCM.
+  - [ ] La clave privada ECDH jamás se expone fuera del cliente ni se almacena en D1.
+  - [ ] Menú contextual en `TotpCard` y `EditAccountModal` con diálogo "Compartir con..." y selección de permisos (`read` / `write`).
+  - [ ] Pestaña "Compartidos" en `SecurityModal` con gestión de revocación para propietarios y rechazo para destinatarios.
+  - [ ] Badges visuales distinguiendo ítems propios de compartidos recibidos.
+  - [ ] Todos los endpoints protegidos con validación estricta de sesión y registro en `audit_logs`.
+  - [ ] 0 errores en `tsc -b`, 100% de tests unitarios y de integración pasando.
+
+---
+
+### 📍 Hito v3.0: Backend Self-Hosted Desacoplado (Docker / VPS)
+* **Objetivo:** Habilitar el despliegue del backend de sincronización en infraestructura propia fuera de Cloudflare (Docker Compose / VPS), con base de datos SQLite/PostgreSQL y compatibilidad con el cliente PWA.

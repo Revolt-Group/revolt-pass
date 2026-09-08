@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-ARCH-002` |
-| **Version** | `1.2.1-PROD` |
+| **Version** | `1.4.4-PROD (v2.5 Architecture)` |
 | **Status** | Approved / Architecture Specification |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
 | **Tech Stack** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
@@ -30,7 +30,7 @@ flowchart TB
             I18nEngine["i18n Engine (ES/EN Zero-Knowledge)"]
         end
 
-        subgraph CoreEngine ["Core Engine & Security (TypeScript)"]
+        subgraph CoreEngine ["Core Security Engine (TypeScript)"]
             CryptoWorker["Web Worker (PBKDF2-SHA256 600k rounds)"]
             SubtleEngine["Web Crypto API (AES-GCM-256 / HMAC)"]
             WebAuthnManager["WebAuthn Manager (Windows Hello PIN / Biometrics)"]
@@ -41,13 +41,13 @@ flowchart TB
         subgraph ClientStorage ["Secure Local Storage"]
             IDB[("IndexedDB (idb wrapper)\n- vault_encrypted\n- user_config\n- sync_queue")]
             CacheStorage[("Cache Storage (Workbox PWA)\nStatic Assets & Shell")]
-            RAM[("Volatile RAM Memory\n- Master Key\n- Decrypted Items\n(Auto-lock purges)")]
+            RAM[("Volatile RAM\n- Master Key\n- Decrypted Items\n(Auto-lock purges)")]
         end
     end
 
     subgraph CloudflareEdge ["Cloudflare Global Network (Edge Runtime)"]
         WAF["Cloudflare WAF / DDoS Protection / SSL Termination"]
-        Worker["Cloudflare Worker (REST API Router)"]
+        Worker["Cloudflare Worker (Router REST API)"]
         
         subgraph Endpoints ["Worker Micro-Endpoints"]
             TimeEp["GET /api/time (UTC Timestamp)"]
@@ -83,68 +83,48 @@ flowchart TB
 
 ---
 
-## 2. End-to-End Data Flows and Lifecycles
+## 2. Comprehensive Data Flow and Lifecycles
 
-### 2.1 Registration and Vault Initialization Flow
-1. The user accesses `https://<your-domain-or-subdomain>.workers.dev` and enters a username and Master Password.
-2. The client generates a 16-byte cryptographic `kdf_salt` using `crypto.getRandomValues`.
-3. The client dispatches `MasterKey` derivation to the Web Worker via `PBKDF2-SHA256` (600,000 iterations).
-4. The client initializes an empty `VaultItem[]` array, serializes it to JSON, and generates a random 12-byte `IV`.
+### 2.1 Registration and Initial Vault Provisioning Flow
+1. The user visits `https://<your-domain-or-subdomain>.workers.dev` and inputs a username and Master Password.
+2. The client generates a random 16-byte cryptographic `kdf_salt` using `crypto.getRandomValues`.
+3. The client dispatches Master Key derivation via `PBKDF2-SHA256` (600,000 iterations) to an isolated Web Worker.
+4. The client initializes an empty list of `VaultItem[]`, serializes it to JSON, and generates a random 12-byte `IV`.
 5. The client encrypts the JSON using `AES-GCM-256`, producing the `encrypted_blob`.
-6. The client sends `POST /api/auth/register` to the Worker containing: `{ username, kdf_salt, encrypted_blob, iv }`.
-7. The Worker executes an atomic transaction in Cloudflare D1 inserting the user and their initial vault record (version 1).
-8. The encrypted blob and configurations are persisted in local `IndexedDB`.
+6. The client sends `POST /api/auth/register` to the Worker containing `{ username, kdf_salt, encrypted_blob, iv }`.
+7. The Worker runs an atomic transaction on Cloudflare D1 inserting the user and their initial vault record (version 1).
+8. The encrypted blob and user config are persisted locally in `IndexedDB`.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User
-    participant UI as React UI
-    participant WorkerThread as Web Worker (PBKDF2)
-    participant Crypto as Web Crypto API
-    participant IDB as IndexedDB (idb)
-    participant CF as Cloudflare Worker API
-    participant D1 as Cloudflare D1 (SQLite)
+---
 
-    User->>UI: Enters Username + Master Password
-    UI->>Crypto: crypto.getRandomValues(16 bytes) -> salt
-    UI->>WorkerThread: postMessage({ password, salt, rounds: 600000 })
-    WorkerThread-->>UI: Returns Master Key (CryptoKey)
-    UI->>Crypto: AES-GCM-256 Encrypt(JSON([]), IV)
-    Crypto-->>UI: encrypted_blob + IV
-    UI->>CF: POST /api/auth/register { username, salt, blob, iv }
-    CF->>D1: INSERT INTO users, vaults (Atomic Transaction)
-    D1-->>CF: Commit OK
-    CF-->>UI: 201 Created { user_id, version: 1 }
-    UI->>IDB: Save salt, version, blob, iv
-    UI->>User: Vault initialized and ready
-```
-
-### 2.2 Unlock Flow: Cold (Master Password) vs. Fast (WebAuthn / Windows Hello)
+### 2.2 Unlock and Session Reconstruction Flow
+Revolt Pass implements a dual unlock pathway (biometric/hardware passkey hot path or Master Password cold path):
 
 ```mermaid
 flowchart TD
-    Start([PWA Startup]) --> CheckCreds{WebAuthn credential\nregistered in IndexedDB?}
+    Start([User Opens App]) --> CheckStorage{Does IndexedDB contain active configuration?}
+    CheckStorage -- No --> GoRegister[Redirect to Register]
+    CheckStorage -- Yes --> CheckCreds{Is WebAuthn Passkey configured?}
     
-    %% Fast Flow (WebAuthn)
+    %% Hot Flow
     CheckCreds -- Yes --> PromptWebAuthn[Show button: 'Unlock with Windows Hello / Biometrics']
-    PromptWebAuthn --> ClickBio[User clicks or triggers automatically]
+    PromptWebAuthn --> ClickBio[User clicks or auto-triggers]
     ClickBio --> InvokeWebAuthn["navigator.credentials.get({\n  publicKey: {\n    challenge: randomBytes(32),\n    userVerification: 'required'\n  }\n})"]
-    InvokeWebAuthn --> WinHello[Windows Hello requests PIN or Mobile requests Biometrics]
+    InvokeWebAuthn --> WinHello[Windows Hello prompts for PIN or Mobile prompts Biometrics]
     WinHello --> BioSuccess{Verification Successful?}
     BioSuccess -- Yes --> UnwrapKey[Decrypt wrapped MasterKey from IndexedDB]
     UnwrapKey --> DecryptVault[Decrypt Vault with AES-GCM in RAM]
     DecryptVault --> EnterApp([Vault Unlocked in RAM])
-    BioSuccess -- No / Cancelled --> FallbackToPassword[Show Master Password form]
+    BioSuccess -- No / Canceled --> FallbackToPassword[Show Master Password Form]
     
     %% Cold Flow
     CheckCreds -- No --> FallbackToPassword
     FallbackToPassword --> InputPwd[User enters Master Password]
     InputPwd --> RunPBKDF2[Web Worker runs PBKDF2-SHA256 with 600k iterations]
-    RunPBKDF2 --> DeriveKey[Obtain MasterKey]
+    RunPBKDF2 --> DeriveKey[Derive MasterKey]
     DeriveKey --> DecryptVault
     
-    %% Offer enrollment
+    %% Offer Enrollment
     EnterApp --> CheckEnroll{Device not enrolled in WebAuthn?}
     CheckEnroll -- Yes --> PromptEnroll[Suggest enabling Windows Hello / Biometrics]
     CheckEnroll -- No --> Ready([Ready to operate])
@@ -160,6 +140,54 @@ To prevent TOTP codes from failing due to second-level clock discrepancies in th
 6. Clock discrepancy is determined:
    $$\text{offset} = t_{server} - \left( t_0 + \frac{RTT}{2} \right)$$
 7. This `offset` is stored in volatile memory and added to `Date.now()` inside `generateTOTP()`.
+
+---
+
+### 2.4 Cross-Account Secure Sharing Subsystem (v2.5 - ADR-014)
+To enable cryptographically secure sharing of specific items between distinct user accounts without revealing Master Passwords or delegating decryption to the server, Revolt Pass implements an asymmetric key agreement flow based on ECDH P-384 with AES-256-GCM symmetric encapsulation.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Owner as Owner (Ignacio)
+    participant ClientA as PWA Ignacio (Web Crypto)
+    participant Edge as Cloudflare Worker (Router)
+    participant D1 as Cloudflare D1 (SQLite)
+    participant ClientB as PWA Bruno (Web Crypto)
+    actor Recipient as Recipient (Bruno)
+
+    Note over Owner,ClientA: Ignacio shares a corporate TOTP account with Bruno
+    Owner->>ClientA: Selects "Share with..." and enters username "bruno"
+    ClientA->>Edge: GET /api/users/bruno/public-key (Bearer Token Ignacio)
+    Edge->>D1: SELECT ecdh_public_key FROM users WHERE username = 'bruno'
+    D1-->>Edge: ecdh_public_key (SPKI Base64)
+    Edge-->>ClientA: Returns Bruno's public key
+    
+    Note over ClientA: 1. Generates ephemeral ECDH P-384 pair or uses identity pair in RAM<br/>2. Derives Z = ECDH(PrivKey_Ignacio, PubKey_Bruno)<br/>3. Derives WrappingKey = HKDF-SHA256(Z, salt, 'revolt-pass-shared-item-v1')<br/>4. Encrypts item with ItemKey (AES-256-GCM)<br/>5. Wraps ItemKey with WrappingKey (AES-256-GCM Wrap)
+    
+    ClientA->>Edge: POST /api/shared-items { recipient_user_id, source_item_id, encrypted_item, item_iv, encrypted_item_key, key_iv, permissions }
+    Edge->>D1: INSERT INTO shared_items (...)
+    D1-->>Edge: OK (id, created_at)
+    Edge-->>ClientA: 201 Created
+    ClientA-->>Owner: Displays confirmation and key fingerprint
+
+    Note over Recipient,ClientB: Bruno synchronizes his vault
+    Recipient->>ClientB: Logs in / Unlocks vault
+    ClientB->>Edge: GET /api/shared-items (Bearer Token Bruno)
+    Edge->>D1: SELECT * FROM shared_items WHERE recipient_user_id = ? AND revoked_at IS NULL
+    D1-->>Edge: Returns active shared item packages
+    Edge-->>ClientB: 200 OK with encrypted shared items
+    
+    Note over ClientB: 1. Loads PrivKey_Bruno (decrypted from vault into RAM)<br/>2. Derives Z = ECDH(PrivKey_Bruno, PubKey_Ignacio)<br/>3. Derives WrappingKey = HKDF-SHA256(Z, salt, 'revolt-pass-shared-item-v1')<br/>4. Unwraps ItemKey with WrappingKey<br/>5. Decrypts encrypted_item into volatile RAM
+    
+    ClientB-->>Recipient: Renders item in list with badge "Shared by @ignacio"
+    Note over ClientB: The decrypted item is NEVER written to disk or IndexedDB in plaintext
+```
+
+* **Local Storage Isolation Policy:**
+  - Received shared items are decrypted in real time upon sync and reside **strictly in volatile RAM memory**.
+  - When the vault locks or the session expires, shared item references and their symmetric keys are instantly purged.
+  - In `IndexedDB`, only the encrypted payload (`encrypted_item`, `encrypted_item_key`, IVs) is cached for offline availability, ensuring local disk inspections never reveal plaintext secrets.
 
 ---
 
@@ -367,6 +395,38 @@ The API is exposed under the `/api/v1` (or `/api`) prefix. All responses adopt a
 #### 11. `GET /api/audit-logs`
 * **Purpose:** Retrieve the chronological security audit history for the authenticated user.
 
+#### 12. `GET /api/users/:username/public-key`
+* **Purpose:** Retrieve recipient ECDH P-384 public key to derive the shared Diffie-Hellman secret.
+* **Authentication:** Active session required (`Authorization: Bearer <token>`).
+* **HTTP Codes:** `200 OK` (`{ ecdh_public_key, user_id }`), `404 Not Found`.
+
+#### 13. `POST /api/users/me/ecdh-key`
+* **Purpose:** Register or rotate the authenticated user's own ECDH P-384 public key.
+* **Payload:** `{ "ecdh_public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE..." }`.
+* **HTTP Codes:** `200 OK`, `400 Bad Request`.
+
+#### 14. `POST /api/shared-items`
+* **Purpose:** Share an encrypted item with its symmetric key encapsulated via ECDH wrapping with a designated recipient.
+* **Payload:** `{ "recipient_user_id": "usr_...", "source_item_id": "cuid_...", "encrypted_item": "...", "item_iv": "...", "encrypted_item_key": "...", "key_iv": "...", "permissions": "read" | "write" }`.
+* **HTTP Codes:** `201 Created`, `400 Bad Request`, `404 Recipient Not Found`, `409 Conflict`.
+
+#### 15. `GET /api/shared-items`
+* **Purpose:** List active received shared items (`revoked_at IS NULL`) for client-side decryption.
+* **HTTP Codes:** `200 OK` (list of `SharedItemRecord[]`).
+
+#### 16. `GET /api/shared-items/sent`
+* **Purpose:** List items shared by the current user with other accounts for audit and revocation management.
+* **HTTP Codes:** `200 OK`.
+
+#### 17. `PUT /api/shared-items/:id`
+* **Purpose:** Update shared item content (requires `permissions = 'write'` or ownership).
+* **Payload:** `{ "encrypted_item": "...", "item_iv": "..." }`.
+* **HTTP Codes:** `200 OK`, `403 Forbidden`, `404 Not Found`.
+
+#### 18. `DELETE /api/shared-items/:id`
+* **Purpose:** Revoke item access (if invoked by owner) or reject/delete from view (if invoked by recipient).
+* **HTTP Codes:** `200 OK`, `403 Forbidden`, `404 Not Found`.
+
 ---
 
 ## 5. Canonical Data Models and TypeScript Types
@@ -470,6 +530,56 @@ export interface ActiveSessionState {
   timeDriftOffsetMs: number; // Milliseconds offset against server
   lastActivityTimestamp: number; // Timestamp of last user event
 }
+
+/**
+ * Permissions assigned to a shared item (v2.5).
+ */
+export type SharedItemPermissions = 'read' | 'write';
+
+/**
+ * Shared item record as persisted in Cloudflare D1 (v2.5).
+ */
+export interface SharedItemRecord {
+  id: string; // Prefix 'shi_' + UUID
+  owner_user_id: string;
+  recipient_user_id: string;
+  source_item_id: string; // ID of item in owner's vault
+  encrypted_item: string; // Base64 ciphertext of item encrypted with ItemKey
+  item_iv: string; // Base64 12-byte IV for the item
+  encrypted_item_key: string; // Base64 ItemKey wrapped with WrappingKey (AES-GCM Wrap)
+  key_iv: string; // Base64 12-byte IV for the key
+  permissions: SharedItemPermissions;
+  version: number;
+  created_at: number; // Unix Epoch in seconds
+  updated_at: number;
+  revoked_at?: number | null;
+}
+
+/**
+ * In-memory volatile RAM representation of a decrypted incoming shared item.
+ */
+export interface DecryptedSharedItem {
+  shared_id: string;
+  source_item_id: string;
+  owner_user_id: string;
+  owner_username?: string;
+  permissions: SharedItemPermissions;
+  item: VaultItem;
+  item_key: CryptoKey; // Symmetric AES-256-GCM key in RAM
+  fingerprint: string; // SHA-256 fingerprint of owner's public key
+  received_at: number;
+}
+
+/**
+ * Cryptographic API interface contract for sharing (src/lib/crypto/sharing.ts).
+ */
+export interface SharingCryptoAPI {
+  generateUserECDHKeyPair(): Promise<{ publicKey: CryptoKey; privateKey: CryptoKey; spkiBase64: string; pkcs8Base64: string }>;
+  deriveWrappingKey(localPrivateKey: CryptoKey, remotePublicKey: CryptoKey, salt?: Uint8Array): Promise<CryptoKey>;
+  encryptSharedItem(item: VaultItem, itemKey: CryptoKey, recipientPubKey: CryptoKey, senderPrivKey: CryptoKey): Promise<{ encrypted_item: string; item_iv: string; encrypted_item_key: string; key_iv: string }>;
+  decryptSharedItem(encryptedItem: string, itemIv: string, encryptedItemKey: string, keyIv: string, recipientPrivKey: CryptoKey, senderPubKey: CryptoKey): Promise<VaultItem>;
+  computeKeyFingerprint(spkiBase64: string): Promise<string>;
+}
 ```
 
 ---
@@ -481,7 +591,7 @@ The underlying SQLite relational engine of Cloudflare D1 is structured using pre
 ```sql
 -- =====================================================================
 -- D1 SCHEMA: REVOLT PASS DATABASE (schema.sql)
--- Version: 1.0.0
+-- Version: 1.1.0 (v2.5 Architecture Ready)
 -- Engine: Cloudflare D1 (SQLite Serverless)
 -- =====================================================================
 
@@ -493,6 +603,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL COLLATE NOCASE,     -- Case-insensitive for login
     kdf_salt TEXT NOT NULL,                    -- 16 bytes in Base64 format
     passkey_credential_id TEXT,                -- Optional FIDO2 credential ID
+    ecdh_public_key TEXT DEFAULT NULL,         -- ECDH P-384 public key in SPKI Base64 format (v2.5)
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
     CONSTRAINT uq_users_username UNIQUE (username)
@@ -515,11 +626,34 @@ CREATE TABLE IF NOT EXISTS vaults (
 -- Index for version control and synchronization auditing
 CREATE INDEX IF NOT EXISTS idx_vaults_user_version ON vaults(user_id, version);
 
+-- Cross-Account Shared Items Table (Zero-Knowledge - v2.5)
+CREATE TABLE IF NOT EXISTS shared_items (
+    id TEXT PRIMARY KEY,                       -- Prefix 'shi_' + UUID
+    owner_user_id TEXT NOT NULL,               -- Item owner
+    recipient_user_id TEXT NOT NULL,           -- Recipient user
+    source_item_id TEXT NOT NULL,              -- ID of source item in owner's vault
+    encrypted_item TEXT NOT NULL,              -- Payload encrypted with ItemKey (AES-256-GCM)
+    item_iv TEXT NOT NULL,                     -- 12-byte IV for item in Base64
+    encrypted_item_key TEXT NOT NULL,          -- ItemKey wrapped with WrappingKey (ECDH + HKDF)
+    key_iv TEXT NOT NULL,                      -- 12-byte IV for key in Base64
+    permissions TEXT NOT NULL DEFAULT 'read' CHECK(permissions IN ('read', 'write')),
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    revoked_at INTEGER DEFAULT NULL,
+    CONSTRAINT fk_shared_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_shared_recipient FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT uq_shared_owner_recipient_item UNIQUE (owner_user_id, recipient_user_id, source_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_recipient_active ON shared_items(recipient_user_id, revoked_at);
+CREATE INDEX IF NOT EXISTS idx_shared_owner ON shared_items(owner_user_id, created_at DESC);
+
 -- Synchronization Audit Table (Optional, lightweight rotation)
 CREATE TABLE IF NOT EXISTS sync_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
-    action TEXT NOT NULL,                      -- 'REGISTER', 'SYNC_PULL', 'SYNC_PUSH'
+    action TEXT NOT NULL,                      -- 'REGISTER', 'SYNC_PULL', 'SYNC_PUSH', 'SHARE_ITEM', 'REVOKE_SHARE'
     client_version INTEGER,
     server_version INTEGER,
     ip_country TEXT,                           -- Sourced from cf.country (no personal IP stored)

@@ -23,6 +23,10 @@
 - [ADR-008: Multi-Device Lifecycle, Granular Session Revocation, and Remote FIDO2 Passkey Deletion](#adr-008-multi-device-lifecycle-granular-session-revocation-and-remote-fido2-passkey-deletion)
 - [ADR-009: Adoption of GNU AGPLv3 License with Strict Trademark & Brand Assets Policy](#adr-009-adoption-of-gnu-agplv3-license-with-strict-trademark--brand-assets-policy)
 - [ADR-010: Decoupled Private Instance Mode and Community Self-Hosting (`VITE_PRIVATE_INSTANCE`)](#adr-010-decoupled-private-instance-mode-and-community-self-hosting-vite_private_instance)
+- [ADR-011: Preventive Hygiene Diagnostics and Breach Detection via k-Anonymity](#adr-011-preventive-hygiene-diagnostics-and-breach-detection-via-k-anonymity)
+- [ADR-012: Perimeter Hardening (CSP, Rate Limiting, CORS) and Sliding Session Rotation](#adr-012-perimeter-hardening-csp-rate-limiting-cors-and-sliding-session-rotation)
+- [ADR-013: Native Protobuf Mass Ingestion, Differential Reconciliation, and Open Exporters](#adr-013-native-protobuf-mass-ingestion-differential-reconciliation-and-open-exporters)
+- [ADR-014: Adoption of ECDH P-384 for Item Key Sharing](#adr-014-adoption-of-ecdh-p-384-for-item-key-sharing)
 
 ---
 
@@ -288,3 +292,77 @@ Adopt **Private Instance Decoupling via `VITE_PRIVATE_INSTANCE` and Remote D1 Tr
 2. **Restricted Access Visual Overlay:** When `VITE_PRIVATE_INSTANCE=true` is supplied, unauthenticated visitors without a local vault profile encounter a full-screen blurred `Restricted Access Overlay` with all background registration inputs disabled and dimmed.
 3. **Discrete Owner Unlock Shortcuts:** The owner can dismiss the restricted overlay at any time via capture-phase keyboard shortcuts (`Ctrl + Shift + U` or `Ctrl + Alt + U`) or by performing a triple-click on the central security shield icon.
 4. **Backend Defense-in-Depth:** On the owner's remote production database, an SQLite trigger rejects unauthorized new account insertions directly at the storage engine level, providing zero-trust enforcement even if client-side code is tampered with.
+
+---
+
+## ADR-011: Preventive Hygiene Diagnostics and Breach Detection via k-Anonymity
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+Users store TOTP secrets and passwords that may have been compromised in public data breaches or configured with weak entropy. The system needs to proactively alert users to compromised credentials and hygiene risks without ever transmitting full passwords, secrets, or complete hashes to the server or third-party APIs.
+
+### Decision
+1. **k-Anonymity with HaveIBeenPwned (HIBP):** Calculate the SHA-1 hash of the credential client-side. Only the first 5 hexadecimal characters (*hash prefix*) are transmitted via a Cloudflare Worker edge proxy. The external service returns candidate suffixes with breach frequencies. The final suffix matching occurs 100% locally in client memory.
+2. **Local Hygiene Diagnostics:** Bit-entropy calculations on Base32 secrets, duplicate detection, and backup obsolescence alerts (>30 days) execute purely client-side without sending telemetry.
+
+---
+
+## ADR-012: Perimeter Hardening (CSP, Rate Limiting, CORS) and Sliding Session Rotation
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+To mitigate XSS injection vectors, credential stuffing or user enumeration attacks on authentication endpoints, and persistent session hijacking over untrusted networks, the perimeter boundary on Cloudflare Workers requires robust hardening.
+
+### Decision
+1. **Strict Content-Security-Policy (CSP):** Immutable CSP headers emitted by the Worker preventing unauthorized script execution, external domain connections, and iframe embedding (`frame-ancestors 'none'`).
+2. **Perimeter Rate Limiting:** Enforce 10 requests/minute on `/api/auth/salt` and `/api/auth/register`, returning `HTTP 429 Too Many Requests` with a `Retry-After` header.
+3. **Restrictive CORS:** `Access-Control-Allow-Origin` headers bound to `env.APP_DOMAIN` in production.
+4. **Sliding Session Token Rotation with Grace Window (`prev_token_hash`):** The session token is rotated on vault sync requests. To tolerate network concurrency across parallel requests or multiple browser tabs, Cloudflare D1 retains the preceding token hash in `prev_token_hash` during a sliding grace window.
+
+---
+
+## ADR-013: Native Protobuf Mass Ingestion, Differential Reconciliation, and Open Exporters
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+Migration from existing 2FA providers (Google Authenticator, Bitwarden, Aegis, 2FAS, etc.) often suffers from friction, uncontrolled duplicate generation, and critical recovery code data loss.
+
+### Decision
+1. **Native Pure TypeScript Protobuf Decoder:** Implemented a standalone parser for Google Authenticator's binary payload `otpauth-migration://offline?data=...` without heavy external dependencies.
+2. **Three-Way Reconciliation Dialog:** Differential preview (`new`, `duplicate`, `conflict`) with user-selectable strategies (`keep existing`, `overwrite`, `keep both`) and automated recovery code merging.
+3. **Open Universal Exporters:** Full vault backups exportable in Aegis JSON, Bitwarden CSV, `otpauth://` URI lists, and Google Authenticator Protobuf QR carousel for maximum interoperability.
+
+---
+
+## ADR-014: Adoption of ECDH P-384 for Item Key Sharing
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+Revolt Pass is fundamentally a single-user personal vault. However, team and organizational workflows inevitably require sharing specific secrets (e.g. organizational GitHub TOTP seeds, production access keys). Sharing these credentials via external channels (chat, email, documents) breaches the Zero-Knowledge security model. Revolt Pass requires a mechanism to securely share individual vault items between accounts such that Cloudflare D1 never gains access to plaintext secrets or decryption keys.
+
+### Evaluated Alternatives
+1. **Re-encrypting item secrets with the recipient's master key:**
+   - Requires sender to know the recipient's master key. Violates Zero-Knowledge completely. **Rejected.**
+2. **Pre-Shared Symmetric Key (PSK):**
+   - Relies on out-of-band key distribution. Lacks lifecycle management and scalable revocation. **Rejected.**
+3. **RSA-OAEP for key encapsulation:**
+   - RSA-2048 is legacy; RSA-4096 incurs substantial payload bloat and Web Crypto API context limitations. **Rejected.**
+4. **ECDH P-384 with HKDF-SHA256 and AES-256-GCM wrapping (Selected Option):**
+   - Each user generates an asymmetric ECDH key pair on the NIST P-384 curve natively supported in Web Crypto API.
+   - The user's private key remains encrypted inside their personal vault.
+   - The public key is published to D1 and queryable by authenticated users.
+   - The sender derives an ECDH shared secret using their private key and the recipient's public key. HKDF-SHA256 derives an AES-256-GCM `wrapping_key` to encapsulate the item's unique symmetric `item_key`.
+   - Cloudflare D1 stores only the encrypted item ciphertext and the wrapped item key.
+
+### Decision
+Adopt **ECDH P-384 with HKDF-SHA256 key derivation and AES-256-GCM key encapsulation** (standard native Web Crypto ECIES scheme).
+- The architecture is 100% Zero-Knowledge regarding item contents: D1 only observes relational metadata and ciphertext blobs.
+- Establishes a mandatory architectural dependency on Milestone v2.0 to implement the per-item symmetric key model (`encrypted_key`).

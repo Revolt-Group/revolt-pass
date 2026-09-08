@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-PRD-001` |
-| **Version** | `1.2.1-PROD` |
+| **Version** | `1.4.4-PROD (v2.5 Scope Ready)` |
 | **Status** | Approved / Canonical Specification |
 | **Organization** | Revolt Group |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
@@ -23,10 +23,10 @@ The system runs on the client (browser/device) leveraging native hardware **Web 
 
 ### 1.2 Problem Statement
 1. **Systemic Risk of Centralized Managers:** Recurrent industry incidents (e.g., massive breaches in proprietary commercial providers) highlight the danger of trusting cryptographic secrets and vaults to servers that process or store metadata and credentials in plaintext or with third-party-managed keys.
-2. **Operational Friction on Workstations (Desktop / Windows):** Engineers and operators working in desktop environments often lack fingerprint biometric sensors, degrading user experience or forcing them to rely on mobile phones to retrieve 6-digit codes. Supporting native authentication via **Windows Hello (through secure PIN or biometrics)** via the FIDO2 / WebAuthn standard is imperative, matching Touch ID / Face ID in mobile ecosystems.
-3. **Critical Loss of Recovery Codes:** Most 2FA apps on the market treat single-use recovery codes as unstructured notes or loose text files, leading to account lockouts in emergencies and operational disasters.
-4. **Time Drift:** Small discrepancies between the client device clock and identity provider (IdP) clocks cause sporadic and inexplicable rejections of valid TOTP tokens.
-5. **Local Surface Vulnerabilities:** Inadvertent persistence in the operating system clipboard (*clipboard sniffing*) and data exposure in RAM after prolonged screen inactivity.
+2. **Operational Friction on Desktop Workstations (Windows):** Engineers working on desktop workstations frequently lack fingerprint scanners, forcing them to use mobile devices for 6-digit codes. Supporting native **Windows Hello (via secure PIN or biometrics)** via FIDO2 / WebAuthn is critical.
+3. **Critical Loss of Recovery Codes:** Most 2FA apps treat one-time recovery codes as unstructured notes or loose text files, leading to permanent account lockouts during emergencies.
+4. **Time Drift:** Discrepancies between client clocks and identity providers (IdP) cause intermittent rejection of valid TOTP tokens.
+5. **Local Attack Surface:** Inadvertent OS clipboard persistence (*clipboard sniffing*) and RAM exposure after extended periods of inactivity.
 
 ---
 
@@ -83,9 +83,12 @@ The design and development of Revolt Pass is strictly governed by five engineeri
   * Optimistic concurrency resolution model with version-based conflict detection.
 
 ### 3.2 Out-of-Scope (Deferred to Later Versions v2.0+)
-* Shared multi-family or enterprise multi-user vaults (the MVP is sovereign single-user per instance).
-* Browser extension for Chromium/Firefox with script injection into third-party pages.
-* Real-time HaveIBeenPwned (HIBP) API integration for bulk password auditing.
+* Shared multi-family vaults or corporate LDAP/SSO directories (deferred to v3.0+; asymmetric zero-knowledge item sharing between accounts is formally scheduled for **Milestone v2.5** under ECDH P-384 / ADR-014).
+* Browser extension for Chromium/Firefox with script injection into third-party pages (scheduled for **Milestone v2.1**).
+* Native compiled desktop application with direct OS hardware security integration in Rust (scheduled for **Milestone v2.2**).
+* Terminal CLI tool (`rpctl`) with process memory secret injection (scheduled for **Milestone v2.3**).
+* Duress password and decoy vault (scheduled for **Milestone v2.4**).
+* Real-time HaveIBeenPwned (HIBP) API integration for bulk password auditing (implemented in v1.3.0 under k-Anonymity / ADR-011).
 * Proprietary U2F hardware token support not implementing standard FIDO2/WebAuthn layers.
 
 ---
@@ -190,6 +193,13 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 * **FR-16.1:** The Cloudflare Worker records critical security events in the `audit_logs` table (user logons, passkey enrollments, session terminations, remote revocations, and credential changes).
 * **FR-16.2:** The UI presents a chronological audit history formatted to the active locale (`es-ES` / `en-US`), with server-side deduplication to prevent log flooding during background synchronizations.
 
+### FR-17: Cross-Account Secure Sharing (Milestone v2.5 - ADR-014)
+* **FR-17.1:** **Zero-Knowledge Asymmetric Key Agreement:** Users can share individual secret items (organizational TOTP seeds, access notes, or credentials) with other registered accounts via ECDH P-384 elliptic curve Diffie-Hellman key agreement and AES-256-GCM symmetric encapsulation.
+* **FR-17.2:** **Granular Permissions and Audit:** Support for read-only (`read`) or collaborative editing (`write`) privileges. Every sharing, modification, or revocation operation logs a traceable event in `audit_logs`.
+* **FR-17.3:** **Sovereign Revocation and Lifecycle:** The item owner can revoke access at any time (`DELETE /api/shared-items/:id`), instantly removing the item from recipient sync updates. The UI presents standard advice to rotate the credential at the destination service when appropriate.
+* **FR-17.4:** **Volatile RAM Isolation:** Decrypted incoming shared items reside **strictly in volatile client RAM memory**. They are never persisted as plaintext to IndexedDB or local disk, and are immediately purged on vault lock.
+* **FR-17.5:** **Out-of-Band Key Fingerprint Verification:** The UI displays the SHA-256 cryptographic fingerprint of the recipient's public key (`SHA-256(spki)`) to enable out-of-band verification against public key substitution attacks.
+
 ---
 
 ## 5. Non-Functional Requirements (NFR)
@@ -234,3 +244,19 @@ The system must operate comfortably within Cloudflare's strict free tier limits:
 | **Worker CPU Consumption** | $< 3.5 \text{ ms}$ | Cloudflare Worker Analytics |
 | **Time Drift Precision** | $\pm 50 \text{ ms}$ maximum error | Comparison vs adjusted `Date.now()` |
 | **Initial Bundle Size (Gzipped)** | $< 180 \text{ KB}$ | Vite build report & Rollup visualizer |
+
+---
+
+## 7. Competitive Differentiation Matrix
+
+Revolt Pass is uniquely positioned in the marketplace as the **only free, open-source Zero-Knowledge manager featuring native asymmetric cross-account sharing**:
+
+| Comparison Vector | Revolt Pass | Bitwarden | 1Password | Aegis Authenticator | Google Authenticator |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Cryptographic Paradigm** | **Native Zero-Knowledge** (Web Crypto API) | Zero-Knowledge | Zero-Knowledge | Local Zero-Knowledge | Optional cloud sync (no strict E2EE) |
+| **Cross-Account Secure Sharing** | **Yes** (v2.5 ECDH P-384 native) | Yes (Paid Organization required) | Yes (Paid commercial) | No (Manual file export only) | No (Mass QR export only) |
+| **User Operational Cost** | **$0 / Always Free** (Cloudflare Free Tier) | $3 - $4 / user / month to share | $3 - $8 / user / month | Free (Local only) | Free |
+| **Windows Hello PIN Unlock** | **Yes** (WebAuthn Level 3) | Requires desktop app | Requires desktop app | Not applicable (Android only) | Not applicable |
+| **Structured Recovery Codes** | **Yes** (Integrated per account) | No (Generic note field) | No (Generic note field) | No | No |
+| **Licensing & Sovereignty** | **GNU AGPLv3** (100% Open Source) | Partially open server | Closed / Proprietary | GPLv3 (Android only) | Proprietary |
+| **Telemetry & Trackers** | **Zero Telemetry** | Optional analytics | Commercial telemetry | Zero Telemetry | Telemetry tied to Google Account |

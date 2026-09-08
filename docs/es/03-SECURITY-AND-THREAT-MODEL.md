@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-SEC-003` |
-| **Versión** | `1.2.1-PROD` |
+| **Versión** | `1.4.4-PROD (v2.5 Design)` |
 | **Estado** | Aprobado / Especificación de Seguridad de Grado Criptográfico |
 | **Marco de Referencia** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
 | **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
@@ -110,6 +110,73 @@ La generación de contraseñas de un solo uso por tiempo (TOTP) sigue estrictame
 
 ---
 
+### 1.5 Criptografía Asimétrica y Acuerdo de Claves (ECDH P-384 + HKDF-SHA256 - ADR-014)
+Para permitir la compartición segura de secretos individuales entre usuarios sin revelar información en texto claro al servidor Cloudflare D1 ni requerir canales externos fuera de banda, Revolt Pass adopta un esquema de **Encapsulamiento Asimétrico de Claves (KEM)** basado en **ECDH P-384** y **HKDF-SHA256**.
+
+```mermaid
+flowchart TD
+    subgraph SenderSide ["Emisor (Propietario del Ítem)"]
+        ItemKey["ItemKey\n(AES-256-GCM 256-bit)"]
+        SenderPriv["Sender PrivKey\n(ECDH P-384 en RAM)"]
+        RecipientPub["Recipient PubKey\n(Obtenida de D1)"]
+        
+        ECDH1["Web Crypto subtle.deriveBits\nECDH P-384"]
+        HKDF1["Web Crypto subtle.deriveKey\nHKDF-SHA256 (info: 'revolt-pass-shared-item-v1')"]
+        WrapKey["Web Crypto subtle.wrapKey\nAES-256-GCM"]
+        
+        SenderPriv & RecipientPub --> ECDH1
+        ECDH1 -->|Z: 48 bytes| HKDF1
+        HKDF1 -->|WrappingKey: 256-bit| WrapKey
+        ItemKey --> WrapKey
+        WrapKey --> EncryptedItemKey["encrypted_item_key\n+ key_iv (12B) + auth_tag (16B)"]
+    end
+
+    subgraph Storage ["Cloudflare D1 (Zero-Knowledge)"]
+        D1Record["shared_items table:\n- encrypted_item (cifrado con ItemKey)\n- encrypted_item_key (cifrado con WrappingKey)\n- ivs & metadatos de relación"]
+    end
+
+    subgraph RecipientSide ["Destinatario"]
+        RecipientPriv["Recipient PrivKey\n(Descifrada de su vault en RAM)"]
+        SenderPub["Sender PubKey"]
+        
+        ECDH2["Web Crypto subtle.deriveBits\nECDH P-384"]
+        HKDF2["Web Crypto subtle.deriveKey\nHKDF-SHA256 (mismo salt e info)"]
+        UnwrapKey["Web Crypto subtle.unwrapKey\nAES-256-GCM"]
+        DecryptItem["Web Crypto subtle.decrypt\nAES-256-GCM"]
+        
+        RecipientPriv & SenderPub --> ECDH2
+        ECDH2 -->|Z: 48 bytes| HKDF2
+        HKDF2 -->|WrappingKey| UnwrapKey
+        EncryptedItemKey --> UnwrapKey
+        UnwrapKey --> RecoveredItemKey["ItemKey recuperada en RAM"]
+        RecoveredItemKey --> DecryptItem
+        DecryptItem --> PlaintextItem["Ítem Descifrado en RAM volátil\n(Nunca en disco/IndexedDB)"]
+    end
+
+    EncryptedItemKey --> D1Record
+    D1Record --> RecipientSide
+```
+
+#### Parámetros Criptográficos Canónicos:
+1. **Curva Elíptica:** NIST P-384 (`secp384r1`). Proporciona un margen de seguridad criptográfico de 192 bits (superior a P-256 y alineado con suites CNSA/NSA Suite B), respaldado de forma nativa en la Web Crypto API sin paquetes externos.
+2. **Generación de Par de Claves:**
+   $$\text{KeyPair} = \text{crypto.subtle.generateKey}(\{ \text{name: "ECDH"}, \text{namedCurve: "P-384"} \}, \text{extractable: true}, [\text{"deriveKey"}, \text{"deriveBits"} ])$$
+   * La clave pública se exporta en formato `spki` (codificada en Base64) y se publica en Cloudflare D1 en la columna `users.ecdh_public_key`.
+   * La clave privada se exporta en formato `pkcs8`, se cifra simétricamente con la `MasterKey` del usuario y se almacena dentro de su propio `encrypted_blob` en IndexedDB. Jamás se envía en texto claro a la nube.
+3. **Acuerdo de Clave Secreta Compartida (ECDH):**
+   $$\mathcal{Z} = \text{ECDH}(\text{PrivKey}_A, \text{PubKey}_B) \in \mathbb{F}_p \quad (48 \text{ bytes})$$
+4. **Función de Derivación de Clave de Envoltura (HKDF-SHA256 - RFC 5869):**
+   A partir del secreto compartido $\mathcal{Z}$, se deriva una clave simétrica de envoltura `WrappingKey` (AES-GCM de 256 bits) garantizando independencia criptográfica y separación de contexto:
+   $$\text{PRK} = \text{HMAC-SHA256}(\text{Salt}, \mathcal{Z})$$
+   $$\text{WrappingKey} = \text{HKDF-Expand}(\text{PRK}, \text{"revolt-pass-shared-item-v1"}, 256 \text{ bits})$$
+5. **Encapsulamiento del Secreto (Key Wrapping):**
+   La clave simétrica propia del ítem (`ItemKey`, AES-256-GCM) se encapsula mediante la `WrappingKey` obtenida:
+   $$\text{EncryptedKey}, \text{KeyTag} = \text{AES-GCM-256-Wrap}(\text{WrappingKey}, \text{ItemKey}, \text{KeyIV})$$
+   El contenido del ítem se cifra con la `ItemKey`:
+   $$\text{EncryptedItem}, \text{ItemTag} = \text{AES-GCM-256-Encrypt}(\text{ItemKey}, \text{ItemJSON}, \text{ItemIV})$$
+
+---
+
 ## 2. Modelo de Amenazas (STRIDE & Análisis de Vectores de Ataque)
 
 Se evalúa la postura de seguridad de Revolt Pass conforme a la metodología **STRIDE** de Microsoft y se detalla la matriz de vectores de ataque.
@@ -129,6 +196,9 @@ quadrantChart
     "Man-in-the-Middle (Network)": [0.20, 0.80]
     "Brute Force Master Password": [0.40, 0.90]
     "Clock Desync (Time Drift)": [0.80, 0.40]
+    "ECDH Key Substitution": [0.30, 0.85]
+    "Shared Item Replay": [0.25, 0.60]
+    "Recipient Enumeration": [0.60, 0.35]
 ```
 
 ### Matriz Detallada de Vectores de Ataque y Mitigaciones
@@ -142,6 +212,9 @@ quadrantChart
 | **VEC-05** | *Information Disclosure* | **Ataque de Fuerza Bruta Offline sobre la Contraseña Maestra:** Si un atacante roba el salt y el blob cifrado, intenta deducir la contraseña mediante diccionarios y hashes masivos. | Alto | **Factor de Trabajo Elevado (PBKDF2 600,000 rondas):** 600,000 iteraciones con SHA-256 fuerzan al atacante a consumir enormes recursos energéticos y de cómputo por cada intento de clave, volviendo inviable la fuerza bruta frente a contraseñas robustas. |
 | **VEC-06** | *Elevation of Privilege* | **Ataques de Inyección de Scripts (XSS):** Inyección de código JavaScript para leer la memoria del navegador o interceptar los eventos de teclado. | Crítico | **Aislamiento Estricto & CSP:** Política de Seguridad de Contenido (CSP) que bloquea `unsafe-inline`, `unsafe-eval` y restringe la carga de recursos externos únicamente a `self` y al CDN de `cdn.simpleicons.org`. Cero dependencias de librerías CDN en tiempo de ejecución. |
 | **VEC-07** | *Denial of Service* | **Falla de Sincronización por Pérdida de Conectividad:** El usuario viaja en avión o experimenta cortes de red y necesita acceder a sus cuentas corporativas. | Alto | **Disponibilidad Offline Absoluta (100%):** Todo el estado se mantiene cifrado en IndexedDB y los assets en Service Worker. La aplicación opera indefinidamente en modo avión. |
+| **VEC-NEW-01** | *Spoofing / Tampering* | **Sustitución Maliciosa de Clave Pública ECDH (Key Substitution Attack):** Un atacante que comprometa el servidor Cloudflare D1 sustituye la clave pública de un usuario por una propia para descifrar ítems compartidos dirigidos a ese usuario. | Crítico | **Verificación de Fingerprint Fuera de Banda:** La UI computa y muestra la huella criptográfica SHA-256 de la clave pública del destinatario (`SHA-256(spki)` en formato hex agrupado o emoji-hash). Los usuarios verifican la huella mediante un canal secundario seguro (Signal, llamada) antes de compartir secretos de alto impacto. |
+| **VEC-NEW-02** | *Tampering / Replay* | **Replay o Reinserción de Paquetes Cifrados Compartidos:** Un actor reenvía un ciphertext compartido antiguo para sobreescribir una versión actualizada o revertir una revocación. | Medio | **Restricciones de Unicidad y Versión en D1:** Índice único `UNIQUE(owner_user_id, recipient_user_id, source_item_id)`, monotonicidad de versiones y validación estricta de sesión autenticada que impide a terceros inyectar o reactivar filas en `shared_items`. |
+| **VEC-NEW-03** | *Information Disclosure* | **Enumeración Masiva de Destinatarios:** Escaneo automatizado del endpoint público de claves para descubrir nombres de usuario registrados en la plataforma. | Bajo | **Defensa en Profundidad en el Edge:** Requiere sesión autenticada activa (`Authorization: Bearer <token>`) para consultar `/api/users/:username/public-key` y aplica Rate Limiter en Cloudflare Workers limitando solicitudes ráfaga por IP. |
 
 ---
 
@@ -218,3 +291,22 @@ Este algoritmo previene la fuga involuntaria de secretos en aplicaciones de mens
 ### 3.6 Privacidad Estricta en Internacionalización (Zero-Leak i18n)
 * **Sin Servicios de Terceros:** A diferencia de aplicaciones que envían el DOM a APIs externas (Google Translate, DeepL, etc.) —lo que expondría descripciones de cuentas, nombres de servicios y tokens 2FA—, Revolt Pass utiliza diccionarios 100% estáticos compilados en el bundle cliente.
 * **Cero Telemetría Lingüística:** La selección de idioma se almacena localmente en `localStorage.revolt_lang` y no se envía ni se registra en ningún servidor central.
+
+---
+
+### 3.7 Extensión del Modelo de Confianza (Compartición Segura v2.5: Metadatos de Relación vs. Contenido ZK)
+El Hito v2.5 introduce la capacidad de compartir secretos entre usuarios de forma asimétrica. Es un principio de transparencia de ingeniería delimitar con rigor matemático qué información aprende la infraestructura central frente a qué información permanece inexpugnable bajo Conocimiento Cero:
+
+#### 1. Información Conocida por el Servidor / Cloudflare D1 (Metadatos de Relación):
+* **Participantes de la Transacción:** Quién comparte (`owner_user_id`) y con quién (`recipient_user_id`).
+* **Identificador Opaco del Ítem Origen:** El identificador UUID/CUID del ítem compartido (`source_item_id`).
+* **Marcas Temporales:** Fechas y horas de compartición (`created_at`), última actualización (`updated_at`) y revocación (`revoked_at`).
+* **Permisos Concedidos:** Si el receptor tiene privilegios de solo lectura (`read`) o edición (`write`).
+* **Claves Públicas ECDH P-384:** Las representaciones SPKI públicas de las claves de los usuarios, necesarias para efectuar el acuerdo Diffie-Hellman.
+
+#### 2. Información 100% Blindada bajo Zero-Knowledge (Contenido e Integridad):
+* **Contenido del Secreto:** Nombres de usuario, contraseñas, semillas TOTP, códigos de respaldo y notas cifradas (`encrypted_item`).
+* **Clave Simétrica del Ítem (`item_key`):** Permanece encapsulada (`encrypted_item_key`) mediante una clave AES-256-GCM derivada exclusivamente en la RAM de los dos navegadores involucrados mediante ECDH + HKDF.
+* **Inviolabilidad frente a Brechas Centrales:** Incluso si un adversario obtiene un volcado completo de la base de datos D1 o compromete el Worker en el Edge, le es matemáticamente inviable descifrar los ítems o recuperar las claves simétricas, ya que ninguna clave privada ECDH reside jamás en el servidor ni abandona el dispositivo del usuario sin estar cifrada con su propia `MasterKey`.
+* **Ciclo de Vida en Memoria Volátil:** Los secretos compartidos recibidos se descifran al vuelo y residen **exclusivamente en la memoria RAM del cliente**; nunca se persisten en texto plano en la base de datos local IndexedDB, mitigando ataques de extracción forense en disco.
+

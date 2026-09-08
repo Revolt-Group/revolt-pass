@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-SEC-003` |
-| **Version** | `1.2.1-PROD` |
+| **Version** | `1.4.4-PROD (v2.5 Design)` |
 | **Status** | Approved / Cryptographic Grade Security Specification |
 | **Frameworks & Standards** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, W3C WebAuthn Level 3 |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
@@ -61,52 +61,116 @@ flowchart LR
 ```
 
 * **Key Size:** 256 bits (`AES-256`).
-* **Initialization Vector (IV / Nonce):** 96 bits (12 bytes). **Strict Rule:** A fresh IV is generated with `crypto.getRandomValues(new Uint8Array(12))` **on every save operation**. Reusing a (Key, IV) pair under AES-GCM destroys authenticity and can enable plaintext recovery.
-* **Authentication Tag:** 128 bits (16 bytes). The authentication tag enforces strict cryptographic integrity: altering a single bit in the database or in transit triggers immediate rejection (`OperationError`) during `subtle.decrypt()`, neutralizing tampering attacks.
+* **Initialization Vector (IV / Nonce):** 96 bits (12 bytes). **Strict invariant:** A new IV is generated via `crypto.getRandomValues(new Uint8Array(12))` **on every save operation**. Nonce reuse under AES-GCM destroys authenticity and enables plaintext recovery.
+* **Authentication Tag:** 128 bits (16 bytes). Provides strict cryptographic integrity: any 1-bit alteration in transit or at rest triggers an immediate `OperationError` during `subtle.decrypt()`, thwarting tampering attacks.
 
 ---
 
-### 1.3 Quick Unlock Mechanism via WebAuthn / Passkeys
-To provide a frictionless experience without compromising the Zero-Knowledge model, a **Local Key Wrapping** architecture backed by FIDO2 / WebAuthn hardware is implemented:
+### 1.3 Rapid Unlock Mechanism via WebAuthn / Passkeys
+To ensure a frictionless experience without breaking the Zero-Knowledge boundary, Revolt Pass implements a hardware-backed **Local Key Wrapping** scheme via WebAuthn / FIDO2.
 
 1. **Enrollment:**
-   * The user successfully authenticates with their Master Password (obtaining `MasterKey`).
-   * The client invokes `navigator.credentials.create()` configuring:
-     * `authenticatorAttachment: "platform"` (restricts to local device hardware: Windows Hello on PC, Touch ID / Face ID on Apple, Biometrics on Android).
-     * `userVerification: "required"` (enforces Windows Hello PIN or biometric scan).
-   * The client generates a random local symmetric wrapping key (`DeviceWrappingKey`, 256 bits).
-   * The `MasterKey` is encrypted with the `DeviceWrappingKey` via AES-GCM, producing `wrapped_master_key`.
-   * The `DeviceWrappingKey` is stored protected in the browser's local store, bound to the registered WebAuthn credential ID.
+   * The user authenticates with Master Password (producing `MasterKey`).
+   * The client calls `navigator.credentials.create()` with:
+     * `authenticatorAttachment: "platform"` (restricts to local platform hardware: Windows Hello, Touch ID / Face ID, Android Biometrics).
+     * `userVerification: "required"` (forces biometric scan or Windows Hello PIN).
+   * Client generates a random 256-bit symmetric `DeviceWrappingKey`.
+   * `MasterKey` is wrapped using `DeviceWrappingKey` via AES-GCM, yielding `wrapped_master_key`.
+   * `DeviceWrappingKey` is persisted securely in local browser storage, tied to the WebAuthn credential ID.
 2. **Subsequent Unlock:**
-   * The application requests assertion with `navigator.credentials.get({ publicKey: { challenge, userVerification: "required" } })`.
-   * The user enters their **Windows Hello PIN** or touches the fingerprint sensor on mobile.
-   * Upon valid assertion returned by the OS hardware TPM/Enclave, the client releases `DeviceWrappingKey`, decrypts `wrapped_master_key`, and reconstructs `MasterKey` in volatile RAM.
-   * If the user revokes the credential, uninstalls the PWA, or verification fails, the wrapping key is purged and the system requires the Master Password.
+   * Application requests assertion with `navigator.credentials.get({ publicKey: { challenge, userVerification: "required" } })`.
+   * User provides Windows Hello PIN or biometric touch.
+   * Following hardware TPM/Enclave verification, client unlocks `DeviceWrappingKey`, decrypts `wrapped_master_key`, and reconstructs `MasterKey` in volatile RAM.
+   * If the credential is revoked or verification fails, keys are purged and Master Password is required.
 
 ---
 
 ### 1.4 TOTP Engine (RFC 6238 / RFC 4226)
-Time-based one-time password (TOTP) generation strictly follows IETF specifications:
+One-Time Password generation strictly follows IETF standards:
 
 1. **Base32 Decoding (RFC 4648):**
-   * Secret is sanitized by stripping null bytes, dashes, and spaces.
-   * Pure TypeScript Base32 decoder:
-     * Input: `string` characters in alphabet `[A-Z2-7]`.
-     * Output: binary `Uint8Array` bytes.
-2. **Step Interval Calculation:**
+   * Sanitizes secrets by stripping null characters, hyphens, and whitespace.
+   * Pure TypeScript Base32 decoder with alphabet `[A-Z2-7]`.
+2. **Interval Calculation:**
    $$C_t = \left\lfloor \frac{T_{local} + \Delta T_{drift}}{X} \right\rfloor$$
-   where $X = 30$ seconds, $T_{local}$ is Unix time in seconds, and $\Delta T_{drift}$ is the time offset calculated against the Worker.
-   The counter $C_t$ is serialized as a 64-bit integer in Big-Endian format (8 bytes).
+   where $X = 30$ seconds and $\Delta T_{drift}$ is the edge time synchronization delta. Counter serialized as 64-bit Big-Endian integer (8 bytes).
 3. **HMAC Generation:**
-   * Sign $C_t$ with the decoded secret key using `crypto.subtle.sign("HMAC", hmacKey, counterBuffer)`.
-   * Supported algorithms: `SHA-1` (default 20 bytes) and `SHA-256` (32 bytes).
+   * Signs $C_t$ with secret using `crypto.subtle.sign("HMAC", hmacKey, counterBuffer)`.
+   * Supports `SHA-1` (20 bytes default) and `SHA-256` (32 bytes).
 4. **Dynamic Truncation:**
-   * The last byte of the hash determines the offset:
+   * Last byte determines offset:
      $$\text{offset} = \text{hash}[20 - 1] \ \& \ \text{0x0F}$$
-   * Extract 4 bytes starting at offset, masking to clear the most significant sign bit:
+   * Extracts 4 bytes masking sign bit:
      $$\text{binary} = ((\text{hash}[\text{offset}] \ \& \ \text{0x7F}) \ll 24) \ | \ ((\text{hash}[\text{offset} + 1] \ \& \ \text{0xFF}) \ll 16) \ | \ ((\text{hash}[\text{offset} + 2] \ \& \ \text{0xFF}) \ll 8) \ | \ (\text{hash}[\text{offset} + 3] \ \& \ \text{0xFF})$$
-   * Calculate final code via modulo:
+   * Computes final code via modulo:
      $$\text{token} = (\text{binary} \pmod{10^{\text{digits}}}).\text{toString}().\text{padStart}(\text{digits}, \text{'0'})$$
+
+---
+
+### 1.5 Asymmetric Cryptography & Key Agreement (ECDH P-384 + HKDF-SHA256 - ADR-014)
+To enable cryptographically secure secret sharing between individual users without leaking plaintext to Cloudflare D1 and without requiring out-of-band pre-shared keys, Revolt Pass implements an **Asymmetric Key Encapsulation Mechanism (KEM)** built on **ECDH P-384** and **HKDF-SHA256**.
+
+```mermaid
+flowchart TD
+    subgraph SenderSide ["Sender (Item Owner)"]
+        ItemKey["ItemKey\n(AES-256-GCM 256-bit)"]
+        SenderPriv["Sender PrivKey\n(ECDH P-384 in RAM)"]
+        RecipientPub["Recipient PubKey\n(Fetched from D1)"]
+        
+        ECDH1["Web Crypto subtle.deriveBits\nECDH P-384"]
+        HKDF1["Web Crypto subtle.deriveKey\nHKDF-SHA256 (info: 'revolt-pass-shared-item-v1')"]
+        WrapKey["Web Crypto subtle.wrapKey\nAES-256-GCM"]
+        
+        SenderPriv & RecipientPub --> ECDH1
+        ECDH1 -->|Z: 48 bytes| HKDF1
+        HKDF1 -->|WrappingKey: 256-bit| WrapKey
+        ItemKey --> WrapKey
+        WrapKey --> EncryptedItemKey["encrypted_item_key\n+ key_iv (12B) + auth_tag (16B)"]
+    end
+
+    subgraph Storage ["Cloudflare D1 (Zero-Knowledge)"]
+        D1Record["shared_items table:\n- encrypted_item (encrypted with ItemKey)\n- encrypted_item_key (encrypted with WrappingKey)\n- ivs & relationship metadata"]
+    end
+
+    subgraph RecipientSide ["Recipient"]
+        RecipientPriv["Recipient PrivKey\n(Decrypted from vault into RAM)"]
+        SenderPub["Sender PubKey"]
+        
+        ECDH2["Web Crypto subtle.deriveBits\nECDH P-384"]
+        HKDF2["Web Crypto subtle.deriveKey\nHKDF-SHA256 (same salt and info)"]
+        UnwrapKey["Web Crypto subtle.unwrapKey\nAES-256-GCM"]
+        DecryptItem["Web Crypto subtle.decrypt\nAES-256-GCM"]
+        
+        RecipientPriv & SenderPub --> ECDH2
+        ECDH2 -->|Z: 48 bytes| HKDF2
+        HKDF2 -->|WrappingKey| UnwrapKey
+        EncryptedItemKey --> UnwrapKey
+        UnwrapKey --> RecoveredItemKey["ItemKey recovered in RAM"]
+        RecoveredItemKey --> DecryptItem
+        DecryptItem --> PlaintextItem["Decrypted Item in volatile RAM\n(Never written to disk/IndexedDB)"]
+    end
+
+    EncryptedItemKey --> D1Record
+    D1Record --> RecipientSide
+```
+
+#### Canonical Cryptographic Parameters:
+1. **Elliptic Curve:** NIST P-384 (`secp384r1`). Provides a 192-bit cryptographic security strength (exceeding P-256 and aligned with CNSA/NSA Suite B specifications), natively supported in the Web Crypto API without external libraries.
+2. **Key Pair Generation:**
+   $$\text{KeyPair} = \text{crypto.subtle.generateKey}(\{ \text{name: "ECDH"}, \text{namedCurve: "P-384"} \}, \text{extractable: true}, [\text{"deriveKey"}, \text{"deriveBits"} ])$$
+   * Public key is exported in `spki` format (Base64 encoded) and registered in Cloudflare D1 column `users.ecdh_public_key`.
+   * Private key is exported in `pkcs8` format, symmetrically encrypted with user's `MasterKey`, and stored inside the user's `encrypted_blob` in IndexedDB. It is never exposed to the server in plaintext.
+3. **Diffie-Hellman Shared Secret Agreement (ECDH):**
+   $$\mathcal{Z} = \text{ECDH}(\text{PrivKey}_A, \text{PubKey}_B) \in \mathbb{F}_p \quad (48 \text{ bytes})$$
+4. **Key Derivation Function (HKDF-SHA256 - RFC 5869):**
+   From the shared secret $\mathcal{Z}$, a 256-bit symmetric `WrappingKey` is derived, ensuring context separation and key independence:
+   $$\text{PRK} = \text{HMAC-SHA256}(\text{Salt}, \mathcal{Z})$$
+   $$\text{WrappingKey} = \text{HKDF-Expand}(\text{PRK}, \text{"revolt-pass-shared-item-v1"}, 256 \text{ bits})$$
+5. **Secret Encapsulation (Key Wrapping):**
+   The item's symmetric key (`ItemKey`, AES-256-GCM) is wrapped using the derived `WrappingKey`:
+   $$\text{EncryptedKey}, \text{KeyTag} = \text{AES-GCM-256-Wrap}(\text{WrappingKey}, \text{ItemKey}, \text{KeyIV})$$
+   The item content is encrypted with the `ItemKey`:
+   $$\text{EncryptedItem}, \text{ItemTag} = \text{AES-GCM-256-Encrypt}(\text{ItemKey}, \text{ItemJSON}, \text{ItemIV})$$
 
 ---
 
@@ -129,6 +193,9 @@ quadrantChart
     "Man-in-the-Middle (Network)": [0.20, 0.80]
     "Brute Force Master Password": [0.40, 0.90]
     "Clock Desync (Time Drift)": [0.80, 0.40]
+    "ECDH Key Substitution": [0.30, 0.85]
+    "Shared Item Replay": [0.25, 0.60]
+    "Recipient Enumeration": [0.60, 0.35]
 ```
 
 ### Detailed Attack Vector Matrix and Mitigations
@@ -142,6 +209,9 @@ quadrantChart
 | **VEC-05** | *Information Disclosure* | **Offline Brute Force on Master Password:** Attacker steals salt and encrypted blob, attempting dictionary and hash-cracking attacks. | High | **High Work Factor (PBKDF2 600,000 rounds):** 600,000 iterations with SHA-256 force massive CPU/energy consumption per attempt, making brute force infeasible against strong passwords. |
 | **VEC-06** | *Elevation of Privilege* | **Cross-Site Scripting (XSS) Attacks:** JavaScript injection to inspect browser memory or intercept keystrokes. | Critical | **Strict Isolation & CSP:** Content Security Policy blocking `unsafe-inline`, `unsafe-eval` and restricting external resource loading strictly to `self` and `cdn.simpleicons.org`. Zero runtime CDN dependencies. |
 | **VEC-07** | *Denial of Service* | **Sync Failure Due to Connectivity Loss:** User travels on an airplane or encounters outages and needs access to corporate accounts. | High | **Absolute Offline Availability (100%):** Entire state remains encrypted in IndexedDB and assets precached in Service Worker. Operates indefinitely in airplane mode. |
+| **VEC-NEW-01** | *Spoofing / Tampering* | **Malicious ECDH Public Key Substitution (Key Substitution Attack):** An attacker compromising Cloudflare D1 replaces a user's public key with their own to intercept and decrypt shared items addressed to that recipient. | Critical | **Out-of-Band Visual Fingerprint Verification:** The UI computes and presents the SHA-256 fingerprint of the recipient's public key (`SHA-256(spki)` in grouped hex or emoji-hash format). Users verify this fingerprint via an independent secure channel (Signal, voice call) before sharing sensitive secrets. |
+| **VEC-NEW-02** | *Tampering / Replay* | **Replay or Insertion of Stale Shared Ciphertext:** An attacker replays an old shared ciphertext to overwrite an updated item or reverse a revocation. | Medium | **D1 Uniqueness Constraints & Monotonic Versions:** Database constraint `UNIQUE(owner_user_id, recipient_user_id, source_item_id)`, version monotonicity, and strict session authentication preventing third parties from injecting or modifying rows in `shared_items`. |
+| **VEC-NEW-03** | *Information Disclosure* | **Mass Recipient Enumeration:** Automated scraping of the public key endpoint to identify registered usernames on the platform. | Low | **Edge Defense-in-Depth:** Requires an active authenticated session (`Authorization: Bearer <token>`) to query `/api/users/:username/public-key` and enforces Cloudflare Workers edge rate limiting against brute-force queries per IP. |
 
 ---
 
@@ -218,3 +288,22 @@ This algorithm prevents inadvertent secret leaks into messaging applications, of
 ### 3.6 Strict Internationalization Privacy (Zero-Leak i18n)
 * **Zero Third-Party APIs:** Unlike applications that proxy rendered DOM strings to cloud translation services (Google Translate, DeepL, etc.) — which risks leaking account descriptions, service names, and 2FA credentials —, Revolt Pass utilizes 100% static dictionaries compiled directly into the client bundle.
 * **Zero Language Telemetry:** Locale preferences are stored purely in `localStorage.revolt_lang` and never transmitted to or logged on any remote server.
+
+---
+
+### 3.7 Extension of the Trust Model (Cross-Account Secure Sharing v2.5: Relationship Metadata vs. ZK Content)
+Milestone v2.5 introduces asymmetric cross-account secret sharing. As an engineering transparency principle, we rigorously delineate what the central infrastructure learns versus what remains strictly inviolable under Zero-Knowledge:
+
+#### 1. Information Learned by the Server / Cloudflare D1 (Relationship Metadata):
+* **Transaction Participants:** Who shares (`owner_user_id`) and with whom (`recipient_user_id`).
+* **Opaque Source Item Identifier:** The UUID/CUID identifier of the shared item (`source_item_id`).
+* **Timestamps:** Sharing creation date (`created_at`), update date (`updated_at`), and revocation date (`revoked_at`).
+* **Granted Permissions:** Whether the recipient possesses read-only (`read`) or collaborative edit (`write`) privileges.
+* **ECDH P-384 Public Keys:** Public SPKI key representations required to perform Diffie-Hellman key agreement.
+
+#### 2. Information 100% Shielded Under Zero-Knowledge (Content & Key Confidentiality):
+* **Secret Content:** Usernames, passwords, TOTP seeds, backup codes, and notes (`encrypted_item`).
+* **Item Symmetric Key (`item_key`):** Encapsulated (`encrypted_item_key`) under an AES-256-GCM wrapping key derived strictly in the browser RAM of the two parties via ECDH + HKDF.
+* **Resilience to Centralized Breaches:** Even with a full database dump of D1 or compromised Worker execution at the edge, an attacker cannot decrypt items or extract symmetric keys, as no ECDH private key ever reaches the server or leaves the client unencrypted.
+* **Volatile RAM Lifecycle:** Received shared items are decrypted in real time and retained **strictly in volatile client RAM**; they are never persisted as plaintext in IndexedDB, mitigating forensic recovery risks from lost or stolen devices.
+

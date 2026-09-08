@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-ARCH-002` |
-| **Versión** | `1.2.1-PROD` |
+| **Versión** | `1.4.4-PROD (v2.5 Architecture)` |
 | **Estado** | Aprobado / Especificación de Arquitectura |
 | **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Pila Tecnológica** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
@@ -160,6 +160,54 @@ Para evitar que los códigos TOTP fallen por desfase de segundos en el reloj del
 6. Se determina la discrepancia de reloj:
    $$\text{offset} = t_{server} - \left( t_0 + \frac{RTT}{2} \right)$$
 7. Dicho `offset` se almacena en memoria volátil y se suma a `Date.now()` en la función `generateTOTP()`.
+
+---
+
+### 2.4 Subsistema de Compartición Segura entre Cuentas (v2.5 - ADR-014)
+Para permitir el intercambio seguro de ítems específicos entre cuentas independientes sin comprometer la clave maestra de ningún usuario ni delegar descifrado al servidor, se implementa el flujo de acuerdo de clave asimétrico ECDH P-384 con encapsulamiento simétrico AES-256-GCM.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Propietario as Propietario (Ignacio)
+    participant ClientA as PWA Ignacio (Web Crypto)
+    participant Edge as Cloudflare Worker (Router)
+    participant D1 as Cloudflare D1 (SQLite)
+    participant ClientB as PWA Bruno (Web Crypto)
+    actor Receptor as Receptor (Bruno)
+
+    Note over Propietario,ClientA: Ignacio desea compartir cuenta TOTP corporativa con Bruno
+    Propietario->>ClientA: Selecciona "Compartir con..." e ingresa usuario "bruno"
+    ClientA->>Edge: GET /api/users/bruno/public-key (Bearer Token Ignacio)
+    Edge->>D1: SELECT ecdh_public_key FROM users WHERE username = 'bruno'
+    D1-->>Edge: ecdh_public_key (SPKI Base64)
+    Edge-->>ClientA: Retorna clave pública de Bruno
+    
+    Note over ClientA: 1. Genera par ECDH P-384 o usa par de identidad en RAM<br/>2. Deriva Z = ECDH(PrivKey_Ignacio, PubKey_Bruno)<br/>3. Deriva WrappingKey = HKDF-SHA256(Z, salt, 'revolt-pass-shared-item-v1')<br/>4. Cifra item con ItemKey (AES-256-GCM)<br/>5. Envuelve ItemKey con WrappingKey (AES-256-GCM Wrap)
+    
+    ClientA->>Edge: POST /api/shared-items { recipient_user_id, source_item_id, encrypted_item, item_iv, encrypted_item_key, key_iv, permissions }
+    Edge->>D1: INSERT INTO shared_items (...)
+    D1-->>Edge: OK (id, created_at)
+    Edge-->>ClientA: 201 Created
+    ClientA-->>Propietario: Muestra confirmación y huella de clave (Fingerprint)
+
+    Note over Receptor,ClientB: Bruno sincroniza su bóveda
+    Receptor->>ClientB: Inicia sesión / Desbloquea bóveda
+    ClientB->>Edge: GET /api/shared-items (Bearer Token Bruno)
+    Edge->>D1: SELECT * FROM shared_items WHERE recipient_user_id = ? AND revoked_at IS NULL
+    D1-->>Edge: Retorna paquetes compartidos activos
+    Edge-->>ClientB: 200 OK con items compartidos cifrados
+    
+    Note over ClientB: 1. Carga PrivKey_Bruno (descifrada de su vault en RAM)<br/>2. Deriva Z = ECDH(PrivKey_Bruno, PubKey_Ignacio)<br/>3. Deriva WrappingKey = HKDF-SHA256(Z, salt, 'revolt-pass-shared-item-v1')<br/>4. Desenvuelve ItemKey con WrappingKey<br/>5. Descifra encrypted_item en memoria RAM volátil
+    
+    ClientB-->>Receptor: Renderiza ítem en la lista con distintivo "Compartido por @ignacio"
+    Note over ClientB: El ítem descifrado NUNCA se escribe en disco ni en IndexedDB en texto claro
+```
+
+* **Política de Aislamiento en Almacenamiento Local:**
+  - Los ítems compartidos recibidos se descifran en tiempo de ejecución tras la sincronización y habitan **estrictamente en la memoria RAM volátil**.
+  - Si la sesión se bloquea o caduca, las referencias a los ítems compartidos y sus claves se purgan automáticamente de la memoria.
+  - En `IndexedDB`, solo se almacena el paquete cifrado (`encrypted_item`, `encrypted_item_key`, IVs) para permitir funcionamiento offline, garantizando que una inspección de almacenamiento local no exponga jamás secretos en claro.
 
 ---
 
@@ -367,6 +415,38 @@ La API se expone bajo el prefijo `/api/v1` (o `/api`). Todas las respuestas adop
 #### 11. `GET /api/audit-logs`
 * **Propósito:** Obtener el historial cronológico de auditoría de seguridad del usuario autenticado.
 
+#### 12. `GET /api/users/:username/public-key`
+* **Propósito:** Obtener la clave pública ECDH P-384 del destinatario para derivar el secreto compartido.
+* **Autenticación:** Sesión activa requerida (`Authorization: Bearer <token>`).
+* **Códigos HTTP:** `200 OK` (`{ ecdh_public_key, user_id }`), `404 Not Found`.
+
+#### 13. `POST /api/users/me/ecdh-key`
+* **Propósito:** Registrar o rotar la clave pública ECDH P-384 propia del usuario autenticado.
+* **Payload:** `{ "ecdh_public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE..." }`.
+* **Códigos HTTP:** `200 OK`, `400 Bad Request`.
+
+#### 14. `POST /api/shared-items`
+* **Propósito:** Compartir un ítem cifrado con clave simétrica encapsulada vía ECDH con un destinatario.
+* **Payload:** `{ "recipient_user_id": "usr_...", "source_item_id": "cuid_...", "encrypted_item": "...", "item_iv": "...", "encrypted_item_key": "...", "key_iv": "...", "permissions": "read" | "write" }`.
+* **Códigos HTTP:** `201 Created`, `400 Bad Request`, `404 Recipient Not Found`, `409 Conflict`.
+
+#### 15. `GET /api/shared-items`
+* **Propósito:** Listar ítems compartidos recibidos activos (`revoked_at IS NULL`) para su descifrado en el cliente.
+* **Códigos HTTP:** `200 OK` (lista de `SharedItemRecord[]`).
+
+#### 16. `GET /api/shared-items/sent`
+* **Propósito:** Listar los ítems que el usuario actual ha compartido con otros usuarios para auditoría y gestión de revocación.
+* **Códigos HTTP:** `200 OK`.
+
+#### 17. `PUT /api/shared-items/:id`
+* **Propósito:** Actualizar el contenido de un ítem compartido (requiere `permissions = 'write'` o ser el propietario).
+* **Payload:** `{ "encrypted_item": "...", "item_iv": "..." }`.
+* **Códigos HTTP:** `200 OK`, `403 Forbidden`, `404 Not Found`.
+
+#### 18. `DELETE /api/shared-items/:id`
+* **Propósito:** Revocar acceso al ítem (si lo ejecuta el propietario) o rechazar/eliminar de la vista (si lo ejecuta el destinatario).
+* **Códigos HTTP:** `200 OK`, `403 Forbidden`, `404 Not Found`.
+
 ---
 
 ## 5. Modelos de Datos y Tipos TypeScript Canónicos
@@ -469,6 +549,56 @@ export interface ActiveSessionState {
   timeDriftOffsetMs: number; // Compensación de milisegundos contra el servidor
   lastActivityTimestamp: number; // Marca de tiempo del último evento de usuario
 }
+
+/**
+ * Permisos asignados a un ítem compartido (v2.5).
+ */
+export type SharedItemPermissions = 'read' | 'write';
+
+/**
+ * Registro de ítem compartido en Cloudflare D1 (v2.5).
+ */
+export interface SharedItemRecord {
+  id: string; // Prefijo 'shi_' + UUID
+  owner_user_id: string;
+  recipient_user_id: string;
+  source_item_id: string; // ID del ítem en la bóveda del propietario
+  encrypted_item: string; // Base64 del ciphertext del ítem cifrado con ItemKey
+  item_iv: string; // Base64 del IV de 12 bytes del ítem
+  encrypted_item_key: string; // Base64 de la ItemKey envuelta con WrappingKey (AES-GCM Wrap)
+  key_iv: string; // Base64 del IV de 12 bytes de la clave
+  permissions: SharedItemPermissions;
+  version: number;
+  created_at: number; // Unix Epoch en segundos
+  updated_at: number;
+  revoked_at?: number | null;
+}
+
+/**
+ * Representación en memoria RAM volátil de un ítem compartido recibido y descifrado.
+ */
+export interface DecryptedSharedItem {
+  shared_id: string;
+  source_item_id: string;
+  owner_user_id: string;
+  owner_username?: string;
+  permissions: SharedItemPermissions;
+  item: VaultItem;
+  item_key: CryptoKey; // Clave simétrica AES-256-GCM en RAM
+  fingerprint: string; // Huella SHA-256 de la clave pública del propietario
+  received_at: number;
+}
+
+/**
+ * Contrato de interfaz del módulo criptográfico de compartición (src/lib/crypto/sharing.ts).
+ */
+export interface SharingCryptoAPI {
+  generateUserECDHKeyPair(): Promise<{ publicKey: CryptoKey; privateKey: CryptoKey; spkiBase64: string; pkcs8Base64: string }>;
+  deriveWrappingKey(localPrivateKey: CryptoKey, remotePublicKey: CryptoKey, salt?: Uint8Array): Promise<CryptoKey>;
+  encryptSharedItem(item: VaultItem, itemKey: CryptoKey, recipientPubKey: CryptoKey, senderPrivKey: CryptoKey): Promise<{ encrypted_item: string; item_iv: string; encrypted_item_key: string; key_iv: string }>;
+  decryptSharedItem(encryptedItem: string, itemIv: string, encryptedItemKey: string, keyIv: string, recipientPrivKey: CryptoKey, senderPubKey: CryptoKey): Promise<VaultItem>;
+  computeKeyFingerprint(spkiBase64: string): Promise<string>;
+}
 ```
 
 ---
@@ -480,7 +610,7 @@ El motor relacional SQLite subyacente a Cloudflare D1 se estructura mediante sen
 ```sql
 -- =====================================================================
 -- ESQUEMA D1: REVOLT PASS DATABASE (schema.sql)
--- Versión: 1.0.0
+-- Versión: 1.1.0 (v2.5 Architecture Ready)
 -- Motor: Cloudflare D1 (SQLite Serverless)
 -- =====================================================================
 
@@ -492,6 +622,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL COLLATE NOCASE,     -- Case-insensitive para login
     kdf_salt TEXT NOT NULL,                    -- 16 bytes en formato Base64
     passkey_credential_id TEXT,                -- ID de credencial FIDO2 opcional
+    ecdh_public_key TEXT DEFAULT NULL,         -- Clave pública ECDH P-384 en formato SPKI Base64 (v2.5)
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
     CONSTRAINT uq_users_username UNIQUE (username)
@@ -514,11 +645,34 @@ CREATE TABLE IF NOT EXISTS vaults (
 -- Índice para control de versiones y auditoría de sincronización
 CREATE INDEX IF NOT EXISTS idx_vaults_user_version ON vaults(user_id, version);
 
+-- Tabla de Ítems Compartidos entre Usuarios (Zero-Knowledge - v2.5)
+CREATE TABLE IF NOT EXISTS shared_items (
+    id TEXT PRIMARY KEY,                       -- Prefijo 'shi_' + UUID
+    owner_user_id TEXT NOT NULL,               -- Propietario del ítem
+    recipient_user_id TEXT NOT NULL,           -- Destinatario del ítem
+    source_item_id TEXT NOT NULL,              -- ID del ítem original en bóveda del propietario
+    encrypted_item TEXT NOT NULL,              -- Payload cifrado con ItemKey (AES-256-GCM)
+    item_iv TEXT NOT NULL,                     -- IV de 12 bytes del ítem en Base64
+    encrypted_item_key TEXT NOT NULL,          -- ItemKey envuelta con WrappingKey (ECDH + HKDF)
+    key_iv TEXT NOT NULL,                      -- IV de 12 bytes de la clave en Base64
+    permissions TEXT NOT NULL DEFAULT 'read' CHECK(permissions IN ('read', 'write')),
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    revoked_at INTEGER DEFAULT NULL,
+    CONSTRAINT fk_shared_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_shared_recipient FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT uq_shared_owner_recipient_item UNIQUE (owner_user_id, recipient_user_id, source_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_recipient_active ON shared_items(recipient_user_id, revoked_at);
+CREATE INDEX IF NOT EXISTS idx_shared_owner ON shared_items(owner_user_id, created_at DESC);
+
 -- Tabla de Auditoría de Sincronización (Opcional, rotación ligera)
 CREATE TABLE IF NOT EXISTS sync_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
-    action TEXT NOT NULL,                      -- 'REGISTER', 'SYNC_PULL', 'SYNC_PUSH'
+    action TEXT NOT NULL,                      -- 'REGISTER', 'SYNC_PULL', 'SYNC_PUSH', 'SHARE_ITEM', 'REVOKE_SHARE'
     client_version INTEGER,
     server_version INTEGER,
     ip_country TEXT,                           -- Obtenido de cf.country (sin almacenar IP personal)

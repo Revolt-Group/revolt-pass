@@ -23,6 +23,10 @@
 - [ADR-008: Ciclo de Vida Multidispositivo, Revocación Granular de Sesiones y Eliminación Remota de Passkeys FIDO2](#adr-008-ciclo-de-vida-multidispositivo-revocación-granular-de-sesiones-y-eliminación-remota-de-passkeys-fido2)
 - [ADR-009: Adopción de la Licencia GNU AGPLv3 con Política Restrictiva de Marcas Registradas](#adr-009-adopción-de-la-licencia-gnu-agplv3-con-política-restrictiva-de-marcas-registradas)
 - [ADR-010: Modo Desacoplado de Instancia Privada y Auto-alojamiento Comunitario (`VITE_PRIVATE_INSTANCE`)](#adr-010-modo-desacoplado-de-instancia-privada-y-auto-alojamiento-comunitario-vite_private_instance)
+- [ADR-011: Diagnóstico de Higiene Preventivo y Detección de Brechas bajo k-Anonymity](#adr-011-diagnóstico-de-higiene-preventivo-y-detección-de-brechas-bajo-k-anonymity)
+- [ADR-012: Endurecimiento Perimetral (CSP, Rate Limiting, CORS) y Sesiones Deslizantes con Rotación](#adr-012-endurecimiento-perimetral-csp-rate-limiting-cors-y-sesiones-deslizantes-con-rotación)
+- [ADR-013: Ingesta Masiva Protobuf, Conciliación Diferencial y Exportadores Abiertos](#adr-013-ingesta-masiva-protobuf-conciliación-diferencial-y-exportadores-abiertos)
+- [ADR-014: Adopción de ECDH P-384 para Compartición de Claves de Ítems](#adr-014-adopción-de-ecdh-p-384-para-compartición-de-claves-de-ítems)
 
 ---
 
@@ -288,3 +292,77 @@ Se adopta el **Desacoplamiento de Instancia Privada mediante `VITE_PRIVATE_INSTA
 2. **Capa Visual Restringida para Instancias Privadas:** Cuando `VITE_PRIVATE_INSTANCE=true` está configurado, la interfaz inicial de la aplicación se bloquea con una pantalla superpuesta (`Restricted Access Overlay`) informando que la instancia es privada, y tornando inerte el formulario inferior.
 3. **Mecanismo de Desbloqueo del Propietario:** El propietario puede desactivar la pantalla restrictiva en cualquier momento mediante atajos de teclado globales en fase de captura (`Ctrl + Shift + U` o `Ctrl + Alt + U`) o mediante un triple clic discreto en el icono de escudo central.
 4. **Defensa en Profundidad en el Backend:** En la base de datos de producción remota, un trigger SQLite bloquea cualquier inserción de usuarios adicionales a nivel de motor de almacenamiento, garantizando seguridad absoluta independientemente del frontend.
+
+---
+
+## ADR-011: Diagnóstico de Higiene Preventivo y Detección de Brechas bajo k-Anonymity
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+Los usuarios almacenan secretos TOTP y contraseñas que pueden haber sido expuestos en brechas de datos masivas públicas o configurados con baja entropía. Se requiere alertar preventivamente sobre credenciales comprometidas y debilidades higiénicas sin revelar jamás ninguna contraseña, secreto o hash completo al servidor ni a APIs de terceros.
+
+### Decisión
+1. **k-Anonymity con HIBP (HaveIBeenPwned):** Se calcula localmente el hash SHA-1 de la credencial en el cliente. Únicamente los primeros 5 caracteres hexadecimales del hash (*hash prefix*) se envían a través de un proxy en Cloudflare Worker. El servidor externo devuelve una lista de sufijos coincidentes con sus frecuencias de brecha. La comparación final del sufijo se realiza de manera 100% local en memoria.
+2. **Diagnóstico Local de Higiene:** Cálculo de entropía en bits de los secretos Base32, detección de cuentas duplicadas y advertencias de obsolescencia de backups (>30 días) ejecutados localmente sin transmitir telemetría.
+
+---
+
+## ADR-012: Endurecimiento Perimetral (CSP, Rate Limiting, CORS) y Sesiones Deslizantes con Rotación
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+Para mitigar vectores de inyección XSS, ataques de fuerza bruta o enumeración de usuarios en endpoints de autenticación, y secuestro de sesiones persistentes en redes públicas, se requiere endurecer la frontera perimetral en el borde (Cloudflare Workers).
+
+### Decisión
+1. **Content-Security-Policy (CSP) Estricta:** Cabeceras CSP inmutables generadas por el Worker bloqueando scripts no autorizados, conexiones a orígenes ajenos y framing del sitio (`frame-ancestors 'none'`).
+2. **Limitador de Tasa Perimetral (Rate Limiting):** Restricción de 10 peticiones/minuto en `/api/auth/salt` y `/api/auth/register` devolviendo `HTTP 429 Too Many Requests` con cabecera `Retry-After`.
+3. **CORS Restrictivo:** Cabeceras `Access-Control-Allow-Origin` enlazadas a `env.APP_DOMAIN` en producción.
+4. **Rotación Deslizante de Tokens con Ventana de Gracia (`prev_token_hash`):** En cada ciclo de sincronización, el token de sesión se rota. Para absorber la concurrencia entre pestañas o peticiones paralelas, el servidor conserva el hash del token anterior en `prev_token_hash` durante una ventana de gracia temporal.
+
+---
+
+## ADR-013: Ingesta Masiva Protobuf, Conciliación Diferencial y Exportadores Abiertos
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+La migración desde otros gestores (Google Authenticator, Bitwarden, Aegis, 2FAS, etc.) suele provocar fricción y riesgo de duplicación descontrolada de cuentas o pérdida de metadatos críticos como claves de recuperación.
+
+### Decisión
+1. **Decodificador Nativo Protobuf (TypeScript Puro):** Se implementa un analizador para la carga binaria de `otpauth-migration://offline?data=...` de Google Authenticator sin dependencias externas pesadas ni APIs de terceros.
+2. **Diálogo de Conciliación Tridireccional:** Análisis previo de diferencias (`nuevas`, `duplicadas`, `conflictos`) con estrategias seleccionables (`conservar existentes`, `sobrescribir`, `conservar ambos`) y fusión de claves de recuperación.
+3. **Exportación Universal y Abierta:** Generación de respaldos en Aegis JSON, Bitwarden CSV, listas de URIs `otpauth://` y carrusel de códigos QR binarios Google Authenticator para máxima interoperabilidad.
+
+---
+
+## ADR-014: Adopción de ECDH P-384 para Compartición de Claves de Ítems
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+Revolt Pass es tradicionalmente una bóveda personal monousuario. Sin embargo, en la operativa de equipos u organizaciones surgen secretos compartidos (ej. credenciales TOTP de organizaciones en GitHub, accesos a infraestructura de producción). Compartir estos secretos mediante canales externos (mensajería, documentos compartidos) destruye el modelo Zero-Knowledge. Se requiere permitir la compartición segura de ítems individuales entre usuarios de Revolt Pass garantizando que Cloudflare D1 jamás tenga acceso al secreto ni a las claves de descifrado.
+
+### Alternativas Evaluadas
+1. **Envío del secreto re-cifrado con la clave maestra del destinatario:**
+   - Requiere que el remitente conozca la clave maestra del destinatario. Rompe Zero-Knowledge totalmente. **Descartada.**
+2. **Clave simétrica compartida pre-acordada (PSK):**
+   - Canal de distribución externo y no controlado. Imposibilidad de gestión de ciclo de vida o revocación escalable. **Descartada.**
+3. **RSA-OAEP para encapsulamiento de clave:**
+   - RSA-2048 considerado legacy; RSA-4096 presenta overhead de tamaño excesivo y limitaciones de contexto en Web Crypto API. **Descartada.**
+4. **ECDH P-384 con HKDF-SHA256 y AES-256-GCM wrapping (Opción Seleccionada):**
+   - Cada usuario genera un par de claves asimétricas ECDH sobre la curva estándar NIST P-384 nativa en la Web Crypto API.
+   - La clave privada del usuario vive cifrada dentro de su propia bóveda personal.
+   - La clave pública se almacena en D1 y es accesible para otros usuarios autenticados.
+   - El remitente deriva un secreto compartido usando su clave privada y la clave pública del destinatario. Con HKDF-SHA256 deriva una clave de encapsulamiento (`wrapping_key` AES-256-GCM) que envuelve la clave simétrica única del ítem (`item_key`).
+   - El servidor D1 solo almacena el blob del ítem cifrado y la clave del ítem encapsulada.
+
+### Decisión
+Se adopta **ECDH P-384 con HKDF-SHA256 para derivación de clave de encapsulamiento y AES-256-GCM para encapsulamiento de clave de ítem** (esquema ECIES nativo en Web Crypto API).
+- El modelo es 100% Zero-Knowledge respecto al contenido: D1 solo almacena metadatos de relación y blobs cifrados.
+- Requiere como precondición arquitectónica que el Hito v2.0 implemente el modelo de clave simétrica por ítem (`encrypted_key`).
