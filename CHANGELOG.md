@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0] - 2026-09-08
+
+### Added
+- **Suite Integral de Secretos (Polymorphic Secrets Engine):**
+  - Transformed Revolt Pass from a dedicated 2FA authenticator into a full-fledged Zero-Knowledge Password & Secrets Manager.
+  - Added support for 6 canonical secret types:
+    - `totp`: Time-based One-Time Passwords with real-time countdown, RFC 6238 drift compensation, and backup codes manager.
+    - `login`: Web logins with username, password reveal/mask, copy timeout, CSPRNG password generator, website URL, inline 2FA seed, and password history tracking.
+    - `card`: Credit and debit cards with cardholder name, masked card number, brand auto-detection (Visa, Mastercard, Amex, Discover), expiration date, CVV reveal, and ATM PIN reveal.
+    - `note`: End-to-end encrypted freeform markdown notes for sensitive records and seed phrases.
+    - `server_key`: SSH and API keys with host, port, username, public key, private key (masked/reveal), passphrase, and token fields.
+    - `identity`: Personal identity documents with first/last name, email, phone, national ID / passport number, and physical address.
+  - Backward compatibility: existing v1.0–v1.5 2FA vaults are automatically normalized and auto-upgraded without requiring user intervention.
+- **Per-Item Symmetric Key Wrapping (`encrypted_key`):**
+  - Envelope encryption architecture: every item is protected by an independent 256-bit AES-GCM `item_key`, encrypted under the user's Master Key (`${ivBase64}:${ciphertextBase64}`).
+  - Lays the cryptographic foundation for granular per-item sharing via ECDH in Milestone v2.5.
+- **30-Day Soft-Delete Trash Bin & Cryptographic Auto-Purge:**
+  - Soft deletion sets `deleted_at: timestamp`.
+  - Cryptographic auto-purge: items exceeding 30 days in the trash are automatically and irreversibly purged from memory and ciphertext during `encryptVault`.
+  - Dedicated trash filter tab in `VaultList` with badge counters, remaining days indicator, 1-click restore, individual permanent delete, and bulk "Vaciar Papelera" actions.
+- **Cloudflare D1 Vault Snapshots & Optimistic Rollback (`src/worker/api.ts`):**
+  - Automatic snapshot archiving in D1 on every `PUT /api/vault`, maintaining a rolling window of the 5 most recent vault states.
+  - Endpoints: `GET /api/vault/snapshots` and `POST /api/vault/restore/:vault_version`.
+  - Concurrency-safe rollback: restored snapshots are promoted to `current.version + 1`, enforcing strict Optimistic Concurrency Control (OCC) across all devices and triggering instant client pull synchronization.
+  - "Historial de Bóveda" (snapshots) tab in `SecurityModal` with version badges, item counts, timestamps, and 1-click rollback.
+- **100% Client-Side Printable Emergency Kit (`src/lib/utils/emergencyKit.ts`):**
+  - Generates an offline, vector-rendered HTML printable disaster recovery sheet (`window.print()`).
+  - High-resolution SVG QR code encoding Instance URL, User ID, and username for instant device pairing.
+  - Designated handwritten Master Password box and security instructions. Plaintext master password is never stored, displayed, or printed.
+  - Integrated via `EmergencyKitModal.tsx` and accessible directly from the Security Modal.
+- **Polymorphic UI Suite & Password Generator:**
+  - `PolymorphicItemCard.tsx`: Tailored card views for all 6 secret types with inline copy-guard (45s clipboard purge), password reveal, and trash mode.
+  - `EditAccountModal.tsx`: Comprehensive secret creator and editor with type-selector tabs, CSPRNG password generator, auto-detection, and password history tracking (`recordPasswordHistory`).
+  - `VaultList.tsx`: Category filter pills (`all`, `login`, `totp`, `card`, `note`, `server_key`, `identity`, `trash`), badge counters, and view switcher.
+
+### Changed
+- Bumped project version to `v2.0.0` in `package.json` and `src/constants/version.ts`.
+- Migrated Cloudflare D1 schema with `vault_snapshots` and `folders` tables.
+- Verified test suite: **143 passing automated tests** across 18 test files.
+
+---
+
 ## [1.5.0] - 2026-09-08
 
 ### Added

@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-SEC-003` |
-| **Versión** | `1.5.0-PROD` |
+| **Versión** | `2.0.0-PROD (v2.5 Scope Ready)` |
 | **Estado** | Aprobado / Especificación de Seguridad de Grado Criptográfico |
 | **Marco de Referencia** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, RFC 9106 (Argon2), RFC 8291, RFC 8292, W3C WebAuthn Level 3 |
 | **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
@@ -200,6 +200,32 @@ Para usuarios que prefieren alertas por email, Revolt Pass implementa una arquit
 
 ---
 
+### 1.7 Cifrado de Sobre por Elemento (`item_key` Envelope Encryption - v2.0)
+Para ofrecer aislamiento criptográfico estricto a nivel de registro y establecer los cimientos para el intercambio asimétrico seguro entre cuentas (v2.5), cada elemento en la bóveda (`VaultItem`) posee su propia clave simétrica independiente:
+1. **Generación:** Al crear o normalizar un elemento, el cliente genera una clave criptográfica de 256 bits mediante `crypto.getRandomValues(new Uint8Array(32))`.
+2. **Envoltura (Wrapping):** La clave del elemento se cifra utilizando AES-256-GCM bajo la `MasterKey` del usuario con un IV fresco de 12 bytes.
+3. **Formato de Almacenamiento:** El atributo `encrypted_key` se almacena serializado como:
+   $$\text{encrypted\_key} = \text{base64}(IV) \parallel \text{":"} \parallel \text{base64}(Ciphertext \parallel AuthTag)$$
+4. **Beneficio de Seguridad:** Un compromiso selectivo o vector de re-cifrado no afecta a otros elementos; además, la compartición con otros usuarios (v2.5) solo requiere re-envolver la `item_key` bajo la clave compartida ECDH sin necesidad de recifrar o re-estructurar el elemento completo.
+
+---
+
+### 1.8 Snapshots Históricos y Aislamiento de Respaldos en Cloudflare D1 (v2.0)
+La mitigación contra desastres, corrupción de datos o sobreescritura accidental se implementa mediante snapshots transaccionales en Cloudflare D1:
+1. **Aislamiento Criptográfico:** Cada fila en `vault_snapshots` contiene un `encrypted_blob` y un `iv` cifrados con AES-256-GCM bajo la clave maestra del usuario, idénticos a los registros de la tabla principal `vaults`. El servidor jamás posee capacidades de inspección ni descifrado sobre los snapshots.
+2. **Gobernanza de Recursos (Ventana Rodante de 5 Versiones):** Durante la sincronización (`PUT /api/vault`), el Worker archiva automáticamente el estado previo y elimina snapshots que superen el límite de 5 versiones por usuario, preservando la cuota del tier gratuito de Cloudflare.
+3. **Rollback Seguro Monotónico (OCC):** La restauración ejecutada mediante `POST /api/vault/restore/:vault_version` asigna `version = current.version + 1`, garantizando que ningún cliente local mantenga un estado obsoleto o entre en conflicto de concurrencia al sincronizar de vuelta.
+
+---
+
+### 1.9 Modelo de Seguridad del Emergency Kit Físico Imprimible (v2.0)
+Para mitigar el riesgo de pérdida irreversible de acceso ante fallecimiento, amnesia de contraseña o pérdida de dispositivos biométricos, Revolt Pass provee un generador de Kit de Emergencia físico:
+1. **Ejecución 100% Client-Side y Offline:** El kit se ensambla en la memoria local del navegador y se imprime mediante `window.print()`. Ninguna imagen, payload o dato de impresión se envía a servicios remotos de conversión de documentos.
+2. **Carga Útil en Código QR Vectorial:** El código QR renderizado en SVG vectorial de alta definición contiene la carga cifrada de la bóveda (`vault_data`), idéntica al blob en reposo. Sin la Contraseña Maestra manuscrita, el código QR es inofensivo ante el escaneo de terceros.
+3. **Principio de Aislamiento Manuscrito (Air-Gapped Storage):** La Contraseña Maestra **NUNCA** se imprime, no se inyecta en el DOM ni se codifica en el QR. La hoja contiene exclusivamente un recuadro físico de alto contraste para que el usuario escriba su contraseña a mano con bolígrafo tras la impresión, desacoplando completamente el secreto del plano digital.
+
+---
+
 ## 2. Modelo de Amenazas (STRIDE & Análisis de Vectores de Ataque)
 
 Se evalúa la postura de seguridad de Revolt Pass conforme a la metodología **STRIDE** de Microsoft y se detalla la matriz de vectores de ataque.
@@ -222,13 +248,16 @@ quadrantChart
     "ECDH Key Substitution": [0.30, 0.85]
     "Shared Item Replay": [0.25, 0.60]
     "Push Relay Tampering": [0.20, 0.30]
+    "Snapshot Rollback Hijack": [0.15, 0.80]
+    "Trash Bin Data Lingering": [0.30, 0.50]
+    "Emergency Kit Print Leak": [0.10, 0.90]
 ```
 
 ### Matriz Detallada de Vectores de Ataque y Mitigaciones
 
 | Vector / ID | Categoría STRIDE | Descripción de la Amenaza | Impacto | Controles de Mitigación Implementados |
 | :--- | :--- | :--- | :--- | :--- |
-| **VEC-01** | *Information Disclosure* | **Compromiso de Cloudflare D1:** Un actor malicioso o un empleado desleal con acceso administrativo a la cuenta de Cloudflare extrae el contenido de la tabla `vaults`. | Nulo (Zero-Knowledge) | **Inviolabilidad Criptográfica:** La base de datos solo almacena blobs cifrados con AES-256-GCM. Sin la Contraseña Maestra y el salt, romper el blob requeriría $2^{255}$ operaciones computacionales, lo cual es físicamente imposible. |
+| **VEC-01** | *Information Disclosure* | **Compromiso de Cloudflare D1:** Un actor malicioso o un empleado desleal con acceso administrativo a la cuenta de Cloudflare extrae el contenido de la tabla `vaults` o `vault_snapshots`. | Nulo (Zero-Knowledge) | **Inviolabilidad Criptográfica:** La base de datos solo almacena blobs cifrados con AES-256-GCM. Sin la Contraseña Maestra y el salt, romper el blob requeriría $2^{255}$ operaciones computacionales, lo cual es físicamente imposible. |
 | **VEC-02** | *Tampering* | **Alteración de Datos en Tránsito o en Reposo:** Modificación malintencionada de bytes en el `encrypted_blob` dentro de D1 para provocar comportamientos anómalos en el cliente. | Nulo (Rechazo Inmediato) | **Etiqueta de Autenticación GCM:** AES-GCM verifica el Authentication Tag de 128 bits. Si un solo bit es modificado, `crypto.subtle.decrypt` arroja un error inmutable y la aplicación se bloquea de inmediato sin procesar datos corruptos. |
 | **VEC-03** | *Information Disclosure* | **Acceso Físico a Estación de Trabajo Desbloqueada:** El operador abandona su escritorio con la PWA abierta en primer plano. | Crítico | **Auto-Lock por Inactividad & Ocultamiento:** Temporizador en RAM que purga las claves tras 5 minutos de inactividad de mouse/teclado. Adicionalmente, el evento `visibilitychange` bloquea la bóveda si la pestaña permanece oculta. |
 | **VEC-04** | *Information Disclosure* | **Clipboard Sniffing (Espionaje de Portapapeles):** Aplicaciones en segundo plano o malware sin privilegios de administrador que monitorean el portapapeles del sistema operativo para capturar códigos TOTP o Recovery Codes. | Alto | **Auto-Clear Programado:** Rutina con temporizador estricto de 45 segundos que sobrescribe el portapapeles con texto vacío. Compara el contenido previo para evitar borrar información legítima si el usuario copió otra cosa en el intervalo. |
@@ -236,6 +265,9 @@ quadrantChart
 | **VEC-06** | *Elevation of Privilege* | **Ataques de Inyección de Scripts (XSS):** Inyección de código JavaScript para leer la memoria del navegador o interceptar los eventos de teclado. | Crítico | **Aislamiento Estricto & CSP:** Política de Seguridad de Contenido (CSP) que bloquea `unsafe-inline`, `unsafe-eval` y restringe la carga de recursos externos únicamente a `self` y al CDN de `cdn.simpleicons.org`. Cero dependencias de librerías CDN en tiempo de ejecución. |
 | **VEC-07** | *Denial of Service* | **Falla de Sincronización por Pérdida de Conectividad:** El usuario viaja en avión o experimenta cortes de red y necesita acceder a sus cuentas corporativas. | Alto | **Disponibilidad Offline Absoluta (100%):** Todo el estado se mantiene cifrado en IndexedDB y los assets en Service Worker. La aplicación opera indefinidamente en modo avión. |
 | **VEC-08** | *Information Disclosure / Spoofing* | **Intercepción o Alteración de Notificaciones Web Push:** Un atacante en la red intercepta o intenta falsificar alertas push dirigidas a los dispositivos del usuario. | Nulo | **Cifrado de Carga Útil RFC 8291 (ECDH P-256 + AES-128-GCM):** Todo payload push va cifrado de extremo a extremo con el par de claves del navegador. Las alertas no contienen secretos de la bóveda ni credenciales maestras. |
+| **VEC-09** | *Tampering / Rollback* | **Manipulación Maliciosa de Snapshots Históricos:** Un actor intenta forzar la reversión a un snapshot antiguo con contraseñas vulneradas o datos desactualizados. | Alto | **Autenticación Estricta & Monotonicidad OCC:** La restauración exige token de sesión autenticado del propietario de la bóveda. La versión restaurada incrementa monótonamente a `current.version + 1`, previniendo inconsistencias de estado y alertando a otros dispositivos vía sincronización. |
+| **VEC-10** | *Information Disclosure* | **Persistencia Residual de Secretos en Papelera:** Información sensible eliminada por el usuario permanece indefinidamente en textos cifrados de la base de datos o en copias locales. | Medio | **Purga Criptográfica Automática a los 30 Días:** En cada ciclo de cifrado (`encryptVault`), el sistema purga y destruye permanentemente del objeto serializado cualquier elemento cuyo `deleted_at` supere los 30 días, asegurando su destrucción matemática absoluta sin residuos en el ciphertext. |
+| **VEC-11** | *Information Disclosure* | **Fuga de Credenciales en Impresión de Emergency Kit:** Envío accidental de claves maestras a la cola de impresión o intercepción por malware de renderizado de documentos. | Crítico | **Aislamiento Manuscrito Fuera de Banda:** La generación del Emergency Kit se ejecuta 100% offline en el cliente sin servicios externos. La Contraseña Maestra jamás se renderiza en el DOM ni en el código QR vectorial; se reserva un recuadro físico para escritura manual posterior a la impresión. |
 | **VEC-NEW-01** | *Spoofing / Tampering* | **Sustitución Maliciosa de Clave Pública ECDH (Key Substitution Attack):** Un atacante que comprometa el servidor Cloudflare D1 sustituye la clave pública de un usuario por una propia para descifrar ítems compartidos dirigidos a ese usuario. | Crítico | **Verificación de Fingerprint Fuera de Banda:** La UI computa y muestra la huella criptográfica SHA-256 de la clave pública del destinatario (`SHA-256(spki)` en formato hex agrupado o emoji-hash). Los usuarios verifican la huella mediante un canal secundario seguro (Signal, llamada) antes de compartir secretos de alto impacto. |
 | **VEC-NEW-02** | *Tampering / Replay* | **Replay o Reinserción de Paquetes Cifrados Compartidos:** Un actor reenvía un ciphertext compartido antiguo para sobreescribir una versión actualizada o revertir una revocación. | Medio | **Restricciones de Unicidad y Versión en D1:** Índice único `UNIQUE(owner_user_id, recipient_user_id, source_item_id)`, monotonicidad de versiones y validación estricta de sesión autenticada que impide a terceros inyectar o reactivar filas en `shared_items`. |
 | **VEC-NEW-03** | *Information Disclosure* | **Enumeración Masiva de Destinatarios:** Escaneo automatizado del endpoint público de claves para descubrir nombres de usuario registrados en la plataforma. | Bajo | **Defensa en Profundidad en el Edge:** Requiere sesión autenticada activa (`Authorization: Bearer <token>`) para consultar `/api/users/:username/public-key` y aplica Rate Limiter en Cloudflare Workers limitando solicitudes ráfaga por IP. |

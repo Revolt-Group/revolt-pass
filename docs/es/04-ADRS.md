@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-ADR-004` |
-| **Versión** | `1.2.1-PROD` |
+| **Versión** | `2.0.0-PROD (v2.5 Architecture Ready)` |
 | **Estado** | Aprobado / Registro Vivo de Decisiones de Arquitectura |
 | **Estándar de Formato** | Nygard / MADR (Markdown Architectural Decision Records) |
 | **Licencia** | GNU AGPLv3 + Política de Marca Registrada (Revolt Group) |
@@ -27,6 +27,9 @@
 - [ADR-012: Endurecimiento Perimetral (CSP, Rate Limiting, CORS) y Sesiones Deslizantes con Rotación](#adr-012-endurecimiento-perimetral-csp-rate-limiting-cors-y-sesiones-deslizantes-con-rotación)
 - [ADR-013: Ingesta Masiva Protobuf, Conciliación Diferencial y Exportadores Abiertos](#adr-013-ingesta-masiva-protobuf-conciliación-diferencial-y-exportadores-abiertos)
 - [ADR-014: Adopción de ECDH P-384 para Compartición de Claves de Ítems](#adr-014-adopción-de-ecdh-p-384-para-compartición-de-claves-de-ítems)
+- [ADR-015: Adopción de Argon2id KDF (WASM) y Alertas Proactivas Web Push / BYOK Email](#adr-015-adopción-de-argon2id-kdf-wasm-y-alertas-proactivas-web-push--byok-email)
+- [ADR-016: Suite de Secretos Polimórficos y Cifrado de Sobre por Elemento (`item_key`)](#adr-016-suite-de-secretos-polimórficos-y-cifrado-de-sobre-por-elemento-item_key)
+- [ADR-017: Snapshots Históricos Rotativos en Cloudflare D1 con Rollback Optimista y Emergency Kit Físico](#adr-017-snapshots-históricos-rotativos-en-cloudflare-d1-con-rollback-optimista-y-emergency-kit-físico)
 
 ---
 
@@ -396,3 +399,63 @@ Adicionalmente, eventos de seguridad críticos (inicios de sesión desde nuevos 
 1. Adoptar **Argon2id (64 MB, 3 iteraciones, 1 hilo) vía WebAssembly (`hash-wasm`) en Web Worker** como la función de derivación de claves (KDF) por defecto para todo nuevo registro.
 2. Implementar **auto-upgrade silencioso de KDF**: migración automática y atómica de PBKDF2 a Argon2id al desbloquear, con re-empaquetado de passkeys FIDO2/WebAuthn.
 3. Desplegar **Web Push nativo RFC 8291/8292 en Cloudflare Workers** y soporte de **Email BYOK** para alertas de seguridad proactivas en tiempo real con coste operativo de $0.
+
+---
+
+## ADR-016: Suite de Secretos Polimórficos y Cifrado de Sobre por Elemento (`item_key`)
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+Revolt Pass nació primariamente como un autenticador 2FA/TOTP. Para alcanzar el hito v2.0 (Suite Integral de Secretos), la arquitectura requería evolucionar hacia un gestor completo de credenciales capaz de albergar 6 tipos de secretos canónicos: logins con generador de contraseñas e historial, factores TOTP, tarjetas de pago, notas seguras, claves SSH/servidores e identidades personales.
+
+En la arquitectura v1.x, toda la bóveda se cifraba en un único bloque monolítico con la clave maestra del usuario. Si bien esto era seguro para uso unipersonal, presentaba limitaciones arquitectónicas críticas:
+1. Imposibilidad de compartir un secreto individual sin delegar la clave maestra completa o re-estructurar la base de datos (bloqueante para v2.5 / ADR-014).
+2. Ausencia de aislamiento criptográfico granular entre elementos con diferentes niveles de criticidad.
+3. Riesgo de sobreescritura accidental o colisiones complejas al gestionar múltiples tipos heterogéneos de datos.
+
+### Alternativas Evaluadas
+1. **Creación de tablas separadas en Cloudflare D1 para cada tipo de secreto:**
+   - Revela metadatos sobre la cantidad y categorías de secretos que posee el usuario, violando el principio Zero-Knowledge.
+   - Incrementa drásticamente las escrituras y lecturas en D1, amenazando los límites del tier gratuito de Cloudflare. **Descartada.**
+2. **Cifrado monolítico retenido con campos variantes JSON sin claves de ítem:**
+   - No resuelve la precondición arquitectónica de compartición asimétrica individual para el Hito v2.5 (ADR-014). **Descartada.**
+3. **Esquema Polimórfico en Cliente con Cifrado de Sobre Simétrico (`item_key`) (Opción Seleccionada):**
+   - Cada elemento `VaultItem` genera una clave simétrica única e independiente de 256 bits (`crypto.getRandomValues(32)`).
+   - Dicha clave se envuelve bajo la `MasterKey` mediante AES-256-GCM y se almacena en el atributo `encrypted_key: "${ivBase64}:${ciphertextBase64}"`.
+   - Las cuentas v1.x existentes se normalizan automáticamente a `type = 'totp'` en tiempo de carga (`ensureVaultItemKeys`) sin requerir re-ingreso de datos ni migraciones destructivas de base de datos.
+   - Soporte nativo para 6 tipos canónicos (`totp`, `login`, `card`, `note`, `server_key`, `identity`), historial inmutable de contraseñas previas (`password_history`) y soft-delete de 30 días (`deleted_at`).
+
+### Decisión
+1. Implementar la **Suite Polimórfica de 6 Tipos** en `src/types/vault.ts` y componentes UI especializados (`PolymorphicItemCard`, `EditAccountModal`).
+2. Adoptar **Cifrado de Sobre (Envelope Encryption)** por elemento mediante claves simétricas de 256 bits (`item_key`) envueltas bajo la clave maestra de la bóveda, habilitando la base directa para el acuerdo asimétrico ECDH P-384 en v2.5.
+3. Incorporar **Papelera de 30 Días con Purga Criptográfica Automática** en `encryptVault` para garantizar la destrucción definitiva de datos sin texto residual en el ciphertext.
+
+---
+
+## ADR-017: Snapshots Históricos Rotativos en Cloudflare D1 con Rollback Optimista y Emergency Kit Físico
+
+### Estado
+**Aceptado (Accepted)**
+
+### Contexto y Declaración del Problema
+En sistemas Zero-Knowledge, la recuperación ante desastres presenta un dilema fundamental: el servidor no puede reparar ni regenerar datos corruptos o sobreescritos accidentalmente por el usuario porque desconoce las claves de descifrado. Si un usuario elimina por error credenciales críticas, o si sufre un conflicto de concurrencia irrecuperable entre dispositivos, o si olvida su Contraseña Maestra sin respaldo biométrico activo, el riesgo de pérdida permanente es absoluto.
+
+Por otra parte, la solución debía ajustarse rígidamente a dos restricciones de diseño:
+1. Presupuesto operativo de **$0 USD/mes** permanente (límites estrictos de Cloudflare D1 Free Tier).
+2. Prohibición total de transmitir contraseñas maestras o payloads sin cifrar a servicios de impresión o respaldo en la nube.
+
+### Alternativas Evaluadas
+1. **Almacenamiento de snapshots en servicios externos S3 / Cloudflare R2:**
+   - Requiere bindings adicionales, configuración de permisos y eventual facturación fuera de la capa gratuita garantizada. **Descartada.**
+2. **Backups en texto claro descargables periódicamente:**
+   - Extremadamente peligroso: archivos `.json` sin cifrar en carpetas de descargas exponen todos los secretos a malware local. **Descartada.**
+3. **Snapshots Rotativos en D1 (Máx 5 versiones) con Rollback OCC + Emergency Kit Físico Offline (Opción Seleccionada):**
+   - **Snapshots en D1:** Cada llamada a `PUT /api/vault` archiva el estado previo en `vault_snapshots` y purga automáticamente registros que superen el límite de 5 versiones por usuario. La reversión atómica (`POST /api/vault/restore/:vault_version`) asigna `version = current.version + 1`, garantizando monotonicidad de control de concurrencia optimista.
+   - **Emergency Kit Físico Imprimible:** Generador offline en memoria de cliente que renderiza un documento HTML optimizado para `window.print()`, con código QR vectorial SVG de la carga cifrada actual e instrucciones de recuperación, reservando un recuadro físico para que el usuario anote su Contraseña Maestra a mano con bolígrafo (*air-gapped storage*).
+
+### Decisión
+1. Crear la tabla `vault_snapshots` en Cloudflare D1 y desplegar los endpoints `GET /api/vault/snapshots` y `POST /api/vault/restore/:vault_version` con control de concurrencia optimista (`version = current.version + 1`).
+2. Limitar el historial a una ventana rodante estricta de **5 versiones por usuario** para respetar holgadamente los límites de cuota de Cloudflare D1 Free Tier.
+3. Proveer el **Emergency Kit Físico 100% Offline** en cliente con vector SVG QR y principio de aislamiento manuscrito de la contraseña maestra.

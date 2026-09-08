@@ -93,7 +93,7 @@ export async function deriveMasterKeyDirect(
       derivedBytes as unknown as BufferSource,
       { name: 'AES-GCM', length: 256 },
       params.isExtractable,
-      ['encrypt', 'decrypt']
+      ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']
     );
 
     // Wipe memory buffer
@@ -123,7 +123,7 @@ export async function deriveMasterKeyDirect(
     baseKey,
     { name: 'AES-GCM', length: 256 },
     params.isExtractable,
-    ['encrypt', 'decrypt']
+    ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']
   );
 
   return masterKey;
@@ -169,7 +169,7 @@ export async function deriveMasterKey(
               data.derivedBits,
               { name: 'AES-GCM', length: 256 },
               params.isExtractable,
-              ['encrypt', 'decrypt']
+              ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']
             );
 
             // Memory hygiene: zeroize received buffer in-place

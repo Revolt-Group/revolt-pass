@@ -17,9 +17,9 @@
 ## 1. Resumen Ejecutivo y Declaración del Problema
 
 ### 1.1 Resumen Ejecutivo
-**Revolt Pass** es una Progressive Web App (PWA) de clase empresarial diseñada bajo una arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)**. Su objetivo primordial es operar como una bóveda segura, soberana y de alta disponibilidad para la gestión de factores de autenticación de dos pasos (TOTP - RFC 6238), almacenamiento estructurado de claves de recuperación (*recovery codes*) y futura extensión hacia un gestor integral de credenciales.
+**Revolt Pass** es una Progressive Web App (PWA) de clase empresarial diseñada bajo una arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)**. Su objetivo primordial es operar como una bóveda segura, soberana y de alta disponibilidad para la gestión integral de factores de autenticación (TOTP - RFC 6238), contraseñas y logins (con historial y 2FA embebido), tarjetas de crédito y débito, notas seguras cifradas en Markdown, claves de servidores e infraestructura SSH, fichas de identidad personal y almacenamiento estructurado de claves de recuperación (*recovery codes*).
 
-El sistema se ejecuta en el cliente (navegador/dispositivo) aprovechando la **Web Crypto API** nativa de hardware y se sincroniza de manera bidireccional contra una infraestructura Serverless Edge en **Cloudflare Workers** respaldada por la base de datos relacional distribuida **Cloudflare D1**, operando estrictamente dentro de los límites del tier gratuito de Cloudflare sin incurrir en costos operativos fijos.
+El sistema cuenta con cifrado de sobre por elemento (`item_key`), snapshots automáticos e históricos en **Cloudflare D1** con rollback optimista, papelera de reciclaje con purga automática a los 30 días y generación 100% offline de un Emergency Kit físico imprimible. Se ejecuta en el cliente (navegador/dispositivo) aprovechando la **Web Crypto API** nativa de hardware y derivación de clave pesada con **Argon2id WASM (64 MB)**, sincronizándose de manera bidireccional contra una infraestructura Serverless Edge en **Cloudflare Workers** respaldada por la base de datos relacional distribuida **Cloudflare D1**, operando estrictamente dentro de los límites del tier gratuito de Cloudflare sin incurrir en costos operativos fijos ($0 USD/mes).
 
 ### 1.2 Declaración del Problema
 1. **Riesgo Sistémico de Gestores Centralizados:** Incidentes recurrentes en la industria (ej. brechas masivas en proveedores comerciales propietarios) evidencian el peligro de confiar secretos criptográficos y bóvedas en servidores que procesan o almacenan metadatos y credenciales en texto plano o con llaves administradas por terceros.
@@ -44,7 +44,12 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 
 ## 3. Alcance del Producto (Scope Management)
 
-### 3.1 In-Scope (Alcance Comprometido para MVP v1.0 — v1.5.0)
+### 3.1 In-Scope (Alcance Comprometido e Implementado v1.0 — v2.0.0)
+* **Suite de Secretos Polimórficos (v2.0.0):** Soporte canónico completo para 6 tipos de secretos: `totp`, `login` (con usuario, contraseña, generador CSPRNG, URLs, token 2FA integrado e historial cronológico de contraseñas), `card` (tarjeta, titular, caducidad, CVV/PIN con detección automática de marca), `note` (markdown seguro), `server_key` (host, puerto, usuario, clave pública, clave privada y passphrase) e `identity` (nombres, documentos, emails, teléfonos y direcciones).
+* **Cifrado de Sobre por Elemento (`item_key`):** Cada elemento posee una clave simétrica independiente AES-256 de 32 bytes envuelta bajo la clave maestra de la bóveda, garantizando aislamiento granular de secretos y compatibilidad para compartición asimétrica (v2.5).
+* **Papelera de Reciclaje con Purga Criptográfica a los 30 Días:** Borrado suave con marcado `deleted_at`, visualización con cuenta regresiva de expiración, restauración en 1 clic y destrucción definitiva automática tras 30 días sin residuos en el texto cifrado.
+* **Snapshots Históricos en Cloudflare D1 y Rollback Optimista:** Almacenamiento transaccional de los últimos 5 estados de la bóveda en la tabla `vault_snapshots` de D1. Restauración en 1 clic mediante `POST /api/vault/restore/:vault_version` asignando `version = current.version + 1` para preservar la coherencia de concurrencia optimista.
+* **Emergency Kit Físico Imprimible:** Generador offline en el cliente de hoja de recuperación de alta resolución con código QR vectorial de la bóveda cifrada y recuadro manuscrito para la contraseña maestra, sin llamadas a servicios de red externos (`window.print()`).
 * **Motor Criptográfico TOTP:** Soporte completo de RFC 6238 con HMAC-SHA1 y HMAC-SHA256, dígitos configurables (6 u 8), intervalos de rotación (default 30s) y decodificador Base32 puro RFC 4648 sin librerías externas obsoletas.
 * **Cifrado Simétrico y KDF:** Derivación de clave mediante **Argon2id (64 MB RAM, 3 rondas recomendadas por OWASP 2024)** con soporte y auto-upgrade transparente para cuentas legadas **PBKDF2-SHA256 (600,000 iteraciones)**, y cifrado autenticado de la bóveda completa vía AES-256-GCM.
 * **Alertas Proactivas Zero-Knowledge:** Notificaciones push nativas en tiempo real mediante Web Push (RFC 8291/8292 con VAPID) y notificaciones por correo bajo modelo BYOK (Resend / Cloudflare).
@@ -200,6 +205,37 @@ El diseño y desarrollo de Revolt Pass se rige de forma inflexible por cinco pri
 * **RF-17.3:** **Revocación y Control Soberano:** El propietario original puede revocar el acceso a un ítem en cualquier momento (`DELETE /api/shared-items/:id`), impidiendo actualizaciones posteriores y excluyendo el ítem del sync del destinatario. La interfaz instruye la rotación de la credencial en el servicio remoto cuando corresponda.
 * **RF-17.4:** **Aislamiento Volátil en RAM:** Los ítems compartidos recibidos se descifran en tiempo de ejecución y se retienen **estrictamente en memoria RAM volátil**. Jamás se escriben en texto plano en IndexedDB ni en disco, purga inmediata ante bloqueo de sesión.
 * **RF-17.5:** **Verificación de Fingerprint Fuera de Banda:** La interfaz mostrará el fingerprint criptográfico SHA-256 de la clave pública del destinatario (`SHA-256(spki)`) para permitir su verificación fuera de banda contra ataques de sustitución de clave.
+
+### RF-18: Suite de Secretos Polimórficos (v2.0.0)
+* **RF-18.1:** El esquema de datos de la bóveda soportará 6 tipos canónicos (`type: VaultItemType`): `totp`, `login`, `card`, `note`, `server_key` e `identity`.
+* **RF-18.2:** **Tipo Login:** Gestión de usuario, contraseña enmascarada, generación con CSPRNG configurable, URLs web con apertura directa, código 2FA/TOTP integrado e historial cronológico inmutable de contraseñas previas (`password_history`).
+* **RF-18.3:** **Tipo Tarjeta (`card`):** Número de tarjeta con espaciado cada 4 dígitos, detección automática de marca (Visa, Mastercard, Amex, Discover, etc.), titular, caducidad (`MM/YY`), y alternancia segura de revelado para código CVV y PIN.
+* **RF-18.4:** **Tipo Nota Segura (`note`):** Texto estructurado y formateado en Markdown, con contador de caracteres y renderizado seguro sin inyección HTML.
+* **RF-18.5:** **Tipo Servidor/SSH (`server_key`):** Host, puerto (default 22), usuario, clave pública, clave privada multilínea con enmascaramiento y passphrase opcional.
+* **RF-18.6:** **Tipo Identidad (`identity`):** Tratamiento, nombre, apellidos, documentos de identidad (DNI/Pasaporte), correo electrónico, teléfonos y domicilio postal.
+
+### RF-19: Envoltura de Claves por Elemento (`item_key` Envelope Wrapping)
+* **RF-19.1:** Cada elemento de la bóveda (`VaultItem`) contendrá un atributo `encrypted_key: "${ivBase64}:${ciphertextBase64}"` que encapsula una clave simétrica única de 256 bits generada con `crypto.getRandomValues(32)`.
+* **RF-19.2:** La envoltura y desenvoltura se ejecutan exclusivamente en el cliente mediante AES-256-GCM bajo la clave maestra de la bóveda.
+* **RF-19.3:** Las cuentas existentes provenientes de versiones anteriores (`v1.x`) se normalizan y migran automáticamente en tiempo de carga/guardado asignando `type = 'totp'` y generando su `item_key` respectivo sin requerir intervención del usuario.
+
+### RF-20: Papelera de Reciclaje y Purga Criptográfica a los 30 Días
+* **RF-20.1:** La eliminación de elementos realizará un borrado lógico (*soft-delete*), asignando la marca de tiempo `deleted_at: number` en formato epoch milisegundos.
+* **RF-20.2:** La interfaz expondrá una pestaña o vista dedicada para la Papelera, mostrando los elementos borrados con indicación visual de los días y horas restantes antes de la destrucción definitiva.
+* **RF-20.3:** Los usuarios podrán restaurar elementos a su ubicación original en un clic o eliminarlos permanentemente de forma manual.
+* **RF-20.4:** Durante cada operación de guardado/cifrado de la bóveda (`encryptVault`), el sistema ejecutará una purga criptográfica automática que shreddea y descarta definitivamente de la estructura JSON cualquier elemento cuyo `deleted_at` supere los 30 días, evitando filtraciones residuales en el texto cifrado.
+
+### RF-21: Snapshots Históricos en Cloudflare D1 y Rollback Optimista
+* **RF-21.1:** En cada sincronización remota exitosa (`PUT /api/vault`), el Worker archivará automáticamente el estado previo en la tabla `vault_snapshots` de Cloudflare D1.
+* **RF-21.2:** Se mantendrá una ventana rodante estricta de un máximo de 5 versiones por usuario, purgando automáticamente los snapshots más antiguos para preservar la cuota del tier gratuito de Cloudflare.
+* **RF-21.3:** El endpoint `GET /api/vault/snapshots` expondrá el historial de versiones con marcas de tiempo (`created_at`) y números de versión.
+* **RF-21.4:** El endpoint `POST /api/vault/restore/:vault_version` permitirá la reversión atómica de la bóveda a un snapshot seleccionado, asignando la nueva versión como `current.version + 1` para mantener la monotonicidad del control de concurrencia optimista (OCC).
+
+### RF-22: Emergency Kit Físico Imprimible
+* **RF-22.1:** El usuario podrá generar en cualquier momento un kit físico de recuperación de emergencia imprimible desde el modal de seguridad.
+* **RF-22.2:** Generación 100% offline en el cliente: El documento HTML se ensambla en memoria local y se abre mediante `window.print()` sin realizar peticiones a servicios de terceros.
+* **RF-22.3:** El documento incluirá un código QR vectorial SVG con la carga cifrada actual de la bóveda (`vault_data`), instrucciones de recuperación paso a paso y un recuadro físico de alta visibilidad para que el usuario escriba a mano su Contraseña Maestra.
+* **RF-22.4:** Por imperativo Zero-Knowledge, la Contraseña Maestra y las claves derivadas jamás se renderizan en el DOM del kit ni en el código QR impreso.
 
 ---
 

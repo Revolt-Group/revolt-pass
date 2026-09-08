@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-ADR-004` |
-| **Version** | `1.2.1-PROD` |
+| **Version** | `2.0.0-PROD (v2.5 Architecture Ready)` |
 | **Status** | Approved / Living Architecture Decision Record |
 | **Format Standard** | Nygard / MADR (Markdown Architectural Decision Records) |
 | **License** | GNU AGPLv3 + Revolt Group Trademark Policy |
@@ -27,6 +27,9 @@
 - [ADR-012: Perimeter Hardening (CSP, Rate Limiting, CORS) and Sliding Session Rotation](#adr-012-perimeter-hardening-csp-rate-limiting-cors-and-sliding-session-rotation)
 - [ADR-013: Native Protobuf Mass Ingestion, Differential Reconciliation, and Open Exporters](#adr-013-native-protobuf-mass-ingestion-differential-reconciliation-and-open-exporters)
 - [ADR-014: Adoption of ECDH P-384 for Item Key Sharing](#adr-014-adoption-of-ecdh-p-384-for-item-key-sharing)
+- [ADR-015: Adoption of Argon2id KDF (WASM) and Proactive Alerts (Web Push / BYOK Email)](#adr-015-adoption-of-argon2id-kdf-wasm-and-proactive-alerts-web-push--byok-email)
+- [ADR-016: Polymorphic Secrets Suite & Per-Item Envelope Key Wrapping (`item_key`)](#adr-016-polymorphic-secrets-suite--per-item-envelope-key-wrapping-item_key)
+- [ADR-017: Cloudflare D1 Rolling Historical Snapshots with OCC Rollback and Physical Emergency Kit](#adr-017-cloudflare-d1-rolling-historical-snapshots-with-occ-rollback-and-physical-emergency-kit)
 
 ---
 
@@ -396,3 +399,63 @@ Furthermore, critical security events (logins from unrecognized countries or dev
 1. Adopt **Argon2id (64 MB, 3 iterations, 1 lane) via WebAssembly (`hash-wasm`) in Web Worker** as the default KDF for all new vault registrations.
 2. Implement **silent background KDF auto-upgrade** migrating PBKDF2 vaults to Argon2id on unlock with biometric passkey re-wrapping.
 3. Deploy **native Cloudflare Worker Web Push RFC 8291/8292** and **BYOK Email** proactive security alerts at $0 operational cost.
+
+---
+
+## ADR-016: Polymorphic Secrets Suite & Per-Item Envelope Key Wrapping (`item_key`)
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+Revolt Pass originated primarily as a 2FA/TOTP authenticator. To deliver Milestone v2.0 (Secrets Suite), the architecture required expansion into a full credential manager capable of hosting 6 canonical secret types: logins with password generator and history, TOTP factors, payment cards, secure notes, server/SSH keys, and personal identities.
+
+In the v1.x architecture, the entire vault was encrypted into a single monolithic block with the user's master key. While secure for standalone personal vaults, this imposed severe architectural limitations:
+1. Impossibility of sharing an individual secret without disclosing the entire master key or restructuring the database (blocking Milestone v2.5 / ADR-014).
+2. Lack of granular cryptographic isolation between secrets with differing sensitivity levels.
+3. Risk of accidental overwrite or complex merge collisions when handling polymorphic data types.
+
+### Evaluated Alternatives
+1. **Separate tables in Cloudflare D1 for each secret type:**
+   - Leaks metadata regarding the distribution and volume of secrets held by a user, directly compromising Zero-Knowledge guarantees.
+   - Substantially multiplies D1 read and write operations, endangering the Cloudflare free tier ceiling. **Rejected.**
+2. **Monolithic encryption retained with generic JSON variant fields without item keys:**
+   - Fails to establish the architectural prerequisite for individual asymmetric secret sharing in Milestone v2.5 (ADR-014). **Rejected.**
+3. **Client-Side Polymorphic Schema with Symmetric Envelope Encryption (`item_key`) (Selected Option):**
+   - Each `VaultItem` record generates a unique, independent 256-bit symmetric key (`crypto.getRandomValues(32)`).
+   - This item key is wrapped under the `MasterKey` using AES-256-GCM and stored in the attribute `encrypted_key: "${ivBase64}:${ciphertextBase64}"`.
+   - Existing legacy v1.x accounts are normalized automatically to `type = 'totp'` upon load (`ensureVaultItemKeys`) without requiring user re-entry or disruptive database migrations.
+   - Native support for 6 canonical types (`totp`, `login`, `card`, `note`, `server_key`, `identity`), immutable password history (`password_history`), and 30-day soft deletion (`deleted_at`).
+
+### Decision
+1. Implement the **6-Type Polymorphic Suite** in `src/types/vault.ts` with specialized UI components (`PolymorphicItemCard`, `EditAccountModal`).
+2. Adopt **Envelope Encryption** per item using 256-bit symmetric keys (`item_key`) wrapped under the vault master key, establishing the foundational primitives for ECDH P-384 asymmetric key sharing in v2.5.
+3. Integrate a **30-Day Trash Bin with Cryptographic Auto-Purge** in `encryptVault` to guarantee permanent data shredding leaving zero residual ciphertext traces.
+
+---
+
+## ADR-017: Cloudflare D1 Rolling Historical Snapshots with OCC Rollback and Physical Emergency Kit
+
+### Status
+**Accepted**
+
+### Context and Problem Statement
+In Zero-Knowledge systems, disaster recovery presents a fundamental dilemma: the server cannot inspect, repair, or regenerate corrupted or accidentally deleted data because it does not possess decryption keys. If a user deletes critical credentials in error, encounters an unresolvable cross-device sync collision, or forgets their Master Password without an active biometric passkey, the risk of permanent data loss is absolute.
+
+Furthermore, any recovery mechanism had to strictly adhere to two foundational requirements:
+1. Strict **$0 USD/month** operational budget constraint (within Cloudflare D1 Free Tier).
+2. Absolute ban on transmitting master passwords or unencrypted payloads to cloud document conversion or print services.
+
+### Evaluated Alternatives
+1. **External storage of snapshots in S3 / Cloudflare R2:**
+   - Introduces additional bindings, configuration overhead, and eventual billing risk outside the free tier. **Rejected.**
+2. **Periodic downloadable plaintext JSON backups:**
+   - Severely hazardous: unencrypted JSON files in local download directories expose all credentials to local disk malware. **Rejected.**
+3. **D1 Rolling Snapshots (Max 5 versions) with OCC Rollback + Offline Physical Emergency Kit (Selected Option):**
+   - **D1 Snapshots:** Every `PUT /api/vault` call atomically archives the preceding state in `vault_snapshots` and automatically prunes entries exceeding 5 versions per user. Atomic rollback (`POST /api/vault/restore/:vault_version`) assigns `version = current.version + 1`, maintaining optimistic concurrency control monotonicity.
+   - **Printable Physical Emergency Kit:** Offline client-side in-memory generator assembling an HTML document optimized for `window.print()`, containing an encrypted vault payload vector SVG QR code and step-by-step instructions, reserving a physical box for handwritten Master Password storage (*air-gapped storage*).
+
+### Decision
+1. Create the `vault_snapshots` table in Cloudflare D1 and implement `GET /api/vault/snapshots` and `POST /api/vault/restore/:vault_version` with monotonic OCC versioning (`version = current.version + 1`).
+2. Enforce a strict rolling window of **5 versions per user** to comfortably operate within Cloudflare D1 Free Tier limits.
+3. Provide a **100% Offline Client-Side Emergency Kit** with vector SVG QR rendering and handwritten air-gapped Master Password storage.

@@ -1,8 +1,8 @@
 {
   "name": "revolt-pass",
   "private": true,
-  "version": "1.5.0",
-  "description": "Zero-Knowledge 2FA & Security Vault",
+  "version": "2.0.0",
+  "description": "Zero-Knowledge Password, 2FA & Secrets Manager",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {

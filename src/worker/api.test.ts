@@ -41,6 +41,15 @@ class MockD1Database {
     server_version: number;
     created_at: number;
   }> = [];
+  public vaultSnapshots: Array<{
+    id: number;
+    user_id: string;
+    encrypted_blob: string;
+    iv: string;
+    vault_version: number;
+    created_at: number;
+  }> = [];
+  public snapshotSeq = 1;
   public appSettings = new Map<string, string>();
   public pushSubscriptions = new Map<string, {
     id: string;
@@ -192,6 +201,16 @@ class MockD1Database {
               return (s ? { ...s } : null) as unknown as T;
             }
 
+            // SELECT encrypted_blob, iv, vault_version FROM vault_snapshots WHERE user_id = ? AND vault_version = ?
+            if (normalizedQuery.includes('from vault_snapshots where user_id =') && normalizedQuery.includes('vault_version =')) {
+              const userId = String(params[0]);
+              const version = Number(params[1]);
+              const found = db.vaultSnapshots
+                .filter((s) => s.user_id === userId && s.vault_version === version)
+                .sort((a, b) => b.created_at - a.created_at || b.id - a.id)[0];
+              return (found ? { ...found } : null) as unknown as T;
+            }
+
             // SELECT id FROM push_subscriptions WHERE user_id = ? AND endpoint = ?
             if (normalizedQuery.includes('from push_subscriptions where user_id =') && normalizedQuery.includes('endpoint =')) {
               const userId = String(params[0]);
@@ -209,6 +228,19 @@ class MockD1Database {
 
           async all<T>(): Promise<D1Result<T>> {
             const normalizedQuery = query.toLowerCase().replace(/\s+/g, ' ');
+
+            // SELECT id, user_id, vault_version, created_at FROM vault_snapshots WHERE user_id = ?
+            if (normalizedQuery.includes('from vault_snapshots where user_id =')) {
+              const userId = String(params[0]);
+              const results = db.vaultSnapshots
+                .filter((s) => s.user_id === userId)
+                .sort((a, b) => b.created_at - a.created_at || b.id - a.id);
+              return {
+                results: results as unknown as T[],
+                success: true,
+                meta: {} as unknown as D1Meta,
+              };
+            }
 
             // SELECT ... FROM sessions WHERE user_id = ? AND is_revoked = 0
             if (normalizedQuery.includes('from sessions where user_id =')) {
@@ -483,6 +515,25 @@ class MockD1Database {
           } else if (q.includes('insert into vaults')) {
             const [user_id, encrypted_blob, iv] = s.params as [string, string, string];
             db.addVault({ user_id, encrypted_blob, iv, version: 1 });
+          } else if (q.includes('insert into vault_snapshots')) {
+            const [user_id, encrypted_blob, iv, vault_version] = s.params as [string, string, string, number];
+            db.vaultSnapshots.push({
+              id: db.snapshotSeq++,
+              user_id,
+              encrypted_blob,
+              iv,
+              vault_version,
+              created_at: Math.floor(Date.now() / 1000),
+            });
+          } else if (q.includes('delete from vault_snapshots')) {
+            const userId = String(s.params[0]);
+            const userSnaps = db.vaultSnapshots
+              .filter((snap) => snap.user_id === userId)
+              .sort((a, b) => b.created_at - a.created_at || b.id - a.id);
+            const keepIds = new Set(userSnaps.slice(0, 5).map((snap) => snap.id));
+            db.vaultSnapshots = db.vaultSnapshots.filter(
+              (snap) => snap.user_id !== userId || keepIds.has(snap.id)
+            );
           } else if (q.includes('update vaults')) {
             const [encrypted_blob, iv, version, user_id] = s.params as [string, string, number, string];
             db.addVault({ user_id, encrypted_blob, iv, version });
@@ -878,6 +929,114 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     const updatedVault = mockDb.getVault(userId);
     expect(updatedVault?.version).toBe(3);
     expect(updatedVault?.encrypted_blob).toBe('blob_v3_valido');
+  });
+
+  // -------------------------------------------------------------------------
+  // Milestone v2.0 Vault Snapshots & Historical Rollback Tests
+  // -------------------------------------------------------------------------
+  it('archives snapshots automatically on PUT /api/vault, prunes to max 5, lists snapshots, and performs rollback', async () => {
+    const userId = 'usr_snapshot_tester';
+    mockDb.addUser({ id: userId, username: 'snapuser', kdf_salt: 'salt_snap' });
+    mockDb.addVault({
+      user_id: userId,
+      encrypted_blob: 'blob_v1',
+      iv: 'iv_v1',
+      version: 1,
+    });
+
+    // 1. Update from v1 to v2 -> v1 should be archived into vault_snapshots
+    const putV2 = new Request('https://pass.example.com/api/vault', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': userId,
+      },
+      body: JSON.stringify({
+        encrypted_blob: 'blob_v2',
+        iv: 'iv_v2',
+        version: 2,
+      }),
+    });
+    const resV2 = await handleApiRequest(putV2, env);
+    expect(resV2.status).toBe(200);
+
+    // Verify snapshot v1 is present
+    expect(mockDb.vaultSnapshots).toHaveLength(1);
+    expect(mockDb.vaultSnapshots[0].vault_version).toBe(1);
+    expect(mockDb.vaultSnapshots[0].encrypted_blob).toBe('blob_v1');
+
+    // 2. Perform updates to v3, v4, v5, v6, v7 (total 6 updates -> snapshots should prune to top 5)
+    for (let ver = 3; ver <= 7; ver++) {
+      const putRes = await handleApiRequest(
+        new Request('https://pass.example.com/api/vault', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+          body: JSON.stringify({
+            encrypted_blob: `blob_v${ver}`,
+            iv: `iv_v${ver}`,
+            version: ver,
+          }),
+        }),
+        env
+      );
+      expect(putRes.status).toBe(200);
+    }
+
+    // Strictly capped at 5 snapshots maximum
+    const userSnaps = mockDb.vaultSnapshots.filter((s) => s.user_id === userId);
+    expect(userSnaps).toHaveLength(5);
+    // The oldest snapshot (v1) should have been pruned; remaining versions should be v2, v3, v4, v5, v6
+    const versions = userSnaps.map((s) => s.vault_version).sort((a, b) => a - b);
+    expect(versions).toEqual([2, 3, 4, 5, 6]);
+
+    // 3. GET /api/vault/snapshots -> returns list of snapshots
+    const getSnapsReq = new Request('https://pass.example.com/api/vault/snapshots', {
+      method: 'GET',
+      headers: { 'X-User-Id': userId },
+    });
+    const getSnapsRes = await handleApiRequest(getSnapsReq, env);
+    expect(getSnapsRes.status).toBe(200);
+    const snapsJson = (await getSnapsRes.json()) as ApiResponse<Array<{ vault_version: number }>>;
+    expect(snapsJson.success).toBe(true);
+    expect(snapsJson.data).toHaveLength(5);
+
+    // 4. POST /api/vault/restore/4 -> Rollback to version 4
+    const restoreReq = new Request('https://pass.example.com/api/vault/restore/4', {
+      method: 'POST',
+      headers: { 'X-User-Id': userId },
+    });
+    const restoreRes = await handleApiRequest(restoreReq, env);
+    expect(restoreRes.status).toBe(200);
+    const restoreJson = (await restoreRes.json()) as ApiResponse<{
+      version: number;
+      encrypted_blob: string;
+      restored_from_version: number;
+    }>;
+    expect(restoreJson.success).toBe(true);
+    // Restoring increments version from current (7) to 8 for OCC consistency
+    expect(restoreJson.data?.version).toBe(8);
+    expect(restoreJson.data?.encrypted_blob).toBe('blob_v4');
+    expect(restoreJson.data?.restored_from_version).toBe(4);
+
+    // Verify current vault in database
+    const restoredVault = mockDb.getVault(userId);
+    expect(restoredVault?.version).toBe(8);
+    expect(restoredVault?.encrypted_blob).toBe('blob_v4');
+
+    // Verify audit log recorded VAULT_RESTORE_SNAPSHOT
+    const restoreAudit = mockDb.auditLogs.find((l) => l.event_type === 'VAULT_RESTORE_SNAPSHOT');
+    expect(restoreAudit).toBeDefined();
+    expect(JSON.parse(restoreAudit?.metadata || '{}').restored_from_version).toBe(4);
+
+    // 5. Attempt to restore nonexistent version (e.g. 99) -> 404
+    const badRestoreReq = new Request('https://pass.example.com/api/vault/restore/99', {
+      method: 'POST',
+      headers: { 'X-User-Id': userId },
+    });
+    const badRestoreRes = await handleApiRequest(badRestoreReq, env);
+    expect(badRestoreRes.status).toBe(404);
+    const badJson = (await badRestoreRes.json()) as ApiResponse;
+    expect(badJson.error?.code).toBe('SNAPSHOT_NOT_FOUND');
   });
 
   // -------------------------------------------------------------------------

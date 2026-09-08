@@ -164,3 +164,20 @@ export interface UpdatePasskeyRequestBody {
   name: string;
 }
 
+export interface VaultSnapshotRecord {
+  id: number;
+  user_id: string;
+  encrypted_blob: string;
+  iv: string;
+  vault_version: number;
+  created_at: number;
+}
+
+export interface FolderRecord {
+  id: string;
+  user_id: string;
+  encrypted_name: string;
+  created_at: number;
+}
+
+

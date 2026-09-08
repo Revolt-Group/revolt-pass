@@ -21,6 +21,7 @@ import type {
   UserNotificationSettingsRecord,
   UpdateNotificationSettingsRequestBody,
   TestEmailRequestBody,
+  VaultSnapshotRecord,
 } from './types.ts';
 import { getOrCreateVapidKeys, sendWebPushNotification } from './push.ts';
 import { dispatchEmailAlert } from './email.ts';
@@ -1495,10 +1496,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         );
       }
 
-      // Fetch current server version
-      const current = await env.DB.prepare('SELECT version FROM vaults WHERE user_id = ?')
+      // Fetch current server vault state
+      const current = await env.DB.prepare('SELECT encrypted_blob, iv, version FROM vaults WHERE user_id = ?')
         .bind(userId)
-        .first<{ version: number }>();
+        .first<{ encrypted_blob: string; iv: string; version: number }>();
 
       if (!current) {
         return errorResponse('VAULT_NOT_FOUND', 'Bóveda no encontrada', 404, undefined, env);
@@ -1521,17 +1522,32 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
       const resolvedDeviceName = parseDeviceName(request.headers.get('User-Agent'));
 
-      // Update vault and append sync log and audit log entries
+      // Update vault, archive snapshot (max 5 rotating), and append sync and audit logs
       await env.DB.batch([
+        // 1. Archive previous state as snapshot for disaster recovery (Milestone v2.0)
+        env.DB.prepare(
+          `INSERT INTO vault_snapshots (user_id, encrypted_blob, iv, vault_version, created_at)
+           VALUES (?, ?, ?, ?, unixepoch())`
+        ).bind(userId, current.encrypted_blob, current.iv, current.version),
+        // 2. Prune old snapshots: keep at most 5 latest snapshots per user
+        env.DB.prepare(
+          `DELETE FROM vault_snapshots 
+           WHERE user_id = ? AND id NOT IN (
+             SELECT id FROM vault_snapshots WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 5
+           )`
+        ).bind(userId, userId),
+        // 3. Update active vault state
         env.DB.prepare(
           `UPDATE vaults 
            SET encrypted_blob = ?, iv = ?, version = ?, updated_at = unixepoch() 
            WHERE user_id = ? AND version = ?`
         ).bind(encrypted_blob, iv, version, userId, current.version),
+        // 4. Sync log
         env.DB.prepare(
           `INSERT INTO sync_logs (user_id, action, client_version, server_version, created_at) 
            VALUES (?, 'SYNC_PUSH', ?, ?, unixepoch())`
         ).bind(userId, version, version),
+        // 5. Audit log
         env.DB.prepare(
           `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
            VALUES (?, 'VAULT_SYNC', ?, ?, unixepoch())`
@@ -1548,6 +1564,130 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         data: {
           user_id: userId,
           version,
+          updated_at: Math.floor(Date.now() / 1000),
+        },
+        timestamp: Date.now(),
+      }, 200, extraHeaders, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /api/vault/snapshots: Retrieve historical snapshots list for rollback (v2.0)
+    // -----------------------------------------------------------------------
+    if (request.method === 'GET' && (path === '/api/vault/snapshots' || path === '/api/v1/vault/snapshots')) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const newSessionToken = await rotateSessionOnRequest(request, env, userId);
+
+      const snapshots = await env.DB.prepare(
+        `SELECT id, user_id, vault_version, created_at 
+         FROM vault_snapshots 
+         WHERE user_id = ? 
+         ORDER BY created_at DESC, id DESC`
+      ).bind(userId).all<VaultSnapshotRecord>();
+
+      const extraHeaders: Record<string, string> = {};
+      if (newSessionToken) {
+        extraHeaders['X-New-Session-Token'] = newSessionToken;
+      }
+
+      return jsonResponse({
+        success: true,
+        data: snapshots.results || [],
+        timestamp: Date.now(),
+      }, 200, extraHeaders, env);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /api/vault/restore/:vault_version: Rollback vault to previous snapshot (v2.0)
+    // -----------------------------------------------------------------------
+    const restoreMatch = path.match(/^\/api(?:\/v1)?\/vault\/restore\/(\d+)$/);
+    if (request.method === 'POST' && restoreMatch) {
+      const userId = request.headers.get('X-User-Id');
+      if (!userId) {
+        return errorResponse('UNAUTHORIZED', 'Cabecera X-User-Id requerida', 401, undefined, env);
+      }
+
+      const sessionError = await checkSessionValidity(request, env, userId);
+      if (sessionError) return sessionError;
+
+      const newSessionToken = await rotateSessionOnRequest(request, env, userId);
+      const targetVersion = parseInt(restoreMatch[1], 10);
+
+      // Fetch snapshot to restore
+      const snapshot = await env.DB.prepare(
+        `SELECT encrypted_blob, iv, vault_version 
+         FROM vault_snapshots 
+         WHERE user_id = ? AND vault_version = ? 
+         ORDER BY created_at DESC, id DESC LIMIT 1`
+      ).bind(userId, targetVersion).first<{ encrypted_blob: string; iv: string; vault_version: number }>();
+
+      if (!snapshot) {
+        return errorResponse('SNAPSHOT_NOT_FOUND', `No se encontró ningún respaldo histórico de la versión ${targetVersion}`, 404, undefined, env);
+      }
+
+      // Fetch current vault state
+      const current = await env.DB.prepare(
+        'SELECT encrypted_blob, iv, version FROM vaults WHERE user_id = ?'
+      ).bind(userId).first<{ encrypted_blob: string; iv: string; version: number }>();
+
+      if (!current) {
+        return errorResponse('VAULT_NOT_FOUND', 'Bóveda actual no encontrada', 404, undefined, env);
+      }
+
+      // Strictly increment version so OCC clients immediately sync the rollback
+      const newVersion = current.version + 1;
+      const resolvedDeviceName = parseDeviceName(request.headers.get('User-Agent'));
+
+      await env.DB.batch([
+        // 1. Archive current state as snapshot before restoring
+        env.DB.prepare(
+          `INSERT INTO vault_snapshots (user_id, encrypted_blob, iv, vault_version, created_at)
+           VALUES (?, ?, ?, ?, unixepoch())`
+        ).bind(userId, current.encrypted_blob, current.iv, current.version),
+        // 2. Prune old snapshots (keep top 5)
+        env.DB.prepare(
+          `DELETE FROM vault_snapshots 
+           WHERE user_id = ? AND id NOT IN (
+             SELECT id FROM vault_snapshots WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 5
+           )`
+        ).bind(userId, userId),
+        // 3. Promote snapshot content to current vault with bumped version
+        env.DB.prepare(
+          `UPDATE vaults 
+           SET encrypted_blob = ?, iv = ?, version = ?, updated_at = unixepoch() 
+           WHERE user_id = ?`
+        ).bind(snapshot.encrypted_blob, snapshot.iv, newVersion, userId),
+        // 4. Sync log
+        env.DB.prepare(
+          `INSERT INTO sync_logs (user_id, action, client_version, server_version, created_at) 
+           VALUES (?, 'VAULT_RESTORE', ?, ?, unixepoch())`
+        ).bind(userId, newVersion, newVersion),
+        // 5. Audit log
+        env.DB.prepare(
+          `INSERT INTO audit_logs (user_id, event_type, device_name, metadata, created_at)
+           VALUES (?, 'VAULT_RESTORE_SNAPSHOT', ?, ?, unixepoch())`
+        ).bind(userId, resolvedDeviceName, JSON.stringify({ restored_from_version: targetVersion, new_version: newVersion })),
+      ]);
+
+      const extraHeaders: Record<string, string> = {};
+      if (newSessionToken) {
+        extraHeaders['X-New-Session-Token'] = newSessionToken;
+      }
+
+      return jsonResponse({
+        success: true,
+        data: {
+          user_id: userId,
+          encrypted_blob: snapshot.encrypted_blob,
+          iv: snapshot.iv,
+          version: newVersion,
+          restored_from_version: targetVersion,
           updated_at: Math.floor(Date.now() / 1000),
         },
         timestamp: Date.now(),

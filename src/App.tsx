@@ -37,7 +37,7 @@ import {
   updateSessionToken,
 } from './lib/storage/idb.ts';
 import { deriveMasterKey, generateSalt } from './lib/crypto/kdf.ts';
-import { encryptVault, decryptVault } from './lib/crypto/vault.ts';
+import { encryptVault, decryptVault, moveToTrash, restoreFromTrash } from './lib/crypto/vault.ts';
 import {
   checkWebAuthnSupport,
   registerPlatformPasskey,
@@ -63,8 +63,9 @@ import { CommandPalette } from './components/CommandPalette.tsx';
 import { BackupModal } from './components/BackupModal.tsx';
 import { EditAccountModal } from './components/EditAccountModal.tsx';
 import { SecurityModal } from './components/SecurityModal.tsx';
+import { EmergencyKitModal } from './components/EmergencyKitModal.tsx';
 
-import type { VaultItem, LocalUserConfig, SyncStatus } from './types/vault.ts';
+import type { VaultItem, VaultItemType, LocalUserConfig, SyncStatus } from './types/vault.ts';
 import type { ApiResponse } from './worker/types.ts';
 import { VERSION_NAME } from './constants/version.ts';
 import { useTranslation, LanguageSwitcher } from './i18n/index.ts';
@@ -93,6 +94,8 @@ export function App() {
   const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
+  const [isEmergencyKitOpen, setIsEmergencyKitOpen] = useState(false);
+  const [createInitialType, setCreateInitialType] = useState<VaultItemType>('login');
 
   // Authentication Forms
   const [loginUsername, setLoginUsername] = useState('');
@@ -1175,6 +1178,15 @@ export function App() {
     });
   };
 
+  const handleSaveItem = async (savedItem: VaultItem) => {
+    const isExisting = items.some((it) => it.id === savedItem.id);
+    if (isExisting) {
+      await handleUpdateAccount(savedItem);
+    } else {
+      await handleSaveNewAccount(savedItem);
+    }
+  };
+
   const handleOpenEditAccount = (item: VaultItem) => {
     setEditingItem(item);
     setIsEditModalOpen(true);
@@ -1189,11 +1201,39 @@ export function App() {
     });
   };
 
-  const handleDeleteAccount = async (id: string) => {
+  const handleMoveToTrash = async (id: string) => {
+    startTransition(async () => {
+      const updated = items.map((item) =>
+        item.id === id ? moveToTrash(item) : item
+      );
+      await persistVaultChanges(updated);
+      toast.info(t('vault.movedToTrash') || 'Secreto movido a la papelera (se purgará en 30 días)');
+    });
+  };
+
+  const handleRestoreFromTrash = async (id: string) => {
+    startTransition(async () => {
+      const updated = items.map((item) =>
+        item.id === id ? restoreFromTrash(item) : item
+      );
+      await persistVaultChanges(updated);
+      toast.success(t('vault.restoredFromTrash') || 'Secreto restaurado con éxito');
+    });
+  };
+
+  const handlePermanentDelete = async (id: string) => {
     startTransition(async () => {
       const updated = items.filter((item) => item.id !== id);
       await persistVaultChanges(updated);
-      toast.info(t('toasts.accountDeleted'));
+      toast.info(t('vault.permanentlyDeleted') || 'Secreto eliminado permanentemente');
+    });
+  };
+
+  const handleEmptyTrash = async () => {
+    startTransition(async () => {
+      const updated = items.filter((item) => !item.deleted_at);
+      await persistVaultChanges(updated);
+      toast.info(t('vault.trashEmptied') || 'Papelera vaciada con éxito');
     });
   };
 
@@ -1989,9 +2029,16 @@ export function App() {
         <VaultList
           items={items}
           onTogglePin={handleTogglePin}
-          onDelete={handleDeleteAccount}
+          onDelete={handleMoveToTrash}
+          onRestore={handleRestoreFromTrash}
+          onPurge={handlePermanentDelete}
+          onEmptyTrash={handleEmptyTrash}
           onToggleRecoveryCode={handleToggleRecoveryCode}
-          onOpenAddModal={() => setIsQrModalOpen(true)}
+          onOpenAddModal={() => {
+            setEditingItem(null);
+            setCreateInitialType('login');
+            setIsEditModalOpen(true);
+          }}
           onEditAccount={handleOpenEditAccount}
         />
       </main>
@@ -2012,7 +2059,9 @@ export function App() {
         item={editingItem}
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        onSave={handleUpdateAccount}
+        onSave={handleSaveItem}
+        initialType={createInitialType}
+        onOpenQrScanner={() => setIsQrModalOpen(true)}
       />
 
       <PasswordGeneratorModal
@@ -2043,6 +2092,13 @@ export function App() {
             setIsSecurityOpen(false);
             setIsBackupOpen(true);
           }}
+          onOpenEmergencyKit={() => {
+            setIsEmergencyKitOpen(true);
+          }}
+          onVaultRestored={(restoredItems, version) => {
+            setItems(restoredItems);
+            setVaultVersion(version);
+          }}
           onSelectAccount={(account) => {
             setIsSecurityOpen(false);
             setEditingItem(account);
@@ -2050,6 +2106,15 @@ export function App() {
           }}
         />
       )}
+
+      <EmergencyKitModal
+        isOpen={isEmergencyKitOpen}
+        onClose={() => setIsEmergencyKitOpen(false)}
+        userId={userConfig?.user_id || ''}
+        username={userConfig?.username || ''}
+        vaultVersion={vaultVersion}
+        kdfAlgorithm="argon2id"
+      />
 
       <CommandPalette
         isOpen={isCmdPaletteOpen}

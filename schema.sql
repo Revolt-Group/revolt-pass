@@ -150,3 +150,34 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
+-- =====================================================================
+-- VAULT SNAPSHOTS & ORGANIZATIONAL FOLDERS (v2.0)
+-- =====================================================================
+
+-- Vault Snapshots for Rollback & Disaster Recovery (Rotating max 5 per user)
+CREATE TABLE IF NOT EXISTS vault_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    encrypted_blob TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    vault_version INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_snapshots_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_user ON vault_snapshots(user_id, created_at DESC);
+
+-- Organizational Folders
+CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    encrypted_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_folders_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id);
+
+

@@ -2,23 +2,29 @@
   <strong>Español</strong> | <a href="./README.en.md">English</a>
 </p>
 
-# Revolt Pass — Zero-Knowledge 2FA & Security Vault
+# Revolt Pass — Zero-Knowledge Password, 2FA & Secrets Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-blue.svg)](./CHANGELOG.md)
+[![Version: v2.0.0](https://img.shields.io/badge/Version-v2.0.0-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 134/134](https://img.shields.io/badge/Tests-134%2F134_Passing-brightgreen.svg)](#)
+[![Tests: 143/143](https://img.shields.io/badge/Tests-143%2F143_Passing-brightgreen.svg)](#)
 
-> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de factores de autenticación (TOTP - RFC 6238), almacenamiento estructurado de códigos de recuperación (*recovery codes*), derivación de clave con **Argon2id WASM (64 MB)** con auto-migración silenciosa, alertas proactivas **Web Push RFC 8291/8292** y correo **BYOK (Resend / Cloudflare)**, visor QR individual universal, carrusel de exportación masiva compatible con Google Authenticator, importadores universales multiplataforma (Authy, Bitwarden, Aegis, 1Password, etc.), soporte de llaves físicas YubiKey/FIDO2, diagnóstico preventivo de salud de la bóveda, detección de filtraciones k-Anonymity (HaveIBeenPwned), endurecimiento perimetral (CSP, Rate Limiting, rotación de sesiones) y desbloqueo biométrico nativo (Windows Hello / Passkeys FIDO2).
+> Progressive Web App (PWA) de grado de ciberseguridad con arquitectura criptográfica **Zero-Knowledge (Conocimiento Cero)** para la gestión soberana de contraseñas, factores de autenticación (TOTP - RFC 6238), tarjetas de pago, notas seguras, claves SSH/servidor e identidades personales. Cuenta con cifrado de sobre por elemento (`item_key`), snapshots automáticos en Cloudflare D1 con rollback optimista, papelera con purga automática a los 30 días, Emergency Kit físico imprimible, derivación de clave con **Argon2id WASM (64 MB)**, alertas proactivas **Web Push RFC 8291/8292** y correo **BYOK (Resend / Cloudflare)**, importadores/exportadores universales, soporte YubiKey/FIDO2 y desbloqueo biométrico nativo (Windows Hello / Passkeys).
 
 ---
 
 ## 🌟 Características Principales
 
+* **Suite Integral de Secretos Polimórficos (v2.0.0):**
+  - **6 Tipos Canónicos de Secretos:** Gestión completa de Contraseñas/Logins (con generador CSPRNG, URLs web, token 2FA integrado e historial de contraseñas), Factores 2FA/TOTP, Tarjetas de Crédito/Débito (con detección automática de marca y revelación de CVV/PIN), Notas Seguras en Markdown cifradas, Claves de Servidor/SSH (host, puerto, usuario, clave pública, privada y passphrase) y Fichas de Identidad Personal.
+  - **Cifrado de Sobre por Elemento (`item_key`):** Cada elemento cuenta con una clave simétrica única e independiente envuelta bajo la clave maestra, sentando las bases para el intercambio asimétrico ECDH (v2.5).
+  - **Papelera de 30 Días con Purga Criptográfica:** Eliminación suave con restauración en 1 clic y destrucción definitiva automática tras 30 días sin fugas residuales en el texto cifrado.
+  - **Snapshots en Cloudflare D1 y Rollback Optimista:** Historial automático de los últimos 5 estados de la bóveda en D1 con rollback en un clic e incremento optimista de versión (`current.version + 1`).
+  - **Emergency Kit Físico Imprimible:** Generador offline en cliente de hoja de recuperación de alta resolución con QR vectorial y recuadro manuscrito de contraseña maestra.
 * **Argon2id KDF y Alertas Proactivas Zero-Knowledge (v1.5.0):**
   - **Argon2id WASM:** Derivación de clave maestra resistente a memoria (64 MB, 3 rondas) compilada a WebAssembly via `hash-wasm`, inmune a ataques con clústeres GPU/ASIC. Incluye auto-upgrade silencioso e imperceptible de cuentas legadas PBKDF2 en su próximo inicio de sesión o desbloqueo, con recifrado de bóveda y re-empaquetado biométrico de passkeys.
   - **Web Push Nativo ($0 Costo):** Alertas push en tiempo real directas desde Cloudflare Worker mediante la Push API del navegador, Service Worker y RFC 8291/8292 (VAPID + AES-128-GCM). Alerta ante inicios de sesión desde nuevos países, nuevas sesiones activas, revocaciones remotas y passkeys añadidas.

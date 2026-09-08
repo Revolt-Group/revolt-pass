@@ -32,11 +32,14 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
+  History,
+  Printer,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from '../i18n/index.ts';
 
-import type { LocalUserConfig, SessionInfo, PasskeyInfo, AuditLogItem, VaultItem } from '../types/vault';
+import type { LocalUserConfig, SessionInfo, PasskeyInfo, AuditLogItem, VaultItem, VaultSnapshotInfo } from '../types/vault';
 import type { ApiResponse } from '../worker/types';
 import {
   registerPasskey,
@@ -48,7 +51,7 @@ import { evaluateVaultHygiene } from '../lib/security/vaultHygiene';
 import { checkPasswordPwned } from '../lib/security/pwnedCheck';
 import { deriveMasterKey, generateSalt } from '../lib/crypto/kdf';
 import { encryptVault } from '../lib/crypto/vault';
-
+import { pullRemoteVault } from '../lib/sync/syncEngine';
 
 interface SecurityModalProps {
   isOpen: boolean;
@@ -60,6 +63,8 @@ interface SecurityModalProps {
   onConfigUpdated: (config: LocalUserConfig) => void;
   items?: VaultItem[];
   onOpenBackup?: () => void;
+  onOpenEmergencyKit?: () => void;
+  onVaultRestored?: (items: VaultItem[], newVersion: number) => void;
   onSelectAccount?: (item: VaultItem) => void;
 }
 
@@ -73,10 +78,12 @@ export function SecurityModal({
   onConfigUpdated,
   items = [],
   onOpenBackup,
+  onOpenEmergencyKit,
+  onVaultRestored,
   onSelectAccount,
 }: SecurityModalProps) {
   const { t, lang } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'health' | 'sessions' | 'passkeys' | 'notifications' | 'audit'>('health');
+  const [activeTab, setActiveTab] = useState<'health' | 'sessions' | 'passkeys' | 'notifications' | 'audit' | 'snapshots'>('health');
 
 
   // Vault Hygiene & Diagnostics
@@ -402,6 +409,80 @@ export function SecurityModal({
     }
   }, [userId, getActiveToken]);
 
+  // Snapshots (Vault History) State
+  const [snapshots, setSnapshots] = useState<VaultSnapshotInfo[]>([]);
+  const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
+  const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
+
+  const fetchSnapshots = useCallback(async () => {
+    if (!userId) return;
+    setIsLoadingSnapshots(true);
+    try {
+      const activeToken = await getActiveToken();
+      const headers: Record<string, string> = { 'X-User-Id': userId };
+      if (activeToken) headers['X-Session-Token'] = activeToken;
+
+      const res = await fetch('/api/vault/snapshots', { headers });
+      const newTok = res.headers?.get?.('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
+
+      if (!res.ok) {
+        throw new Error('Error al consultar historial de snapshots');
+      }
+
+      const data = (await res.json()) as ApiResponse<VaultSnapshotInfo[]>;
+      if (data.success && Array.isArray(data.data)) {
+        setSnapshots(data.data);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al cargar snapshots';
+      toast.error(msg);
+    } finally {
+      setIsLoadingSnapshots(false);
+    }
+  }, [userId, getActiveToken]);
+
+  const handleRestoreSnapshot = async (version: number) => {
+    if (!userId) return;
+    const confirmMsg = t('snapshots.restoreConfirm', { version }) || `¿Restaurar la bóveda a la versión ${version}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setRestoringVersion(version);
+    try {
+      const activeToken = await getActiveToken();
+      const headers: Record<string, string> = { 'X-User-Id': userId };
+      if (activeToken) headers['X-Session-Token'] = activeToken;
+
+      const res = await fetch(`/api/vault/restore/${version}`, {
+        method: 'POST',
+        headers,
+      });
+
+      const newTok = res.headers?.get?.('X-New-Session-Token');
+      if (newTok) await updateSessionToken(newTok);
+
+      if (!res.ok) {
+        throw new Error(`Error al restaurar snapshot: HTTP ${res.status}`);
+      }
+
+      // Synchronize remote vault locally
+      if (masterKey) {
+        const pulled = await pullRemoteVault('', masterKey);
+        if (pulled.items) {
+          onVaultRestored?.(pulled.items, pulled.version || version + 1);
+        }
+      }
+
+      toast.success(t('snapshots.restoreSuccess', { version }) || `Bóveda restaurada a versión ${version}`);
+      await fetchSnapshots();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al restaurar snapshot';
+      toast.error(msg);
+    } finally {
+      setRestoringVersion(null);
+    }
+  };
+
   // Trigger loads on modal open or tab change
   useEffect(() => {
     if (!isOpen) return;
@@ -414,8 +495,10 @@ export function SecurityModal({
       fetchNotificationSettings();
     } else if (activeTab === 'audit') {
       fetchAuditLogs();
+    } else if (activeTab === 'snapshots') {
+      fetchSnapshots();
     }
-  }, [isOpen, activeTab, fetchSessions, fetchPasskeys, fetchAuditLogs, checkPushStatus, fetchNotificationSettings]);
+  }, [isOpen, activeTab, fetchSessions, fetchPasskeys, fetchAuditLogs, fetchSnapshots, checkPushStatus, fetchNotificationSettings]);
 
   // Handlers for Web Push
   const handleSubscribePush = async () => {
@@ -1215,6 +1298,18 @@ export function SecurityModal({
               <Clock className="w-3.5 h-3.5" />
               <span>{t('security.tabAudit')}</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('snapshots')}
+              className={`flex-1 py-1.5 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
+                activeTab === 'snapshots'
+                  ? 'bg-[#16181d] text-white border border-white/[0.08] shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <History className="w-3.5 h-3.5 text-blue-400" />
+              <span>{t('security.tabSnapshots')}</span>
+            </button>
 
           </div>
 
@@ -1273,17 +1368,29 @@ export function SecurityModal({
                     </div>
                   </div>
 
-                  {/* Backup Quick Action if needed */}
-                  {onOpenBackup && (
-                    <button
-                      type="button"
-                      onClick={onOpenBackup}
-                      className="py-1.5 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] text-xs font-medium transition-all shrink-0 flex items-center gap-1.5"
-                    >
-                      <Database className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>{t('hygiene.actionBackup')}</span>
-                    </button>
-                  )}
+                  {/* Backup and Emergency Kit Quick Actions */}
+                  <div className="flex items-center gap-2">
+                    {onOpenEmergencyKit && (
+                      <button
+                        type="button"
+                        onClick={onOpenEmergencyKit}
+                        className="py-1.5 px-3 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-xs font-medium transition-all shrink-0 flex items-center gap-1.5"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>{t('emergencyKit.generate')}</span>
+                      </button>
+                    )}
+                    {onOpenBackup && (
+                      <button
+                        type="button"
+                        onClick={onOpenBackup}
+                        className="py-1.5 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border border-white/[0.08] text-xs font-medium transition-all shrink-0 flex items-center gap-1.5"
+                      >
+                        <Database className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>{t('hygiene.actionBackup')}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Quick Metric Tiles */}
@@ -2304,6 +2411,84 @@ export function SecurityModal({
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 5: VAULT HISTORY / SNAPSHOTS */}
+            {activeTab === 'snapshots' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-semibold text-zinc-200">{t('security.snapshotsTitle')}</h4>
+                    <p className="text-[11px] text-zinc-400">
+                      {t('security.snapshotsSubtitle')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchSnapshots}
+                    disabled={isLoadingSnapshots}
+                    className="p-1.5 rounded-lg bg-[#16181d] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] transition-colors"
+                    title="Recargar snapshots"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSnapshots ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                {isLoadingSnapshots ? (
+                  <div className="py-10 flex flex-col items-center justify-center gap-2 text-zinc-400">
+                    <RefreshCw className="w-4 h-4 animate-spin text-zinc-300" />
+                    <span>Cargando snapshots de la bóveda...</span>
+                  </div>
+                ) : snapshots.length === 0 ? (
+                  <div className="py-8 text-center bg-[#08090a] rounded-xl border border-white/[0.04] text-zinc-400 space-y-1.5">
+                    <History className="w-6 h-6 mx-auto text-zinc-600 mb-2" />
+                    <p className="text-xs text-zinc-300 font-medium">{t('security.noSnapshots')}</p>
+                    <p className="text-[11px] text-zinc-500">Cada vez que guardas o modificas un elemento, se archiva automáticamente un snapshot previo en Cloudflare D1.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {snapshots.map((snap) => (
+                      <div
+                        key={snap.vault_version}
+                        className="p-3 rounded-xl bg-[#08090a] border border-white/[0.06] hover:border-white/[0.12] flex items-center justify-between gap-3 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 font-mono text-xs font-bold">
+                            v{snap.vault_version}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-zinc-200">
+                                {t('security.snapshotVersion', { version: snap.vault_version })}
+                              </span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                                D1 Snapshot
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
+                              {new Date(snap.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={restoringVersion !== null}
+                          onClick={() => handleRestoreSnapshot(snap.vault_version)}
+                          className="px-3 py-1.5 rounded-lg bg-[#16181d] hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 border border-white/[0.08] hover:border-blue-500/30 text-xs font-medium flex items-center gap-1.5 transition-all shrink-0 disabled:opacity-50"
+                        >
+                          <RotateCcw className={`w-3.5 h-3.5 ${restoringVersion === snap.vault_version ? 'animate-spin' : ''}`} />
+                          <span>
+                            {restoringVersion === snap.vault_version
+                              ? t('security.restoringSnapshot')
+                              : t('security.restoreSnapshot')}
+                          </span>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

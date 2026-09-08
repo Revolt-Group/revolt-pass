@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-PRD-001` |
-| **Version** | `1.5.0-PROD (v2.5 Scope Ready)` |
+| **Version** | `2.0.0-PROD (v2.5 Scope Ready)` |
 | **Status** | Approved / Canonical Specification |
 | **Organization** | Revolt Group |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
@@ -17,9 +17,9 @@
 ## 1. Executive Summary and Problem Statement
 
 ### 1.1 Executive Summary
-**Revolt Pass** is an enterprise-grade Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture. Its primary objective is to operate as a secure, sovereign, and highly available vault for managing two-factor authentication factors (TOTP - RFC 6238), structured storage of recovery codes, and future expansion into a comprehensive credential manager.
+**Revolt Pass** is an enterprise-grade Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture. Its primary objective is to operate as a secure, sovereign, and highly available vault for the comprehensive management of two-factor authentication factors (TOTP - RFC 6238), passwords and logins (with CSPRNG generator, website URLs, embedded 2FA, and password history), payment credit/debit cards, encrypted Markdown secure notes, server/SSH infrastructure keys, personal identity profiles, and structured recovery codes.
 
-The system runs on the client (browser/device) leveraging native hardware **Web Crypto API** and synchronizes bidirectionally against a Serverless Edge infrastructure on **Cloudflare Workers** backed by the **Cloudflare D1** distributed relational database, operating strictly within the limits of Cloudflare's free tier without incurring fixed operational costs.
+The system features per-item envelope encryption (`item_key`), automatic historical rolling snapshots in **Cloudflare D1** with optimistic rollback, a 30-day trash bin with cryptographic auto-purge, and 100% offline generation of a printable physical Emergency Kit. It executes strictly on the client (browser/device) leveraging native hardware **Web Crypto API** and memory-hard key derivation via **Argon2id WASM (64 MB)**, synchronizing bidirectionally against a Serverless Edge infrastructure on **Cloudflare Workers** backed by the **Cloudflare D1** distributed relational database, operating strictly within Cloudflare's free tier without incurring fixed operational costs ($0 USD/month).
 
 ### 1.2 Problem Statement
 1. **Systemic Risk of Centralized Managers:** Recurrent industry incidents (e.g., massive breaches in proprietary commercial providers) highlight the danger of trusting cryptographic secrets and vaults to servers that process or store metadata and credentials in plaintext or with third-party-managed keys.
@@ -44,7 +44,12 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 
 ## 3. Product Scope Management
 
-### 3.1 In-Scope (Committed Scope for MVP v1.0 — v1.5.0)
+### 3.1 In-Scope (Committed and Implemented Scope v1.0 — v2.0.0)
+* **Polymorphic Secrets Suite (v2.0.0):** Full canonical support for 6 secret types: `totp`, `login` (with username, password, CSPRNG generator, URLs, embedded 2FA token, and chronological password history), `card` (card number, cardholder, expiration, CVV/PIN with automatic brand detection), `note` (secure Markdown), `server_key` (host, port, username, public key, private key, and passphrase), and `identity` (titles, names, IDs/passports, emails, phone numbers, and addresses).
+* **Per-Item Envelope Encryption (`item_key`):** Each item holds an independent 32-byte AES-256 symmetric key wrapped under the master key, guaranteeing granular secret isolation and readiness for asymmetric sharing (v2.5).
+* **30-Day Trash Bin with Cryptographic Auto-Purge:** Soft deletion with `deleted_at` timestamp, countdown display, 1-click restore, and automated permanent destruction after 30 days leaving zero residual leakage in the ciphertext.
+* **Historical Snapshots in Cloudflare D1 & Optimistic Rollback:** Transactional archiving of the last 5 vault versions in the D1 `vault_snapshots` table. 1-click restoration via `POST /api/vault/restore/:vault_version` assigning `version = current.version + 1` to preserve optimistic concurrency control consistency.
+* **Printable Physical Emergency Kit:** 100% client-side offline vector SVG recovery sheet generator featuring the encrypted vault payload QR code and handwritten master password box without external network requests (`window.print()`).
 * **TOTP Cryptographic Engine:** Full RFC 6238 support with HMAC-SHA1 and HMAC-SHA256, configurable digits (6 or 8), rotation intervals (default 30s), and pure RFC 4648 Base32 decoder without deprecated external dependencies.
 * **Symmetric Encryption and KDF:** Key derivation via **Argon2id (64 MB RAM, 3 rounds recommended by OWASP 2024)** with backward support and transparent auto-upgrade for legacy **PBKDF2-SHA256 (600,000 iterations)**, and authenticated encryption of the entire vault via AES-256-GCM.
 * **Proactive Zero-Knowledge Alerts:** Real-time native push notifications via Web Push (RFC 8291/8292 with VAPID) and BYOK email alerts (Resend / Cloudflare).
@@ -200,6 +205,37 @@ The design and development of Revolt Pass is strictly governed by five engineeri
 * **FR-17.3:** **Sovereign Revocation and Lifecycle:** The item owner can revoke access at any time (`DELETE /api/shared-items/:id`), instantly removing the item from recipient sync updates. The UI presents standard advice to rotate the credential at the destination service when appropriate.
 * **FR-17.4:** **Volatile RAM Isolation:** Decrypted incoming shared items reside **strictly in volatile client RAM memory**. They are never persisted as plaintext to IndexedDB or local disk, and are immediately purged on vault lock.
 * **FR-17.5:** **Out-of-Band Key Fingerprint Verification:** The UI displays the SHA-256 cryptographic fingerprint of the recipient's public key (`SHA-256(spki)`) to enable out-of-band verification against public key substitution attacks.
+
+### FR-18: Polymorphic Secrets Suite (v2.0.0)
+* **FR-18.1:** The vault data schema supports 6 canonical types (`type: VaultItemType`): `totp`, `login`, `card`, `note`, `server_key`, and `identity`.
+* **FR-18.2:** **Login Type:** Management of username, masked password, configurable CSPRNG password generator, website URLs with direct launch, integrated 2FA/TOTP token, and chronological immutable password history (`password_history`).
+* **FR-18.3:** **Card Type (`card`):** Card number with 4-digit formatting, automatic card brand detection (Visa, Mastercard, Amex, Discover, etc.), cardholder name, expiration (`MM/YY`), and secure toggle reveal for CVV and PIN codes.
+* **FR-18.4:** **Secure Note Type (`note`):** Structured and formatted Markdown text with character count display and secure rendering preventing HTML injection.
+* **FR-18.5:** **Server/SSH Key Type (`server_key`):** Host, port (default 22), username, public key, masked multiline private key, and optional passphrase.
+* **FR-18.6:** **Identity Type (`identity`):** Title, first name, last name, identification numbers (National ID/Passport), email, phone numbers, and postal address.
+
+### FR-19: Per-Item Envelope Key Wrapping (`item_key`)
+* **FR-19.1:** Each vault item (`VaultItem`) contains an `encrypted_key: "${ivBase64}:${ciphertextBase64}"` wrapping a unique 256-bit symmetric key generated via `crypto.getRandomValues(32)`.
+* **FR-19.2:** Wrapping and unwrapping execute exclusively client-side via AES-256-GCM under the user's master key.
+* **FR-19.3:** Existing accounts from prior versions (`v1.x`) are automatically normalized and upgraded during load/save operations, setting `type = 'totp'` and generating a fresh wrapped `item_key` without user friction.
+
+### FR-20: 30-Day Trash Bin & Cryptographic Auto-Purge
+* **FR-20.1:** Item deletion performs a logical soft-delete, tagging the item with a `deleted_at: number` epoch millisecond timestamp.
+* **FR-20.2:** The UI provides a dedicated Trash tab/filter displaying deleted items with countdown indicators showing remaining days and hours before permanent destruction.
+* **FR-20.3:** Users can restore items to their original location with 1 click or shred them permanently on demand.
+* **FR-20.4:** During each vault save/encryption cycle (`encryptVault`), the system performs an automated cryptographic purge that permanently discards from the serialized JSON any item whose `deleted_at` exceeds 30 days, preventing residual ciphertext leaks.
+
+### FR-21: Historical Snapshots in Cloudflare D1 & Optimistic Rollback
+* **FR-21.1:** On every successful remote synchronization (`PUT /api/vault`), the Worker atomically archives the preceding state in Cloudflare D1's `vault_snapshots` table.
+* **FR-21.2:** A strict rolling window of at most 5 versions per user is enforced, automatically pruning older snapshots to respect Cloudflare free tier quotas.
+* **FR-21.3:** The `GET /api/vault/snapshots` endpoint exposes version history including creation timestamps (`created_at`) and version numbers.
+* **FR-21.4:** The `POST /api/vault/restore/:vault_version` endpoint executes atomic rollback to a selected snapshot, incrementing version to `current.version + 1` to preserve optimistic concurrency control (OCC) monotonicity.
+
+### FR-22: Physical Printable Emergency Kit
+* **FR-22.1:** The user can generate a printable physical emergency recovery kit at any time from the security modal.
+* **FR-22.2:** 100% offline client-side generation: The HTML document is generated locally in memory and triggered via `window.print()` without making external third-party requests.
+* **FR-22.3:** The sheet includes a high-definition vector SVG QR code with the current encrypted vault payload (`vault_data`), step-by-step restoration instructions, and a high-visibility physical box for handwritten Master Password storage.
+* **FR-22.4:** Under strict Zero-Knowledge rules, Master Passwords and derived cryptographic keys are never rendered in the DOM or encoded in the printed QR.
 
 ---
 

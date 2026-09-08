@@ -4,7 +4,7 @@
 | Metadata | Detail |
 | :--- | :--- |
 | **Document Identifier** | `RP-ARCH-002` |
-| **Version** | `1.5.0-PROD (v2.5 Architecture)` |
+| **Version** | `2.0.0-PROD (v2.5 Architecture Ready)` |
 | **Status** | Approved / Architecture Specification |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
 | **Tech Stack** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
@@ -23,16 +23,18 @@ flowchart TB
     subgraph ClientDevice ["Client Device (PWA Sandbox)"]
         subgraph UI ["Presentation Layer (React 19 + Tailwind)"]
             App["App Shell / Router"]
-            TotpView["TotpCard & Circular Timer"]
+            PolymorphicCard["PolymorphicItemCard (6 Types + Trash)"]
             QrScanner["QR Scanner (Camera / Dropzone / Paste)"]
             CmdPalette["Command Palette (Ctrl + K)"]
-            SecurityModal["Security & Sessions Modal"]
+            SecurityModal["Security & History Modal"]
+            EmergencyKit["Emergency Kit Generator (Offline SVG)"]
             I18nEngine["i18n Engine (ES/EN Zero-Knowledge)"]
         end
 
         subgraph CoreEngine ["Core Security Engine (TypeScript)"]
             CryptoWorker["Web Worker (Argon2id WASM 64MB / PBKDF2 600k)"]
             SubtleEngine["Web Crypto API (AES-GCM-256 / HMAC)"]
+            EnvelopeEngine["Envelope Encryption Engine (item_key AES-256)"]
             WebAuthnManager["WebAuthn Manager (Windows Hello PIN / Biometrics)"]
             TimeSyncManager["Time Drift Compensator"]
             SyncEngine["Bi-directional Sync Engine"]
@@ -42,7 +44,7 @@ flowchart TB
         subgraph ClientStorage ["Secure Local Storage"]
             IDB[("IndexedDB (idb wrapper)\n- vault_encrypted\n- user_config\n- sync_queue")]
             CacheStorage[("Cache Storage (Workbox PWA)\nStatic Assets & Shell")]
-            RAM[("Volatile RAM\n- Master Key\n- Decrypted Items\n(Auto-lock purges)")]
+            RAM[("Volatile RAM\n- Master Key & Item Keys\n- Decrypted Items & History\n(Auto-lock purges)")]
         end
     end
 
@@ -55,6 +57,8 @@ flowchart TB
             AuthEp["POST /api/auth/* (Register / Salt)"]
             UpgradeEp["POST /api/auth/upgrade-kdf (Argon2id Auto-Upgrade)"]
             VaultEp["GET|PUT /api/vault (Encrypted Sync)"]
+            SnapshotEp["GET /api/vault/snapshots (Rolling 5 History)"]
+            RestoreEp["POST /api/vault/restore/:vault_version (OCC Rollback)"]
             SessionEp["POST|GET|DELETE|PUT /api/auth/sessions (Session Mgmt)"]
             PasskeyEp["GET|POST|PUT|DELETE /api/passkeys (FIDO2 Registry)"]
             AuditEp["GET /api/audit-logs (Security Audit)"]
@@ -62,7 +66,7 @@ flowchart TB
             EmailEp["POST /api/notifications/email (BYOK Dispatch)"]
         end
         
-        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & push_subscriptions")]
+        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- vault_snapshots & folders\n- sessions & passkeys\n- audit_logs & push_subscriptions")]
     end
 
     %% Relationships
@@ -459,6 +463,17 @@ The API is exposed under the `/api/v1` (or `/api`) prefix. All responses adopt a
 * **Purpose:** Revoke item access (if invoked by owner) or reject/delete from view (if invoked by recipient).
 * **HTTP Codes:** `200 OK`, `403 Forbidden`, `404 Not Found`.
 
+#### 19. `GET /api/vault/snapshots`
+* **Purpose:** List historical archived vault versions for the authenticated user (up to 5 rolling snapshots).
+* **Headers:** `X-User-Id: {user_id}`.
+* **HTTP Codes:** `200 OK` (list of `{ id, user_id, vault_version, created_at }`).
+
+#### 20. `POST /api/vault/restore/:vault_version`
+* **Purpose:** Atomically restore vault state to a preceding historical snapshot in Cloudflare D1.
+* **Headers:** `X-User-Id: {user_id}`.
+* **OCC Behavior:** The Worker retrieves the encrypted blob from the selected snapshot and updates the `vaults` table assigning `version = current.version + 1` to preserve optimistic concurrency control monotonicity, enabling immediate client pulling without synchronization collisions.
+* **HTTP Codes:** `200 OK` (`{ success: true, data: { restored_version, new_version } }`), `404 Not Found` (snapshot not found).
+
 ---
 
 ## 5. Canonical Data Models and TypeScript Types
@@ -481,29 +496,120 @@ export interface RecoveryCode {
 export type TotpAlgorithm = 'SHA1' | 'SHA256';
 
 /**
- * Item types storable in vault (extensible architecture).
+ * Canonical polymorphic secret types supported in the vault (v2.0).
  */
-export type VaultItemType = 'totp' | 'login' | 'note';
+export type VaultItemType = 'totp' | 'login' | 'card' | 'note' | 'server_key' | 'identity';
+
+export interface PasswordHistoryEntry {
+  password: string;
+  changed_at: number; // Unix timestamp in ms
+}
+
+export interface CustomField {
+  id: string;
+  name: string;
+  value: string;
+  is_secret?: boolean;
+}
+
+export interface LoginItemData {
+  username?: string;
+  password?: string;
+  urls?: string[];
+  totp_seed?: string; // Inline 2FA seed (Base32)
+  custom_fields?: CustomField[];
+  password_history?: PasswordHistoryEntry[]; // Previous password history
+}
+
+export type CardBrand = 'visa' | 'mastercard' | 'amex' | 'discover' | 'other';
+
+export interface CardItemData {
+  cardholder_name?: string;
+  card_number?: string;
+  brand?: CardBrand;
+  exp_month?: string; // '01'-'12'
+  exp_year?: string; // '26'-'99' or '2026'
+  cvv?: string;
+  pin?: string;
+  zip_code?: string;
+}
+
+export interface NoteItemData {
+  title?: string;
+  content_markdown?: string;
+}
+
+export interface ServerKeyItemData {
+  host?: string;
+  port?: number;
+  username?: string;
+  private_key?: string;
+  public_key?: string;
+  passphrase?: string;
+  api_token?: string;
+}
+
+export interface IdentityItemData {
+  first_name?: string;
+  last_name?: string;
+  id_number?: string;
+  passport_number?: string;
+  license_number?: string;
+  birthdate?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
 
 /**
- * Atomic structure of an item within the decrypted vault in memory.
+ * Atomic polymorphic structure of an item within the decrypted vault in memory.
  */
 export interface VaultItem {
   id: string; // Canonical UUID v4
   type: VaultItemType;
-  issuer: string; // Service name (e.g. "GitHub", "AWS")
-  account: string; // Account identifier (e.g. "user@email.com")
-  secret: string; // Decoded secret key in Base32 format
+  name?: string;
+  issuer: string; // Service or provider name
+  account: string; // Account or user identifier
+  secret: string; // Base32 secret key (empty string for items without 2FA)
   digits: 6 | 8; // Token digit length (default: 6)
   period: number; // Rotation interval in seconds (default: 30)
   algorithm: TotpAlgorithm; // Hash algorithm (default: 'SHA1')
   recovery_codes?: RecoveryCode[]; // Optional list of emergency codes
-  notes?: string; // Additional secure notes
+
+  // Specialized polymorphic payloads (Milestone v2.0)
+  login_data?: LoginItemData;
+  card_data?: CardItemData;
+  note_data?: NoteItemData;
+  server_key_data?: ServerKeyItemData;
+  identity_data?: IdentityItemData;
+
+  // Organization & Trash Bin (Milestone v2.0)
+  folder_id?: string;
+  deleted_at?: number | null; // Soft-delete epoch timestamp in ms (auto-purged after 30 days)
+
+  // Per-item envelope key wrapping (Milestone v2.0 & foundation for v2.5 ECDH sharing)
+  encrypted_key?: string; // Symmetrically wrapped AES-256 item key: "${ivBase64}:${ciphertextBase64}"
+
+  notes?: string; // General notes
   pinned?: boolean; // Pinned to top indicator
   tags?: string[]; // Organizational tags
   icon_url?: string; // Optional custom logo/photo Data URL or HTTPS link
   created_at: number; // Unix Epoch in milliseconds
-  updated_at: number; // Unix Epoch in milliseconds (used for reconciliation)
+  updated_at: number; // Unix Epoch in milliseconds (used for LWW reconciliation)
+}
+
+export interface VaultSnapshotInfo {
+  id: number;
+  user_id: string;
+  vault_version: number;
+  created_at: number;
+}
+
+export interface Folder {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: number;
 }
 
 /**
@@ -695,4 +801,34 @@ CREATE TABLE IF NOT EXISTS sync_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_synclogs_user_created ON sync_logs(user_id, created_at DESC);
+
+-- =====================================================================
+-- VAULT SNAPSHOTS & ORGANIZATIONAL FOLDERS (v2.0)
+-- =====================================================================
+
+-- Vault Snapshots for Rollback & Disaster Recovery (Rotating max 5 per user)
+CREATE TABLE IF NOT EXISTS vault_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    encrypted_blob TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    vault_version INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_snapshots_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_user ON vault_snapshots(user_id, created_at DESC);
+
+-- Organizational Folders
+CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    encrypted_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_folders_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id);
 ```

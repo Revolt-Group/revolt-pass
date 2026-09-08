@@ -2,22 +2,29 @@
   <a href="./README.md">Español</a> | <strong>English</strong>
 </p>
 
-# Revolt Pass — Zero-Knowledge 2FA & Security Vault
+# Revolt Pass — Zero-Knowledge Password, 2FA & Secrets Vault
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
-[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-blue.svg)](./CHANGELOG.md)
+[![Version: v2.0.0](https://img.shields.io/badge/Version-v2.0.0-blue.svg)](./CHANGELOG.md)
 [![TypeScript: Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-blue.svg)](#)
 [![Vite: v8](https://img.shields.io/badge/Vite-v8-646CFF.svg)](#)
 [![React: 19](https://img.shields.io/badge/React-19-61DAFB.svg)](#)
 [![Tailwind: v4](https://img.shields.io/badge/Tailwind-v4-38B2AC.svg)](#)
 [![Cloudflare: Workers_%2B_D1](https://img.shields.io/badge/Cloudflare-Workers_%2B_D1-F38020.svg)](#)
-[![Tests: 134/134](https://img.shields.io/badge/Tests-134%2F134_Passing-brightgreen.svg)](#)
+[![Tests: 143/143](https://img.shields.io/badge/Tests-143%2F143_Passing-brightgreen.svg)](#)
 
-> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of two-factor authentication (TOTP - RFC 6238), structured recovery codes storage, **Argon2id WASM (64 MB)** key derivation with silent background auto-migration, **Web Push RFC 8291/8292** and **BYOK Email (Resend / Cloudflare)** proactive security alerts, universal individual account QR viewer, Google Authenticator batch QR migration carousel, universal cross-platform importers (Authy, Bitwarden, Aegis, 1Password, etc.), physical YubiKey/FIDO2 roaming keys, proactive vault health diagnostics, k-Anonymity breach detection (HaveIBeenPwned), edge hardening (CSP, Rate Limiting, token rotation), and native biometric hardware unlock (Windows Hello / FIDO2 Passkeys).
+> Enterprise-grade cybersecurity Progressive Web App (PWA) designed under a **Zero-Knowledge** cryptographic architecture for sovereign management of passwords, two-factor authentication (TOTP - RFC 6238), payment cards, secure notes, SSH/server keys, and personal identities. Features per-item envelope encryption (`item_key`), automatic rolling snapshots on Cloudflare D1 with optimistic rollback, 30-day soft-delete trash bin with cryptographic auto-purge, 100% client-side printable physical Emergency Kit, **Argon2id WASM (64 MB)** memory-hard key derivation, proactive **Web Push RFC 8291/8292** and **BYOK Email (Resend / Cloudflare)** security alerts, universal cross-platform importers/exporters, YubiKey/FIDO2 hardware key support, and native biometric hardware unlock (Windows Hello / Passkeys).
 
 ---
 
 ## 🌟 Key Features
+
+* **Polymorphic Secrets Suite (v2.0.0):**
+  - **6 Canonical Secret Types:** Full lifecycle management for Passwords/Logins (with CSPRNG generator, website URLs, integrated 2FA token, and password history), 2FA/TOTP Factors, Credit/Debit Cards (with auto brand detection and CVV/PIN reveal), Encrypted Markdown Secure Notes, Server/SSH Keys (host, port, username, public/private keys, and passphrase), and Personal Identity Profiles.
+  - **Per-Item Envelope Encryption (`item_key`):** Every individual item possesses a unique 256-bit symmetric key wrapped under the master key, laying the cryptographic foundation for ECDH asymmetric sharing (v2.5).
+  - **30-Day Trash Bin with Cryptographic Auto-Purge:** Soft deletion with 1-click restore and automated permanent shredding after 30 days leaving zero residual leakage in the ciphertext.
+  - **Cloudflare D1 Rolling Snapshots & Optimistic Rollback:** Automated history of the last 5 vault versions stored in D1 with 1-click restoration and optimistic version assignment (`current.version + 1`).
+  - **100% Client-Side Printable Physical Emergency Kit:** Offline vector SVG recovery sheet generator featuring encrypted vault payload QR and handwritten master password field.
 
 * **Argon2id KDF & Proactive Zero-Knowledge Alerts (v1.5.0):**
   - **Argon2id WASM:** Memory-hard master key derivation (64 MB, 3 rounds) compiled to WebAssembly via `hash-wasm`, impervious to GPU/ASIC cluster cracking. Features seamless, silent background auto-upgrade of legacy PBKDF2 vaults on next login or unlock, re-encrypting the vault and re-wrapping biometric Passkeys.

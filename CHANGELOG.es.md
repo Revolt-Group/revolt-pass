@@ -7,6 +7,48 @@ y este proyecto se rige por [Control Semántico de Versiones (SemVer)](https://s
 
 ---
 
+## [2.0.0] - 2026-09-08
+
+### Añadido
+- **Suite Integral de Secretos (Motor Polimórfico de Secretos):**
+  - Transformación integral de Revolt Pass: de un autenticador exclusivo de 2FA a un gestor integral de contraseñas, secretos y credenciales Zero-Knowledge.
+  - Soporte nativo para 6 tipos canónicos de secretos:
+    - `totp`: Tokens temporales con cuenta regresiva en vivo, compensación de desvío temporal RFC 6238 y gestor de códigos de respaldo.
+    - `login`: Cuentas de acceso con usuario, contraseña revelable, temporizador de portapapeles (45s), generador CSPRNG, URL web, semilla 2FA integrada e historial de contraseñas anteriores.
+    - `card`: Tarjetas de crédito y débito con titular, número enmascarado, detección automática de marca (Visa, Mastercard, Amex, Discover), fecha de vencimiento, visualización de CVV y PIN de cajero.
+    - `note`: Notas seguras cifradas de extremo a extremo con formato enriquecido Markdown para información confidencial y frases semilla.
+    - `server_key`: Claves SSH y claves de API para infraestructura con servidor, puerto, usuario, clave pública, clave privada protegida, frase de contraseña (passphrase) y token.
+    - `identity`: Fichas de identidad personal con nombre, apellido, correo, teléfono, DNI / pasaporte y domicilio completo.
+  - Retrocompatibilidad absoluta: las bóvedas existentes de versiones v1.0 a v1.5 se normalizan y migran automáticamente en cliente sin intervención del usuario.
+- **Cifrado de Sobre por Elemento (`encrypted_key`):**
+  - Cada elemento de la bóveda cuenta con una clave simétrica única e independiente de 256 bits (`item_key`), envuelta bajo la clave maestra del usuario (`${ivBase64}:${ciphertextBase64}`).
+  - Establece la base criptográfica para el intercambio granular asimétrico mediante curvas elípticas ECDH en el hito v2.5.
+- **Papelera de Reciclaje de 30 Días y Purga Criptográfica Automática:**
+  - Eliminación suave que registra la marca de tiempo `deleted_at: timestamp`.
+  - Purga criptográfica automática: los elementos con más de 30 días en la papelera se eliminan irreversiblemente de la memoria y del texto cifrado durante `encryptVault`.
+  - Pestaña interactiva de papelera en `VaultList` con contadores, indicador de días restantes para purga, restauración en un clic, eliminación permanente individual y vaciado total de papelera.
+- **Snapshots de Bóveda en Cloudflare D1 y Rollback Optimista (`src/worker/api.ts`):**
+  - Archivado automático e instantáneo del estado anterior de la bóveda en cada `PUT /api/vault`, manteniendo un historial rotativo de los últimos 5 snapshots con depuración en cascada.
+  - Endpoints dedicados: `GET /api/vault/snapshots` y `POST /api/vault/restore/:vault_version`.
+  - Rollback consistente con OCC: la restauración asigna `current.version + 1`, garantizando el control de concurrencia optimista y activando la sincronización inmediata en todos los dispositivos vinculados.
+  - Pestaña "Historial de Bóveda" en `SecurityModal` con etiquetas de versión, cantidad de elementos, fecha y restauración en 1 clic.
+- **Kit de Emergencia Físico e Imprimible en Cliente (`src/lib/utils/emergencyKit.ts`):**
+  - Generador HTML 100% offline que genera un documento de recuperación ante desastres de alto contraste para imprimir (`window.print()`).
+  - Código QR vectorial SVG con URL de la instancia, ID de usuario y nombre de cuenta para vinculación rápida de nuevos dispositivos.
+  - Recuadro demarcado para anotación manuscrita de la Contraseña Maestra e instrucciones claras de seguridad. La contraseña nunca se procesa, almacena ni imprime en texto plano.
+  - Integración accesible mediante el componente `EmergencyKitModal.tsx` disponible directamente en el Modal de Seguridad.
+- **Suite de Interfaz Polimórfica y Generador:**
+  - `PolymorphicItemCard.tsx`: Renderizado adaptado para los 6 tipos de secretos con portapapeles seguro (purga a los 45s), revelación de contraseña y modo papelera.
+  - `EditAccountModal.tsx`: Modal integral para crear y editar secretos con selector de tipos, generador seguro CSPRNG, auto-detección y guardado automático de historial de contraseñas (`recordPasswordHistory`).
+  - `VaultList.tsx`: Filtros por categoría (`all`, `login`, `totp`, `card`, `note`, `server_key`, `identity`, `trash`), insignias con contadores y conmutador de vista cuadrícula/lista.
+
+### Modificado
+- Incremento de versión a `v2.0.0` en `package.json` y `src/constants/version.ts`.
+- Migración del esquema Cloudflare D1 con las tablas `vault_snapshots` y `folders`.
+- Validación completa de la suite de pruebas: **143 pruebas automáticas aprobadas** en 18 archivos de test.
+
+---
+
 ## [1.5.0] - 2026-09-08
 
 ### Añadido

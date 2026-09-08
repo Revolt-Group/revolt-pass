@@ -4,7 +4,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Identificador de Documento** | `RP-ARCH-002` |
-| **Versión** | `1.5.0-PROD (v2.5 Architecture)` |
+| **Versión** | `2.0.0-PROD (v2.5 Architecture Ready)` |
 | **Estado** | Aprobado / Especificación de Arquitectura |
 | **Dominio Productivo** | `https://<tu-dominio-o-subdominio>.workers.dev` |
 | **Pila Tecnológica** | React 19, TypeScript, Vite, Tailwind CSS, Workbox, Cloudflare Workers, Cloudflare D1 |
@@ -23,16 +23,18 @@ flowchart TB
     subgraph ClientDevice ["Dispositivo Cliente (PWA Sandbox)"]
         subgraph UI ["Capa de Presentación (React 19 + Tailwind)"]
             App["App Shell / Router"]
-            TotpView["TotpCard & Circular Timer"]
+            PolymorphicCard["PolymorphicItemCard (6 Types + Trash)"]
             QrScanner["QR Scanner (Camera / Dropzone / Paste)"]
             CmdPalette["Command Palette (Ctrl + K)"]
-            SecurityModal["Security & Sessions Modal"]
+            SecurityModal["Security & History Modal"]
+            EmergencyKit["Emergency Kit Generator (Offline SVG)"]
             I18nEngine["i18n Engine (ES/EN Zero-Knowledge)"]
         end
 
         subgraph CoreEngine ["Motor Core & Seguridad (TypeScript)"]
             CryptoWorker["Web Worker (Argon2id WASM 64MB / PBKDF2 600k)"]
             SubtleEngine["Web Crypto API (AES-GCM-256 / HMAC)"]
+            EnvelopeEngine["Envelope Encryption Engine (item_key AES-256)"]
             WebAuthnManager["WebAuthn Manager (Windows Hello PIN / Biometrics)"]
             TimeSyncManager["Time Drift Compensator"]
             SyncEngine["Bi-directional Sync Engine"]
@@ -42,7 +44,7 @@ flowchart TB
         subgraph ClientStorage ["Almacenamiento Local Seguro"]
             IDB[("IndexedDB (idb wrapper)\n- vault_encrypted\n- user_config\n- sync_queue")]
             CacheStorage[("Cache Storage (Workbox PWA)\nStatic Assets & Shell")]
-            RAM[("Memoria Volátil RAM\n- Master Key\n- Decrypted Items\n(Auto-lock purges)")]
+            RAM[("Memoria Volátil RAM\n- Master Key & Item Keys\n- Decrypted Items & History\n(Auto-lock purges)")]
         end
     end
 
@@ -55,6 +57,8 @@ flowchart TB
             AuthEp["POST /api/auth/* (Register / Salt)"]
             UpgradeEp["POST /api/auth/upgrade-kdf (Argon2id Auto-Upgrade)"]
             VaultEp["GET|PUT /api/vault (Encrypted Sync)"]
+            SnapshotEp["GET /api/vault/snapshots (Rolling 5 History)"]
+            RestoreEp["POST /api/vault/restore/:vault_version (OCC Rollback)"]
             SessionEp["POST|GET|DELETE|PUT /api/auth/sessions (Session Mgmt)"]
             PasskeyEp["GET|POST|PUT|DELETE /api/passkeys (FIDO2 Registry)"]
             AuditEp["GET /api/audit-logs (Security Audit)"]
@@ -62,7 +66,7 @@ flowchart TB
             EmailEp["POST /api/notifications/email (BYOK Dispatch)"]
         end
         
-        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- sessions table\n- passkeys table\n- audit_logs & push_subscriptions")]
+        D1Database[("Cloudflare D1 (SQLite Serverless)\n- users & vaults tables\n- vault_snapshots & folders\n- sessions & passkeys\n- audit_logs & push_subscriptions")]
     end
 
     %% Relaciones
@@ -479,6 +483,17 @@ La API se expone bajo el prefijo `/api/v1` (o `/api`). Todas las respuestas adop
 * **Propósito:** Revocar acceso al ítem (si lo ejecuta el propietario) o rechazar/eliminar de la vista (si lo ejecuta el destinatario).
 * **Códigos HTTP:** `200 OK`, `403 Forbidden`, `404 Not Found`.
 
+#### 19. `GET /api/vault/snapshots`
+* **Propósito:** Listar el historial de versiones archivadas de la bóveda del usuario autenticado (hasta 5 snapshots rodantes).
+* **Cabeceras:** `X-User-Id: {user_id}`.
+* **Códigos HTTP:** `200 OK` (lista de `{ id, user_id, vault_version, created_at }`).
+
+#### 20. `POST /api/vault/restore/:vault_version`
+* **Propósito:** Restaurar atómicamente el estado de la bóveda a un snapshot histórico previo en Cloudflare D1.
+* **Cabeceras:** `X-User-Id: {user_id}`.
+* **Comportamiento OCC:** El Worker extrae el blob cifrado del snapshot seleccionado y actualiza la tabla `vaults` asignando `version = current.version + 1` para mantener la monotonicidad del control de concurrencia optimista y permitir que los clientes sincronicen la restauración de inmediato sin colisiones.
+* **Códigos HTTP:** `200 OK` (`{ success: true, data: { restored_version, new_version } }`), `404 Not Found` (snapshot no hallado).
+
 ---
 
 ## 5. Modelos de Datos y Tipos TypeScript Canónicos
@@ -501,28 +516,120 @@ export interface RecoveryCode {
 export type TotpAlgorithm = 'SHA1' | 'SHA256';
 
 /**
- * Tipos de ítems almacenables en la bóveda (arquitectura extensible).
+ * Tipos canónicos de secretos polimórficos soportados en la bóveda (v2.0).
  */
-export type VaultItemType = 'totp' | 'login' | 'note';
+export type VaultItemType = 'totp' | 'login' | 'card' | 'note' | 'server_key' | 'identity';
+
+export interface PasswordHistoryEntry {
+  password: string;
+  changed_at: number; // Unix timestamp en milisegundos
+}
+
+export interface CustomField {
+  id: string;
+  name: string;
+  value: string;
+  is_secret?: boolean;
+}
+
+export interface LoginItemData {
+  username?: string;
+  password?: string;
+  urls?: string[];
+  totp_seed?: string; // Semilla 2FA inline (Base32)
+  custom_fields?: CustomField[];
+  password_history?: PasswordHistoryEntry[]; // Historial de contraseñas previas
+}
+
+export type CardBrand = 'visa' | 'mastercard' | 'amex' | 'discover' | 'other';
+
+export interface CardItemData {
+  cardholder_name?: string;
+  card_number?: string;
+  brand?: CardBrand;
+  exp_month?: string; // '01'-'12'
+  exp_year?: string; // '26'-'99' o '2026'
+  cvv?: string;
+  pin?: string;
+  zip_code?: string;
+}
+
+export interface NoteItemData {
+  title?: string;
+  content_markdown?: string;
+}
+
+export interface ServerKeyItemData {
+  host?: string;
+  port?: number;
+  username?: string;
+  private_key?: string;
+  public_key?: string;
+  passphrase?: string;
+  api_token?: string;
+}
+
+export interface IdentityItemData {
+  first_name?: string;
+  last_name?: string;
+  id_number?: string;
+  passport_number?: string;
+  license_number?: string;
+  birthdate?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
 
 /**
- * Estructura atómica de un ítem dentro de la bóveda descifrada en memoria.
+ * Estructura atómica polimórfica de un ítem dentro de la bóveda descifrada en memoria.
  */
 export interface VaultItem {
   id: string; // UUID v4 canónico
   type: VaultItemType;
-  issuer: string; // Nombre del servicio (ej. "GitHub", "AWS")
-  account: string; // Identificador de la cuenta (ej. "usuario@email.com")
-  secret: string; // Clave secreta decodificada en formato Base32
-  digits: 6 | 8; // Cantidad de dígitos del token (default: 6)
+  name?: string;
+  issuer: string; // Nombre del servicio o proveedor
+  account: string; // Identificador de la cuenta o usuario
+  secret: string; // Clave secreta Base32 (cadena vacía para ítems sin 2FA)
+  digits: 6 | 8; // Dígitos del token TOTP (default: 6)
   period: number; // Intervalo de rotación en segundos (default: 30)
   algorithm: TotpAlgorithm; // Algoritmo de hash (default: 'SHA1')
   recovery_codes?: RecoveryCode[]; // Lista opcional de códigos de emergencia
-  notes?: string; // Anotaciones seguras adicionales
-  pinned?: boolean; // Indicador de fijado en cabecera
+
+  // Cargas útiles polimórficas especializadas (Hito v2.0)
+  login_data?: LoginItemData;
+  card_data?: CardItemData;
+  note_data?: NoteItemData;
+  server_key_data?: ServerKeyItemData;
+  identity_data?: IdentityItemData;
+
+  // Organización y Papelera de Reciclaje (Hito v2.0)
+  folder_id?: string;
+  deleted_at?: number | null; // Marca de borrado suave en ms (purga a los 30 días)
+
+  // Cifrado de sobre por elemento (Hito v2.0 / Base para compartir v2.5)
+  encrypted_key?: string; // Clave simétrica AES-256 envuelta: "${ivBase64}:${ciphertextBase64}"
+
+  notes?: string; // Anotaciones generales
+  pinned?: boolean; // Fijado en cabecera
   tags?: string[]; // Etiquetas organizacionales
-  created_at: number; // Unix Epoch en milisegundos
-  updated_at: number; // Unix Epoch en milisegundos (usado para reconciliación)
+  icon_url?: string; // URL externa o avatar WebP en Base64
+  created_at: number; // Epoch en milisegundos
+  updated_at: number; // Epoch en milisegundos (utilizado para reconciliación LWW)
+}
+
+export interface VaultSnapshotInfo {
+  id: number;
+  user_id: string;
+  vault_version: number;
+  created_at: number;
+}
+
+export interface Folder {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: number;
 }
 
 /**
@@ -714,4 +821,34 @@ CREATE TABLE IF NOT EXISTS sync_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_synclogs_user_created ON sync_logs(user_id, created_at DESC);
+
+-- =====================================================================
+-- SNAPSHOTS DE BÓVEDA Y CARPETAS (v2.0)
+-- =====================================================================
+
+-- Snapshots Históricos para Rollback (Máximo 5 versiones rodantes por usuario)
+CREATE TABLE IF NOT EXISTS vault_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    encrypted_blob TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    vault_version INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_snapshots_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_user ON vault_snapshots(user_id, created_at DESC);
+
+-- Carpetas Organizacionales
+CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    encrypted_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CONSTRAINT fk_folders_user FOREIGN KEY (user_id) 
+        REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id);
 ```

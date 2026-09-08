@@ -3,8 +3,8 @@
 
 | Metadata | Detail |
 | :--- | :--- |
-| **Document Identifier** | `RP-SEC-003` |
-| **Version** | `1.5.0-PROD` |
+| **Identificador de Documento / Document Identifier** | `RP-SEC-003` |
+| **Version** | `2.0.0-PROD (v2.5 Scope Ready)` |
 | **Status** | Approved / Cryptographic Grade Security Specification |
 | **Frameworks & Standards** | OWASP ASVS v4.0, NIST SP 800-63B, RFC 6238, RFC 5869, RFC 9106 (Argon2), RFC 8291, RFC 8292, W3C WebAuthn Level 3 |
 | **Production Domain** | `https://<your-domain-or-subdomain>.workers.dev` |
@@ -197,6 +197,32 @@ For users preferring email security notifications, Revolt Pass implements a zero
 
 ---
 
+### 1.7 Per-Item Envelope Encryption (`item_key` - v2.0)
+To establish granular cryptographic isolation and lay the foundation for asymmetric cross-account sharing (v2.5), each item within the vault (`VaultItem`) possesses its own independent symmetric key:
+1. **Generation:** When creating or normalizing an item, the client generates a 256-bit cryptographic key using `crypto.getRandomValues(new Uint8Array(32))`.
+2. **Wrapping:** The item's key is encrypted using AES-256-GCM under the user's `MasterKey` with a fresh 12-byte IV.
+3. **Storage Format:** The `encrypted_key` attribute is stored serialized as:
+   $$\text{encrypted\_key} = \text{base64}(IV) \parallel \text{":"} \parallel \text{base64}(Ciphertext \parallel AuthTag)$$
+4. **Security Benefit:** Selective compromise or re-encryption vectors do not compromise adjacent items. Furthermore, cross-account sharing (v2.5) only requires re-wrapping `item_key` under the shared ECDH key without re-encrypting the item's payload body.
+
+---
+
+### 1.8 Historical Snapshots & Backup Isolation in Cloudflare D1 (v2.0)
+Disaster recovery, data corruption mitigation, and accidental deletion protection are implemented via transactional snapshots in Cloudflare D1:
+1. **Cryptographic Isolation:** Each row in `vault_snapshots` contains an `encrypted_blob` and `iv` encrypted via AES-256-GCM under the user's master key, identical to records in the primary `vaults` table. The server possesses zero inspection or decryption capabilities over snapshots.
+2. **Resource Governance (Rolling 5-Version Window):** During synchronization (`PUT /api/vault`), the Worker atomically archives the preceding state and purges snapshots exceeding the 5-version ceiling per user, preserving Cloudflare free tier quotas.
+3. **Monotonic Secure Rollback (OCC):** Restorations performed via `POST /api/vault/restore/:vault_version` assign `version = current.version + 1`, ensuring that no local client retains stale state or encounters concurrency conflicts when syncing back.
+
+---
+
+### 1.9 Security Model of the Physical Printable Emergency Kit (v2.0)
+To eliminate the catastrophic risk of permanent account lockout due to master password amnesia, biometric device loss, or unexpected incapacitation, Revolt Pass provides a physical Emergency Kit generator:
+1. **100% Client-Side & Offline Execution:** The kit is generated strictly in local browser memory and dispatched via `window.print()`. No document render payloads, images, or master credentials are ever transmitted to third-party PDF rendering services.
+2. **Vector SVG QR Code Payload:** The rendered high-definition vector SVG QR code encodes the encrypted vault payload (`vault_data`), identical to the blob at rest. Without the handwritten Master Password, scanning the QR code yields zero plaintext secrets to unauthorized third parties.
+3. **Air-Gapped Handwritten Principle:** The Master Password is **NEVER** printed, rendered into the DOM, or encoded in the QR code. The document reserves a prominent physical handwritten box for manual pen entry after printing, strictly decoupling the master secret from the digital plane.
+
+---
+
 ## 2. Threat Model (STRIDE & Attack Vector Analysis)
 
 Revolt Pass security posture is evaluated using Microsoft's **STRIDE** methodology alongside an attack vector matrix.
@@ -219,13 +245,16 @@ quadrantChart
     "ECDH Key Substitution": [0.30, 0.85]
     "Shared Item Replay": [0.25, 0.60]
     "Push Relay Tampering": [0.20, 0.30]
+    "Snapshot Rollback Hijack": [0.15, 0.80]
+    "Trash Bin Data Lingering": [0.30, 0.50]
+    "Emergency Kit Print Leak": [0.10, 0.90]
 ```
 
 ### Detailed Attack Vector Matrix and Mitigations
 
 | Vector / ID | STRIDE Category | Threat Description | Impact | Implemented Mitigation Controls |
 | :--- | :--- | :--- | :--- | :--- |
-| **VEC-01** | *Information Disclosure* | **Cloudflare D1 Compromise:** A malicious actor or rogue employee with administrative access to Cloudflare extracts the `vaults` table. | Nil (Zero-Knowledge) | **Cryptographic Inviolability:** The database only stores AES-256-GCM encrypted blobs. Without the Master Password and salt, cracking the blob requires $2^{255}$ computational operations, which is physically impossible. |
+| **VEC-01** | *Information Disclosure* | **Cloudflare D1 Compromise:** A malicious actor or rogue employee with administrative access to Cloudflare extracts the `vaults` or `vault_snapshots` table. | Nil (Zero-Knowledge) | **Cryptographic Inviolability:** The database only stores AES-256-GCM encrypted blobs. Without the Master Password and salt, cracking the blob requires $2^{255}$ computational operations, which is physically impossible. |
 | **VEC-02** | *Tampering* | **Data Tampering in Transit or Rest:** Malicious modification of bytes in `encrypted_blob` inside D1 to induce anomalous client behavior. | Nil (Immediate Rejection) | **GCM Authentication Tag:** AES-GCM verifies the 128-bit Authentication Tag. Modifying a single bit causes `crypto.subtle.decrypt` to throw an immutable error, immediately locking the app without processing corrupt data. |
 | **VEC-03** | *Information Disclosure* | **Physical Access to Unattended Workstation:** The operator leaves their desk with the PWA unlocked in foreground. | Critical | **Inactivity & Background Auto-Lock:** RAM timer purges keys after 5 minutes of keyboard/mouse inactivity. Additionally, the `visibilitychange` event locks the vault if the tab remains hidden. |
 | **VEC-04** | *Information Disclosure* | **Clipboard Sniffing:** Background applications or unprivileged malware monitoring the OS clipboard to capture TOTP or Recovery Codes. | High | **Scheduled Auto-Clear:** Routine with strict 45-second timer overwriting clipboard with empty text. Compares previous content to avoid clearing legitimate data if user copied something else in between. |
@@ -233,6 +262,9 @@ quadrantChart
 | **VEC-06** | *Elevation of Privilege* | **Cross-Site Scripting (XSS) Attacks:** JavaScript injection to inspect browser memory or intercept keystrokes. | Critical | **Strict Isolation & CSP:** Content Security Policy blocking `unsafe-inline`, `unsafe-eval` and restricting external resource loading strictly to `self` and `cdn.simpleicons.org`. Zero runtime CDN dependencies. |
 | **VEC-07** | *Denial of Service* | **Sync Failure Due to Connectivity Loss:** User travels on an airplane or encounters outages and needs access to corporate accounts. | High | **Absolute Offline Availability (100%):** Entire state remains encrypted in IndexedDB and assets precached in Service Worker. Operates indefinitely in airplane mode. |
 | **VEC-08** | *Information Disclosure / Spoofing* | **Web Push Notification Interception or Tampering:** Network adversary intercepts or attempts to forge push notifications directed to user devices. | Nil | **RFC 8291 Payload Encryption (ECDH P-256 + AES-128-GCM):** All push payloads are encrypted end-to-end to the browser's key pair. Notifications never contain vault secrets or master credentials. |
+| **VEC-09** | *Tampering / Rollback* | **Malicious Rollback via Snapshots:** An adversary attempts to force restoration to a stale snapshot containing revoked credentials or compromised passwords. | High | **Strict Session Auth & OCC Monotonicity:** Restoration strictly requires authenticated session ownership. Restored versions strictly increment to `current.version + 1`, alerting other devices through sync reconciliation and preventing state confusion. |
+| **VEC-10** | *Information Disclosure* | **Residual Secret Lingering in Trash:** Deleted secrets linger indefinitely in database ciphertexts or local cache. | Medium | **Automated 30-Day Cryptographic Purge:** During each vault save cycle (`encryptVault`), items exceeding 30 days in soft deletion are permanently omitted from serialized JSON before encryption, guaranteeing mathematical non-existence in ciphertext. |
+| **VEC-11** | *Information Disclosure* | **Credential Leakage in Emergency Kit Printing:** Accidental transmission of master credentials to network printer spoolers or document rendering APIs. | Critical | **Offline Air-Gapped Handwritten Principle:** Emergency Kit generation executes 100% offline in browser memory. The Master Password is never written to DOM or encoded into the SVG QR code; users manually write it by hand into the designated physical box. |
 | **VEC-NEW-01** | *Spoofing / Tampering* | **Malicious ECDH Public Key Substitution (Key Substitution Attack):** An attacker compromising Cloudflare D1 replaces a user's public key with their own to intercept and decrypt shared items addressed to that recipient. | Critical | **Out-of-Band Visual Fingerprint Verification:** The UI computes and presents the SHA-256 fingerprint of the recipient's public key (`SHA-256(spki)` in grouped hex or emoji-hash format). Users verify this fingerprint via an independent secure channel (Signal, voice call) before sharing sensitive secrets. |
 | **VEC-NEW-02** | *Tampering / Replay* | **Replay or Insertion of Stale Shared Ciphertext:** An attacker replays an old shared ciphertext to overwrite an updated item or reverse a revocation. | Medium | **D1 Uniqueness Constraints & Monotonic Versions:** Database constraint `UNIQUE(owner_user_id, recipient_user_id, source_item_id)`, version monotonicity, and strict session authentication preventing third parties from injecting or modifying rows in `shared_items`. |
 | **VEC-NEW-03** | *Information Disclosure* | **Mass Recipient Enumeration:** Automated scraping of the public key endpoint to identify registered usernames on the platform. | Low | **Edge Defense-in-Depth:** Requires an active authenticated session (`Authorization: Bearer <token>`) to query `/api/users/:username/public-key` and enforces Cloudflare Workers edge rate limiting against brute-force queries per IP. |
