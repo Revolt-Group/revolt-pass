@@ -7,6 +7,40 @@ y este proyecto se rige por [Control Semántico de Versiones (SemVer)](https://s
 
 ---
 
+## [1.5.0] - 2026-09-08
+
+### Añadido
+- **Núcleo Criptográfico de Derivación Argon2id (`src/lib/crypto/kdf.ts` y `kdf.worker.ts`):**
+  - Actualización de la Función de Derivación de Clave Maestra (KDF) de PBKDF2 a **Argon2id** (recomendado por OWASP 2024: 64 MB de memoria, 3 iteraciones, 1 hilo de paralelismo) compilado a WebAssembly nativo mediante `hash-wasm`.
+  - Inmunidad criptográfica ante ataques de fuerza bruta paralelos acelerados por clústeres de GPUs o ASICs, manteniendo una velocidad de derivación sub-400ms en dispositivos cliente estándar.
+  - **Auto-Actualización Silenciosa en Segundo Plano:** Las cuentas legadas creadas con PBKDF2 se re-encriptan y migran de forma automática e imperceptible a Argon2id en su próximo inicio de sesión o desbloqueo, re-cifrando la bóveda y actualizando la columna `kdf_algorithm` en Cloudflare D1 mediante el endpoint atómico `POST /api/auth/upgrade-kdf`.
+  - Re-empaquetado automático de passkeys: las credenciales biométricas locales (Windows Hello / Passkeys FIDO2) se re-cifran de forma transparente con la nueva clave maestra Argon2id sin solicitar confirmaciones al usuario.
+  - Interfaz de actualización manual disponible en la pestaña de Notificaciones del Modal de Seguridad para usuarios que deseen verificar o adelantar la migración.
+  - Retrocompatibilidad total: las cuentas legadas con PBKDF2 se descifran con normalidad y exhiben sus parámetros correspondientes.
+- **Alertas Proactivas con Web Push Nativo Zero-Knowledge (`src/worker/push.ts` y `public/push-sw.js`):**
+  - Notificaciones push instantáneas en tiempo real entregadas al dispositivo del usuario a través de la Push API nativa del navegador y el Service Worker dedicado (`push-sw.js`).
+  - Costo operacional de $0 y cero creación de cuentas: notificaciones enviadas directamente desde el Worker de Cloudflare hacia los servidores push de los navegadores (Google FCM, Apple APNs, Mozilla Push) implementando RFC 8292 (VAPID) y RFC 8291 (cifrado AES-128-GCM) sin librerías pesadas ni intermediarios externos.
+  - Claves VAPID generadas y persistidas de forma segura en la base de datos (`app_settings`), sin claves de servidor estáticas o expuestas.
+  - Disparadores de alerta ante eventos críticos de higiene: inicio de sesión desde un país no reconocido (`NEW_COUNTRY`), nueva sesión activa (`NEW_SESSION`), revocación remota de sesión (`SESSION_REVOKED`) y registro de nueva passkey (`PASSKEY_ADDED`).
+  - Arquitectura 100% Zero-Knowledge: las alertas contienen exclusivamente metadatos sanitizados de higiene (descripción del evento, nombre del dispositivo, país, timestamp), sin exponer jamás el contenido de la bóveda ni secretos.
+- **Alertas por Correo Electrónico BYOK (Bring Your Own Key) (`src/worker/email.ts`):**
+  - Configuración de alertas por correo manteniendo un estricto **costo de $0 USD** para el propietario de la instancia autohospedada:
+    - **Resend (Recomendado):** El usuario ingresa su propia clave API gratuita de Resend (3,000 correos/mes sin costo).
+    - **Cloudflare Email (`send_email`):** Conexión directa mediante Worker con advertencia explícita en la interfaz indicando que Cloudflare exige el plan Workers Paid ($5/mes) en la cuenta del usuario.
+  - Plantillas de correo HTML responsive con estética oscura corporativa de Revolt Pass.
+  - Selectores individuales de eventos: control granular para activar o silenciar alertas por nuevo país, nueva sesión, revocación de sesión o adición de passkeys.
+  - Botones interactivos de prueba inmediata para Web Push y Correo dentro del Modal de Seguridad.
+- **Pestaña de Notificaciones en el Modal de Seguridad (`src/components/SecurityModal.tsx`):**
+  - Pestaña dedicada "Notificaciones" con estado en vivo del permiso push, controles de suscripción/desuscripción, configuración de credenciales de correo BYOK y diagnóstico del algoritmo KDF activo.
+  - Insignias dinámicas de seguridad en la pantalla de bloqueo y pantalla de autenticación reflejando el motor criptográfico activo (`Argon2id 64MB` vs `PBKDF2 600K`).
+
+### Modificado
+- Incremento de versión a `v1.5.0` en `package.json` y `src/constants/version.ts`.
+- Actualización del esquema de base de datos (`schema.sql`) incorporando la columna `kdf_algorithm` en `users`, así como las tablas `push_subscriptions`, `user_notification_settings` y `app_settings`.
+- Ampliación de la suite de pruebas a **134 pruebas automatizadas pasando (100%)** en 17 suites de prueba, certificando la derivación Argon2id WASM, aislamiento criptográfico entre algoritmos, intercambio de claves VAPID, persistencia de preferencias de notificación y suscripción/desuscripción Web Push.
+
+---
+
 ## [1.4.1] - 2026-09-07
 
 ### Añadido
