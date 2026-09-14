@@ -34,7 +34,7 @@
     "idb": "^8.0.3",
     "lucide-react": "^1.41.0",
     "motion": "^13.2.0",
-    "react": "^19.2.8",
+    "react": "^19.3.0",
     "react-dom": "^19.2.8",
     "sonner": "^2.0.8",
     "tailwindcss": "^4.3.3",
@@ -43,7 +43,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260904.1",
     "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
+    "@types/react": "^19.3.0",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "@vitest/coverage-v8": "^5.0.0",
