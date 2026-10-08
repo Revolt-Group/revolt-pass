@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import worker from './index.ts';
-import { handleApiRequest, hashToken } from './api.ts';
+import { handleApiRequest, hashToken, parseDeviceName } from './api.ts';
 import type {
   Env,
   ApiResponse,
@@ -2056,4 +2056,114 @@ describe('API REST Cloudflare Workers & D1 Integration Tests', () => {
     });
   });
 });
+
+describe('parseDeviceName (User-Agent Parser)', () => {
+  it('correctly identifies iOS devices and does not misclassify them as macOS', () => {
+    // iPhone Safari native (includes "like Mac OS X")
+    const iPhoneSafari =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+    expect(parseDeviceName(iPhoneSafari)).toBe('iPhone · Safari');
+
+    // iPhone Chrome (CriOS)
+    const iPhoneChrome =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.6099.119 Mobile/15E148 Safari/604.1';
+    expect(parseDeviceName(iPhoneChrome)).toBe('iPhone · Chrome');
+
+    // iPhone Firefox (FxiOS)
+    const iPhoneFirefox =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/120.0 Mobile/15E148 Safari/605.1.15';
+    expect(parseDeviceName(iPhoneFirefox)).toBe('iPhone · Firefox');
+
+    // iPhone Edge (EdgiOS)
+    const iPhoneEdge =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 EdgiOS/120.0.0.0 Mobile/15E148 Safari/604.1';
+    expect(parseDeviceName(iPhoneEdge)).toBe('iPhone · Edge');
+
+    // iPad Safari (includes "like Mac OS X")
+    const iPadSafari =
+      'Mozilla/5.0 (iPad; CPU OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1';
+    expect(parseDeviceName(iPadSafari)).toBe('iPad · Safari');
+  });
+
+  it('correctly identifies macOS desktop browsers', () => {
+    const macSafari =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+    expect(parseDeviceName(macSafari)).toBe('macOS · Safari');
+
+    const macChrome =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    expect(parseDeviceName(macChrome)).toBe('macOS · Chrome');
+
+    const macFirefox =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0';
+    expect(parseDeviceName(macFirefox)).toBe('macOS · Firefox');
+  });
+
+  it('correctly identifies Opera and Opera GX without falling into Chrome', () => {
+    const opera =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0';
+    expect(parseDeviceName(opera)).toBe('Windows · Opera');
+
+    const operaGX =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPRGX/106.0.0.0';
+    expect(parseDeviceName(operaGX)).toBe('Windows · Opera');
+
+    const legacyOpera =
+      'Opera/9.80 (Windows NT 6.1; WOW64) Presto/2.12.388 Version/12.18';
+    expect(parseDeviceName(legacyOpera)).toBe('Windows · Opera');
+  });
+
+  it('correctly identifies Edge and Samsung Internet', () => {
+    const edge =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+    expect(parseDeviceName(edge)).toBe('Windows · Edge');
+
+    const edgeLegacy =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36 Edge/16.16299';
+    expect(parseDeviceName(edgeLegacy)).toBe('Windows · Edge');
+
+    const edgeAndroid =
+      'Mozilla/5.0 (Linux; Android 14; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 EdgA/120.0.0.0';
+    expect(parseDeviceName(edgeAndroid)).toBe('Android · Edge');
+
+    const samsung =
+      'Mozilla/5.0 (Linux; Android 13; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36';
+    expect(parseDeviceName(samsung)).toBe('Android · Samsung Internet');
+  });
+
+  it('correctly identifies Android, Linux and ChromeOS', () => {
+    const androidChrome =
+      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+    expect(parseDeviceName(androidChrome)).toBe('Android · Chrome');
+
+    const androidOperaTouch =
+      'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 OPT/2.8';
+    expect(parseDeviceName(androidOperaTouch)).toBe('Android · Opera');
+
+    const chromeOS =
+      'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    expect(parseDeviceName(chromeOS)).toBe('ChromeOS · Chrome');
+
+    const linuxFirefox =
+      'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0';
+    expect(parseDeviceName(linuxFirefox)).toBe('Linux · Firefox');
+  });
+
+  it('handles empty, null, whitespace, and unknown user agents cleanly', () => {
+    expect(parseDeviceName(null)).toBe('Dispositivo desconocido');
+    expect(parseDeviceName(undefined)).toBe('Dispositivo desconocido');
+    expect(parseDeviceName('')).toBe('Dispositivo desconocido');
+    expect(parseDeviceName('   ')).toBe('Dispositivo desconocido');
+    expect(parseDeviceName('\t\n ')).toBe('Dispositivo desconocido');
+    expect(parseDeviceName('curl/8.4.0')).toBe('Dispositivo desconocido');
+    expect(parseDeviceName('python-requests/2.31.0')).toBe('Dispositivo desconocido');
+
+    // Partial match (known OS, unknown browser)
+    expect(parseDeviceName('CustomApp/1.0 (Windows NT 10.0)')).toBe('Windows · Navegador');
+
+    // Partial match (known browser, unknown OS)
+    expect(parseDeviceName('Mozilla/5.0 Chrome/120.0.0.0')).toBe('Dispositivo · Chrome');
+  });
+});
+
 
