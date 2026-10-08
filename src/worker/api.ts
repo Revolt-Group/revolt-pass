@@ -121,34 +121,61 @@ export function generateToken(): string {
  * Parses User-Agent header into a clean, human-readable device string.
  */
 export function parseDeviceName(userAgent?: string | null): string {
-  if (!userAgent) return 'Dispositivo desconocido';
-
-  let os = 'Dispositivo';
-  if (userAgent.includes('Windows NT 10.0') || userAgent.includes('Windows')) {
-    os = 'Windows';
-  } else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS X')) {
-    os = 'macOS';
-  } else if (userAgent.includes('iPhone')) {
-    os = 'iPhone';
-  } else if (userAgent.includes('iPad')) {
-    os = 'iPad';
-  } else if (userAgent.includes('Android')) {
-    os = 'Android';
-  } else if (userAgent.includes('Linux')) {
-    os = 'Linux';
+  if (!userAgent || !userAgent.trim()) {
+    return "Dispositivo desconocido";
   }
 
-  let browser = 'Navegador';
-  if (userAgent.includes('Edg/')) {
-    browser = 'Edge';
-  } else if (userAgent.includes('Chrome/') && !userAgent.includes('Edg/')) {
-    browser = 'Chrome';
-  } else if (userAgent.includes('Firefox/')) {
-    browser = 'Firefox';
-  } else if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) {
-    browser = 'Safari';
-  } else if (userAgent.includes('OPR/') || userAgent.includes('Opera/')) {
-    browser = 'Opera';
+  const ua = userAgent;
+
+  // iPhone and iPad must be evaluated BEFORE macOS, since iOS user agents include "like Mac OS X".
+  // Android must be evaluated BEFORE Linux, since its user agent includes "Linux; Android".
+  let os = "Dispositivo";
+  if (ua.includes("iPhone")) {
+    os = "iPhone";
+  } else if (ua.includes("iPad")) {
+    os = "iPad";
+  } else if (ua.includes("Android")) {
+    os = "Android";
+  } else if (ua.includes("Windows")) {
+    os = "Windows";
+  } else if (ua.includes("Macintosh") || ua.includes("Mac OS X")) {
+    os = "macOS";
+  } else if (ua.includes("CrOS")) {
+    os = "ChromeOS";
+  } else if (ua.includes("Linux")) {
+    os = "Linux";
+  }
+
+  // Opera, Edge and Samsung Internet must be evaluated BEFORE Chrome (they all include "Chrome/").
+  // Firefox on iOS uses "FxiOS/" and Chrome on iOS uses "CriOS/".
+  // Chrome must be evaluated BEFORE Safari (Chrome includes "Safari/").
+  let browser = "Navegador";
+  if (
+    ua.includes("OPR/") ||
+    ua.includes("OPT/") ||
+    ua.includes("Opera/") ||
+    ua.includes("OPRGX/")
+  ) {
+    browser = "Opera";
+  } else if (
+    ua.includes("Edg/") ||
+    ua.includes("Edge/") ||
+    ua.includes("EdgiOS/") ||
+    ua.includes("EdgA/")
+  ) {
+    browser = "Edge";
+  } else if (ua.includes("SamsungBrowser/")) {
+    browser = "Samsung Internet";
+  } else if (ua.includes("Firefox/") || ua.includes("FxiOS/")) {
+    browser = "Firefox";
+  } else if (ua.includes("Chrome/") || ua.includes("CriOS/")) {
+    browser = "Chrome";
+  } else if (ua.includes("Safari/") || ua.includes("Safari")) {
+    browser = "Safari";
+  }
+
+  if (os === "Dispositivo" && browser === "Navegador") {
+    return "Dispositivo desconocido";
   }
 
   return `${os} · ${browser}`;
